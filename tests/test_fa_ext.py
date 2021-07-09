@@ -23,9 +23,7 @@ class TestFAExt(unittest.TestCase):
         self._test_membership("nfaThompson")
         self._test_witness("nfaThompson")
         self._test_ewp("nfaThompson")
-        # print "\n\n\nenumNFA(nfaThompson)"
-        # self._test_enumNFA("nfaThompson")
-        # print "END\n\n\n"
+        self._test_enumNFA("nfaThompson")
 
 
 

@@ -5,7 +5,7 @@ from builtins import chr
 from reex_ext import chars, dotany
 
 class InvariantNFA(fa.NFA):
-    """A class that extends NFA to properly handle `char_class` and `any_sym`"""
+    """A class that extends NFA to properly handle `chars` and `dotany`"""
 
     @staticmethod
     def lengthNFA(n, m=None):
@@ -38,8 +38,8 @@ class InvariantNFA(fa.NFA):
         self.Final = nfa.Final
         self.States = nfa.States
 
-        self.delta = dict()         # standard O("1") lookups
-        self.chars_delta = dict()   # O(n) for each in char_class
+        self.delta = dict()
+        self.chars_delta = dict()
         for p in nfa.delta:
             for t in nfa.delta[p]:
                 for q in nfa.delta[p][t]:
@@ -49,26 +49,22 @@ class InvariantNFA(fa.NFA):
         return deepcopy(self)
 
     def evalSymbol(self, stil, sym):
-        """Set of states reacheable from given states through given symbol and epsilon closure.
-
-        :param set|list stil: set of current states
-        :param str sym: symbol to be consumed
-        :returns: set of reached state indexes
-        :rtype: set
-        """
         res = set()
-        for currState in stil:
-            transitionsFromCurr = self.delta.get(currState, dict())
-            chars_transitionsFromCurr = self.chars_delta.get(currState, dict())
+        for state in stil:
+            out = self.delta.get(state, dict())
+            if sym in out.keys():
+                res.update(out[sym])
+            if out.has_key(dotany()):
+                res.update(out[dotany()])
 
-            nextStates = transitionsFromCurr.get(sym, set()).union(transitionsFromCurr.get(dotany(), set()))
-            for chars_transition in chars_transitionsFromCurr:  # chars_transition = [abc0-9], [others...]
-                if sym in chars_transition:                     # sym = a, b, c, 0, 1, 2, ..., 9, others...
-                    nextStates.update(chars_transitionsFromCurr.get(chars_transition, set()))
-
-            for nextStateIndex in nextStates:
-                res.update(self.epsilonClosure(nextStateIndex))
-        return res
+            out = self.chars_delta.get(state, dict())
+            for chrs, successors in out.items():
+                if sym in chrs:
+                    res.update(successors)
+        epres = set()
+        for nxt in res:
+            epres.update(self.epsilonClosure(nxt))
+        return epres
 
     def addTransition(self, stateFrom, label, stateTo):
         """Adds a new transition.
@@ -85,6 +81,23 @@ class InvariantNFA(fa.NFA):
             delta[stateFrom][label] = set([stateTo])
         else:
             delta[stateFrom][label].add(stateTo)
+
+    def delTransition(self, sti1, sym, sti2):
+        delta = self.chars_delta if type(sym) is chars else self.delta
+        if delta.has_key(sti1) and delta[sti1].has_key(sym):
+            delta[sti1][sym].discard(sti2)
+
+    def deleteStates(self, states):
+        self.delta = self.transitionFunction()
+        super(InvariantNFA, self).deleteStates(states)
+
+        delta = self.delta
+        self.delta = dict()
+        self.chars_delta = dict()
+        for p in delta:
+            for t in delta[p]:
+                for q in delta[p][t]:
+                    self.addTransition(p, t, q)
 
     def product(self, other):
         """Product construction between self and other
@@ -116,9 +129,7 @@ class InvariantNFA(fa.NFA):
         while len(notDone) > 0:
             s_current, o_current, so_index = notDone.pop()
 
-            s_next = self.delta.get(s_current, dict()).items()
-            s_next.extend(self.chars_delta.get(s_current, dict()).items())
-
+            s_next = self.transitionFunction(s_current).items()
             o_next = other.delta.get(o_current, dict()).items()
             o_next.extend(getattr(other, "chars_delta", dict()).get(o_current, dict()).items())
 
@@ -160,9 +171,7 @@ class InvariantNFA(fa.NFA):
                 continue
 
             successors = set()
-            for adj in self.delta.get(state, dict()).values():
-                successors.update(adj)
-            for adj in self.chars_delta.get(state, dict()).values():
+            for adj in self.transitionFunction(state).values():
                 successors.update(adj)
 
             for adjacent in successors:
@@ -231,41 +240,27 @@ class InvariantNFA(fa.NFA):
             states.update(self.epsilonClosure(init))
         return any(map(lambda s: self.finalP(s), states))
 
-    # def closeEpsilon(self, st):
-    #     """Add all non epsilon transitions from the states in the epsilon closure of given state to given state.
+    def closeEpsilon(self, state):
+        targets = self.epsilonClosure(state)
+        isFinal = any(map(lambda s: self.finalP(s), targets))
+        targets.remove(state)
 
-    #     :param int st: state index"""
-    #     targets = self.epsilonClosure(st)
-    #     targets.remove(st)
-    #     if not targets:
-    #         return
-    #     for target in targets:
-    #         self.delTransition(st, "@epsilon", target)
-    #     not_final = st not in self.Final
-    #     for target in targets:
-    #         if target in self.delta:
-    #             for symbol, states in self.delta[target].items():
-    #                 if symbol is "@epsilon":
-    #                     continue
-    #                 for state in states:
-    #                     self.addTransition(st, symbol, state)
-    #         if target in self.chars_delta:
-    #             for symbol, states in self.chars_delta[target].items():
-    #                 for state in states:
-    #                     self.addTransition(st, symbol, state)
+        for target in targets:
+            self.delTransition(state, "@epsilon", target)
 
-    #         if not_final and target in self.Final:
-    #             self.addFinal(st)
-    #             not_final = False
+        for target in targets:
+            for trans, adj in self.transitionFunction(target).items():
+                if trans != "@epsilon":
+                    for a in adj:
+                        self.addTransition(state, trans, a)
+
+        if isFinal:
+            self.addFinal(state)
 
     def succintTransitions(self):
-        transitions = dict() # k,v = (from, to), {labels}
-        delta = copy(self.delta)
-        for state, trans in self.chars_delta.items():
-            if delta.has_key(state):
-                delta[state].update(trans)
-            else:
-                delta[state] = trans
+        transitions = dict() # k,v => (from, to), {labels}
+
+        delta = self.transitionFunction()
         for p in delta:
             for t in delta[p]:
                 for q in delta[p][t]:
@@ -289,11 +284,32 @@ class InvariantNFA(fa.NFA):
         :returns: access to an enumeration object (with internal memoization for speed)
         :rtype: EnumInvariantNFA
         """
-        # TODO: finish closeEpsilon and switch commented portion below
-        # cpy = deepcopy(self)
-        # cpy.elimEpsilon()
-        # return EnumInvariantNFA(cpy)
-        return EnumInvariantNFA(self)
+        cpy = deepcopy(self)
+        cpy.elimEpsilon()
+        cpy.trim()
+        return EnumInvariantNFA(cpy)
+
+    def transitionFunction(self, fromState=None):
+        """Combines delta and chars_delta into one collection
+        If fromState=None (default):
+            {stateIndex: {transition: set(states)}}
+        Otherwise:
+            {transition: set(states)}
+        """
+        if fromState is not None:
+            delta = copy(self.delta.get(fromState, dict()))
+            for trans, successors in self.chars_delta.get(fromState, dict()).items():
+                delta[trans] = successors
+            return delta
+        else:
+            delta = copy(self.delta)
+            for state in self.chars_delta:
+                if not delta.has_key(state):
+                    delta[state] = self.chars_delta[state]
+                else:
+                    for trans, succ in self.chars_delta[state].items():
+                        delta[state][trans] = succ
+            return delta
 
 
 class EnumInvariantNFA(object): # should this inherit?
@@ -383,8 +399,7 @@ class EnumInvariantNFA(object): # should this inherit?
         """
         minNextLabel = None
         minNextState = None
-        successors = infa.delta.get(stateIndex, dict()).items()
-        successors.extend(infa.chars_delta.get(stateIndex, dict()).items())
+        successors = infa.transitionFunction(stateIndex).items()
 
         for transition, nextStates in successors:
             if len(nextStates) == 0:
