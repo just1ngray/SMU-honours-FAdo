@@ -5,13 +5,16 @@ from builtins import chr
 from reex_ext import chars, dotany
 
 class InvariantNFA(fa.NFA):
-    """A class that extends NFA to properly handle `chars` and `dotany`"""
+    """A class that extends NFA to properly handle `chars` and `dotany`
+    on an arbitrarily large alphabet without significant performance impacts.
+    """
 
     @staticmethod
     def lengthNFA(n, m=None):
         """Create an InvariantNFA which accepts all words of length >= n and <= m
-        :arg int n: the minimum size of words (inclusive)
-        :arg int m: the maximum size of words (inclusive). If None, defaults to n
+        :param int n: the minimum size of words (inclusive)
+        :param int m: the maximum size of words (inclusive). If None, defaults to n
+        :returns: the InvariantNFA which accepts any word of length s: n <= s <= m
         :rtype: InvariantNFA
         """
         if m is None: m = n
@@ -25,10 +28,10 @@ class InvariantNFA(fa.NFA):
         return lengthNFA
 
     def __init__(self, nfa=None):
-        """Create a NFA which can accept `reex_ext.any_sym` and `reex_ext.char_class` transitions.
-        :arg nfa: the nfa which should use invariant functions
-        ..note: there is no deep copying involved; deep copy the NFA before passing as an argument
-                if the NFA must be preserved
+        """Create an InvariantNFA.
+        :param fa.NFA nfa: the NFA which includes `chars` transitions
+        ..note: there is no deep copying involved; deep copy the NFA before
+                passing as an argument if the NFA must be preserved
         """
         super(InvariantNFA, self).__init__()
         if nfa is None: nfa = fa.NFA()
@@ -46,9 +49,18 @@ class InvariantNFA(fa.NFA):
                     self.addTransition(p, t, q)
 
     def dup(self):
+        """Overridden: simply performs deep copy of self"""
         return deepcopy(self)
 
     def evalSymbol(self, stil, sym):
+        """Overridden:
+        Set of states reacheable from given states through given symbol and
+        epsilon closure.
+        :param set|list stil: set of current states
+        :param str sym: symbol to be consumed
+        :returns: set of reached state indexes
+        :rtype: set<int>
+        """
         res = set()
         for state in stil:
             out = self.delta.get(state, dict())
@@ -67,8 +79,8 @@ class InvariantNFA(fa.NFA):
         return epres
 
     def addTransition(self, stateFrom, label, stateTo):
-        """Adds a new transition.
-
+        """Overridden:
+        Adds a new transition.
         :param int stateFrom: state index of departure
         :param label: symbol consumed (string, epsilon, char_class, any_sym)
         :param int stateTo: state index of arrival
@@ -83,11 +95,21 @@ class InvariantNFA(fa.NFA):
             delta[stateFrom][label].add(stateTo)
 
     def delTransition(self, sti1, sym, sti2):
+        """Overridden:
+        Remove a transition if existing and perform cleanup on transition functions.
+        :param int sti1: state index of departure
+        :param sym: symbol consumed
+        :param int sti2: state index of arrival
+        """
         delta = self.chars_delta if type(sym) is chars else self.delta
         if delta.has_key(sti1) and delta[sti1].has_key(sym):
             delta[sti1][sym].discard(sti2)
 
     def deleteStates(self, states):
+        """Extended: (merges transition functions, then seperates later)
+        Delete given iterable collection of states from the automaton.
+        :param set|list states: collection of int representing states
+        """
         self.delta = self.transitionFunction()
         super(InvariantNFA, self).deleteStates(states)
 
@@ -100,8 +122,10 @@ class InvariantNFA(fa.NFA):
                     self.addTransition(p, t, q)
 
     def product(self, other):
-        """Product construction between self and other
-        :arg other: Union(fa.NFA, InvariantNFA)
+        """Override:
+        Product construction between self and other
+        :param fa.NFA|InvariantNFA other: the NFA to take the intersection with
+        :returns: the intersection of two NFA's
         :rtype: InvariantNFA
         """
         def intersect(a, b):
@@ -151,13 +175,14 @@ class InvariantNFA(fa.NFA):
         return new
 
     def usefulStates(self, initial_states=None):
-        """Set of states reacheable from the given initial state(s) that have a path to a final state.
-
-        :param initial_states: set of initial states
-        :type initial_states: set of int or list of int
-        :returns: set of state indexes
-        :rtype: set of int
-        ..note: this function is only slightly modified from it's super definition"""
+        """Overridden: (only slightly modified)
+        Set of states reacheable from the given initial state(s) that have a path to a
+        final state.
+        :param initial_states: set/list of initial state indices (default is self.Initial)
+        :returns: set of state indexes which can reach final states through some combination
+        of input symbols
+        :rtype: set<int>
+        """
         if initial_states is None:
             initial_states = self.Initial
         useful = set([s for s in initial_states if s in self.Final])
@@ -201,9 +226,11 @@ class InvariantNFA(fa.NFA):
         return useful
 
     def witness(self):
-        """Witness of non emptyness
-        :return: word
-        :rtype: str"""
+        """Overridden:
+        Witness of non emptyness
+        :return: minimal word of length > 0, or None
+        :rtype: Union(str, None)
+        """
         done = set()
         notDone = set()
         for init in self.Initial:
@@ -241,6 +268,11 @@ class InvariantNFA(fa.NFA):
         return any(map(lambda s: self.finalP(s), states))
 
     def closeEpsilon(self, state):
+        """Overridden:
+        Remove epsilon transitions leaving state and add new transitions where necessary
+        to maintain the language of the automaton.
+        :param int state: state index
+        """
         targets = self.epsilonClosure(state)
         isFinal = any(map(lambda s: self.finalP(s), targets))
         targets.remove(state)
@@ -258,6 +290,11 @@ class InvariantNFA(fa.NFA):
             self.addFinal(state)
 
     def succintTransitions(self):
+        """Overridden:
+        :returns: the transition information in a compact way suitable for graphical
+        representation.
+        :rtype: list (stateout, label(s), statein)
+        """
         transitions = dict() # k,v => (from, to), {labels}
 
         delta = self.transitionFunction()
@@ -279,8 +316,8 @@ class InvariantNFA(fa.NFA):
         return l
 
     def enumNFA(self):
-        """NOTE: this is a differently intentioned method than the overridden enumNFA, but I think
-        having access to EnumInvariantNFA is useful
+        """Overridden: (gives access to the enumeration instance instead of returning
+        words directly)
         :returns: access to an enumeration object (with internal memoization for speed)
         :rtype: EnumInvariantNFA
         """
@@ -312,19 +349,20 @@ class InvariantNFA(fa.NFA):
             return delta
 
 
-class EnumInvariantNFA(object): # should this inherit?
+class EnumInvariantNFA(object):
     """An object to enumerate an InvariantNFA efficiently.
     """
     def __init__(self, aut):
-        """:arg aut: must be an e-free InvariantNFA
+        """:param aut: must be an e-free InvariantNFA
         """
         self.aut = aut
         self.lengthProductTrim = dict()
 
     def minWord(self, m):
         """Finds the minimal word of length m
-        :arg m: the length of the desired word
-        :rtype: string or None
+        :param int m: the length of the desired word
+        :returns: the minimal word of length m
+        :rtype: str|NoneType
         """
         if m == 0: return "" if self.aut.ewp() else None
         nfa = self._sized(m)
@@ -375,10 +413,25 @@ class EnumInvariantNFA(object): # should this inherit?
 
         return None
 
+    def enumCrossSection(self, n):
+        """Enumerates the nth cross-section of L(A)
+        :param int n: nonnegative integer representing the size of yielded words
+        :yields str: words in the nth cross-section of L(A)
+        """
+        if n == 0:
+            if self.aut.ewp():
+                yield ""
+            return
+
+        current = self.minWord(n)
+        while current is not None:
+            yield current
+            current = self.nextWord(current)
+
     def enum(self, lo=0, hi=float("inf")):
         """Enumerate all words such that each yielded word w has length |w| in [lo, hi]
-        :arg int lo: the smallest length of a desired yielded word
-        :arg int hi: the highest length of a desired yielded word
+        :param int lo: the smallest length of a desired yielded word
+        :param int hi: the highest length of a desired yielded word
         :yields str: words in L(self.aut)
         """
         if lo == 0 and self.aut.ewp():
@@ -392,10 +445,10 @@ class EnumInvariantNFA(object): # should this inherit?
 
     def _minTransition(self, infa, stateIndex, sym=None):
         """Finds the minimum transition from a state (optionally greater than sym)
-        :arg int stateIndex: the index of the origin state
-        :arg string sym: the lower bounding symbol (i.e., if sym="b", "c" will be accepted but "a" will not)
+        :param int stateIndex: the index of the origin state
+        :param string sym: the lower bounding symbol (i.e., if sym="b", "c" will be accepted but "a" will not)
         :returns: (label, next state index) 2-tuple
-        :rtype: (str, int)
+        :rtype: Tuple(str, int)
         """
         minNextLabel = None
         minNextState = None
@@ -418,7 +471,7 @@ class EnumInvariantNFA(object): # should this inherit?
 
     def _sized(self, size):
         """Computes and memoizes the product of self.aut and lengthNFA of size `size`
-        :arg int size: the size of the words to be accepted
+        :param int size: the size of the words to be accepted
         :returns: the trim InvariantNFA that only accepts words of length `size` in the
         language defined by self.aut
         :rtype: InvariantNFA

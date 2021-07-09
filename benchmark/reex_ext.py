@@ -6,11 +6,20 @@ import bisect
 
 
 class chars(reex.regexp):
-    """A character class which can match any single atom or a range of symbols contained within it
+    """A character class which can match any single atom or a range of symbols
+    contained within it
     i.e., [abc] will match a, b, or c - and nothing else.
           [0-9] will match any symbol between 0 to 9 (inclusive)
+          [^13579] will match anything except odd digits
     """
+
     def __init__(self, symbols, neg=False):
+        """Create a new chars class
+        :param symbols: an iterable collection of symbols (single-character strings),
+                        and 2-tuple ranges of symbols - i.e., ("a", "z")
+        :param bool neg: if the chars class matches everything except the listed symbols
+                         i.e., [^abc] would use the neg=True option
+        """
         super(chars, self).__init__()
 
         self.neg = neg
@@ -30,7 +39,7 @@ class chars(reex.regexp):
         self.ranges = merge_intervals(self.ranges) # note: this function returns sorted ranges
 
     def __str__(self):
-        return ("[" + ("^" if self.neg else "") + self.str + "]")
+        return "[" + ("^" if self.neg else "") + self.str + "]"
 
     _strP = __str__
 
@@ -50,10 +59,68 @@ class chars(reex.regexp):
                 return not self.neg
         return self.neg
 
+    def derivative(self, sigma):
+        """Overridden:
+        Derivative of the regular expression in relation to the given symbol.
+        :param sigma: an arbitrary symbol.
+        :rtype: Union[reex.epsilon, reex.emptyset]
+        """
+        return reex.epsilon() if sigma in self else reex.emptyset()
+
+    def treeLength(self):
+        """Overridden:
+        Number of nodes of the regular expression's syntactical tree.
+        :rtype: integer
+        """
+        return 1
+
+    def linearForm(self):
+        """Overridden:
+        Linear form of the regular expression.
+        ..note: Used for nfaPD/nfaPDO constructions
+        """
+        return {self: {reex.epsilon()}}
+
+    def nfaThompson(self):
+        """Overridden:
+        Epsilon-NFA constructed with Thompson's method that accepts the regular
+        expression's language.
+        :rtype: fa.NFA
+        """
+        aut = fa.NFA()
+        i = aut.addState()
+        aut.addInitial(i)
+        f = aut.addState()
+        aut.addFinal(f)
+        aut.addTransition(i, self, f)
+        return aut
+
+    def _nfaGlushkovStep(self, nfa, initial, final):
+        """Overridden:
+        Append transitions onto initial to a distinct state accepting self
+        :param fa.NFA nfa: the NFA to add to
+        :param initial: an iterable collection of state indices
+        :param set final: TODO: figure out
+        :returns: ...
+        :rtype: Tuple(..., ...)
+        ..note: Used by nfaGlushkov construction
+        """
+        try:
+            target = nfa.addState(self)
+        except common.DuplicateName:
+            target = nfa.addState()
+
+        for source in initial:
+            nfa.addTransition(source, self, target)
+
+        final.add(target)
+        return initial, final
+
     def next(self, current=None):
         """Finds the next symbol accepted by self after current
-        :arg str current: unicode/str/None character to succeed
+        :param str current: unicode/str/None character to succeed
         :returns: the next allowable character (ascending)
+        :rtype: str
         ..note: if current is not in self, the first character is returned
         """
         if current is None or current not in self:
@@ -103,7 +170,9 @@ class chars(reex.regexp):
 
     def intersect(self, other):
         """Find the intersection of another regexp leaf.
-        `other` can be an atom, epsilon, any_sym, or chars
+        :param other: can be an atom, epsilon, any_sym, or chars
+        :returns: the intersection between self and other
+        :rtype: Union(reex.regexp, NoneType)
         """
         if type(other) is dotany:
             return self
@@ -180,36 +249,6 @@ class chars(reex.regexp):
                 return chars(map(to_chr, atoms.union(ranges)))
         return None
 
-    def derivative(self, sigma):
-        return reex.epsilon() if sigma in self else reex.emptyset()
-
-    def treeLength(self):
-        return 1
-
-    def linearForm(self):
-        return {self: {reex.epsilon()}}
-
-    def nfaThompson(self):
-        aut = fa.NFA()
-        i = aut.addState()
-        aut.addInitial(i)
-        f = aut.addState()
-        aut.addFinal(f)
-        aut.addTransition(i, self, f)
-        return aut
-
-    def _nfaGlushkovStep(self, nfa, initial, final):
-        try:
-            target = nfa.addState(self)
-        except common.DuplicateName:
-            target = nfa.addState()
-
-        for source in initial:
-            nfa.addTransition(source, self, target)
-
-        final.add(target)
-        return initial, final
-
 
 class dotany(chars):
     """Class that represents the wildcard symbol that accepts everything.
@@ -232,12 +271,26 @@ class dotany(chars):
         return hash(self.__str__())
 
     def derivative(self, sigma):
+        """Overridden:
+        Derivative of the regular expression in relation to the given symbol.
+        :param sigma: an arbitrary symbol.
+        :rtype: reex.epsilon
+        """
         return reex.epsilon()
 
     def linearForm(self):
+        """Overridden:
+        Linear form of the regular expression.
+        ..note: Used for nfaPD/nfaPDO constructions
+        """
         return {self: {reex.epsilon()}}
 
     def intersect(self, other):
+        """Find the intersection of another regexp leaf.
+        :param other: can be an atom, epsilon, any_sym, or chars
+        :returns: the intersection between self and other
+        :rtype: Union(reex.regexp, NoneType)
+        """
         if type(other) is not reex.epsilon:
             return other
         else:
@@ -245,6 +298,10 @@ class dotany(chars):
 
 
 class anchor(reex.regexp):
+    """A class used temporarily in the conversion from programmer's string format
+    to the equivalent strict mathematical version used in FAdo.
+    """
+
     def __init__(self, label, sigma=None):
         super(anchor, self).__init__()
         self.label = label
@@ -275,8 +332,8 @@ def to_chr(item):
 def bisect_eq(a, x):
     """Locate the leftmost *index* exactly equal to `x`
     https://docs.python.org/3/library/bisect.html
-    :arg list a: the list to search through
-    :arg x: the item to search for
+    :param list a: the list to search through
+    :param x: the item to search for
     :returns: the index of the item x in a, or -1 if not found
     :rtype: int
     """
@@ -288,8 +345,8 @@ def bisect_eq(a, x):
 def bisect_gt(a, x):
     """Locate the leftmost *index* of an item greater than value `x`
     https://docs.python.org/3/library/bisect.html
-    :arg list a: the list to search through
-    :arg x: the item's value to get an index gt for
+    :param list a: the list to search through
+    :param x: the item's value to get an index gt for
     :returns: the index of the item greater than x in a, or len(a) if not found
     :rtype: int
     """
