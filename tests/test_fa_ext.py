@@ -14,19 +14,22 @@ class TestFAExt(unittest.TestCase):
         return super(TestFAExt, self).setUp()
 
     def test_nfaPD(self):
-        self._test_membership("nfaPD")
-        self._test_witness("nfaPD")
-        self._test_ewp("nfaPD")
-        self._test_enumNFA("nfaPD")
+        self._test_all("nfaPD")
 
     def test_nfaThompson(self):
-        self._test_membership("nfaThompson")
-        self._test_witness("nfaThompson")
-        self._test_ewp("nfaThompson")
-        self._test_enumNFA("nfaThompson")
+        self._test_all("nfaThompson")
+
+    def test_nfaGlushkov(self):
+        self._test_all("nfaGlushkov")
 
 
 
+
+    def _test_all(self, method):
+        self._test_membership(method)
+        self._test_witness(method)
+        self._test_ewp(method)
+        self._test_enumNFA(method)
 
     def _test_membership(self, method):
         tests = {

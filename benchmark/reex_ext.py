@@ -1,4 +1,4 @@
-from FAdo import reex, fa
+from FAdo import reex, fa, common
 from lark import Lark, Transformer
 from builtins import chr
 import copy
@@ -197,6 +197,18 @@ class chars(reex.regexp):
         aut.addFinal(f)
         aut.addTransition(i, self, f)
         return aut
+
+    def _nfaGlushkovStep(self, nfa, initial, final):
+        try:
+            target = nfa.addState(self)
+        except common.DuplicateName:
+            target = nfa.addState()
+
+        for source in initial:
+            nfa.addTransition(source, self, target)
+
+        final.add(target)
+        return initial, final
 
 
 class dotany(chars):
