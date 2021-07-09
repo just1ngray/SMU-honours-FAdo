@@ -15,4 +15,4 @@ test:
 	@make clean
 
 clean:
-	find . -name '*.pyc' -delete
+	@find . -name '*.pyc' -delete
