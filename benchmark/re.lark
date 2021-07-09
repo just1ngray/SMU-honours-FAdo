@@ -1,0 +1,20 @@
+%import common.WS
+%ignore WS
+
+// start
+expression  : SYMBOL
+            | ANCHOR
+            | "[" char_class "]"
+            | "(" kleene ")"
+            | "(" concat ")"
+            | "(" disjunction ")"
+
+kleene      : expression "*"
+concat      : expression expression       | concat expression
+disjunction : (expression "+" expression) | (disjunction "+" expression)
+
+!char_class  : ["^"] (CHAR_RANGE | SYMBOL)+
+
+CHAR_RANGE  : SYMBOL "-" SYMBOL
+SYMBOL      : "@epsilon" | "@any"   | "a".."z"  | "A".."Z"  | "0".."9"
+ANCHOR      : "<ASTART>" | "<AEND>"
