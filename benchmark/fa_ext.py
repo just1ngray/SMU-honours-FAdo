@@ -45,8 +45,7 @@ class InvariantNFA(fa.NFA):
         self.chars_delta = dict()
         for p in nfa.delta:
             for t in nfa.delta[p]:
-                for q in nfa.delta[p][t]:
-                    self.addTransition(p, t, q)
+                self.addTransition(p, t, nfa.delta[p][t])
 
     def dup(self):
         """Overridden: simply performs deep copy of self"""
@@ -83,16 +82,21 @@ class InvariantNFA(fa.NFA):
         Adds a new transition.
         :param int stateFrom: state index of departure
         :param label: symbol consumed (string, epsilon, char_class, any_sym)
-        :param int stateTo: state index of arrival
+        :param int|set<int> stateTo: state index(s) of arrival
         """
         delta = self.chars_delta if type(label) is chars else self.delta
 
+        if not hasattr(stateTo, "__iter__"):
+            stateTo = set([stateTo])
+        elif type(stateTo) is not set:
+            stateTo = set(stateTo)
+
         if stateFrom not in delta:
-            delta[stateFrom] = dict([[label, set([stateTo])]])
+            delta[stateFrom] = dict([[label, stateTo]])
         elif label not in delta[stateFrom]:
-            delta[stateFrom][label] = set([stateTo])
+            delta[stateFrom][label] = stateTo
         else:
-            delta[stateFrom][label].add(stateTo)
+            delta[stateFrom][label].update(stateTo)
 
     def delTransition(self, sti1, sym, sti2):
         """Overridden:
