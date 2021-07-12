@@ -124,6 +124,13 @@ class chars(reex.regexp):
         if not hasattr(self, "_lf"):
             self._lf = self.linearForm()
 
+    def _nfaFollowEpsilonStep(self, conditions):
+        """Overridden:
+        ..note: Used by nfaFollow
+        """
+        nfa, initial, final = conditions
+        nfa.addTransition(initial, self, final)
+
     def next(self, current=None):
         """Finds the next symbol accepted by self after current
         :param str current: unicode/str/None character to succeed

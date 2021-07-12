@@ -25,6 +25,9 @@ class TestFAExt(unittest.TestCase):
     def test_nfaPDO(self):
         self._test_all("nfaPDO")
 
+    def test_nfaFollow(self):
+        self._test_all("nfaFollow")
+
 
 
 
