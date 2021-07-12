@@ -116,6 +116,14 @@ class chars(reex.regexp):
         final.add(target)
         return initial, final
 
+    def _memoLF(self):
+        """Overridden:
+        Sets the attribute `_lf` to the linear form of self
+        ..note: Used by nfaPDO
+        """
+        if not hasattr(self, "_lf"):
+            self._lf = self.linearForm()
+
     def next(self, current=None):
         """Finds the next symbol accepted by self after current
         :param str current: unicode/str/None character to succeed

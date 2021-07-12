@@ -22,6 +22,9 @@ class TestFAExt(unittest.TestCase):
     def test_nfaGlushkov(self):
         self._test_all("nfaGlushkov")
 
+    def test_nfaPDO(self):
+        self._test_all("nfaPDO")
+
 
 
 

@@ -387,7 +387,7 @@ class EnumInvariantNFA(object):
         nfa = self._sized(len(current))
 
         stack = [nfa.Initial]
-        for c in current:
+        for c in current: # TODO: add cacheing to improve speed
             stack.append(nfa.evalSymbol(stack[-1], c))
 
         # "backtrack"
@@ -434,14 +434,9 @@ class EnumInvariantNFA(object):
         :param int hi: the highest length of a desired yielded word
         :yields str: words in L(self.aut)
         """
-        if lo == 0 and self.aut.ewp():
-            yield ""
-
-        for l in xrange(max(lo, 1), hi + 1):
-            current = self.minWord(l)
-            while current is not None:
-                yield current
-                current = self.nextWord(current)
+        for l in xrange(lo, hi + 1):
+            for word in self.enumCrossSection(l):
+                yield word
 
     def _minTransition(self, infa, stateIndex, sym=None):
         """Finds the minimum transition from a state (optionally greater than sym)
