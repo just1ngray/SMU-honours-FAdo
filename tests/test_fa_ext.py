@@ -40,32 +40,24 @@ class TestFAExt(unittest.TestCase):
     def _test_membership(self, method):
         tests = {
             "(0[ab]1)": [
-                ("0a1", True),      ("0c1", False),
-                ("0b1", True),      ("0ab1", False),
+                ("0a1", True),      ("0c1", False),     ("0b1", True),      ("0ab1", False),
             ],
             "(0[^ab]1)": [
-                ("0a1", False),      ("0c1", True),
-                ("0b1", False),      ("0ab1", False),
+                ("0a1", False),      ("0c1", True),     ("0b1", False),      ("0ab1", False),
             ],
             "(0[a-f]1)": [
-                ("0a1", True),      ("0f1", True),
-                ("0g1", False),     ("031", False),
+                ("0a1", True),      ("0f1", True),      ("0g1", False),     ("031", False),
             ],
             "(0[^a-f]1)": [
-                ("0a1", False),     ("0f1", False),
-                ("0g1", True),      ("031", True),
+                ("0a1", False),     ("0f1", False),     ("0g1", True),      ("031", True),
             ],
             "(0[abc0-9d-f]1)": [
-                ("001", True),      ("051", True),
-                ("091", True),      ("0a1", True),
-                ("0b1", True),      ("0d1", True),
-                ("0f1", True),      ("0x1", False),
+                ("001", True),      ("051", True),      ("091", True),      ("0a1", True),
+                ("0b1", True),      ("0d1", True),      ("0f1", True),      ("0x1", False),
             ],
             "(0@any1)": [
-                ("001", True),      ("051", True),
-                ("091", True),      ("0a1", True),
-                ("0b1", True),      ("0x1", True),
-                ("0f1", True),      ("0xx1", False),
+                ("001", True),      ("051", True),      ("091", True),      ("0a1", True),
+                ("0b1", True),      ("0x1", True),      ("0f1", True),      ("0xx1", False),
             ]
         }
         for test in tests:
@@ -117,6 +109,7 @@ class TestFAExt(unittest.TestCase):
             self.assertEqual(enuminfa.minWord(i), "0"*i)
 
         enuminfa = InvariantNFA(self.convert.one("(000)").toNFA(nfa_method=method)).enumNFA()
+        self.assertIsNone(enuminfa.minWord(0))
         self.assertIsNone(enuminfa.minWord(1))
         self.assertIsNone(enuminfa.minWord(2))
         self.assertEqual(enuminfa.minWord(3), "000")
