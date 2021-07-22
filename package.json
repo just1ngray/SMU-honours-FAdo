@@ -1,0 +1,26 @@
+{
+  "name": "smu-honours-fado",
+  "version": "1.0.0",
+  "description": "",
+  "main": "none.js",
+  "directories": {
+    "doc": "docs",
+    "test": "tests"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/just1ngray/SMU-honours-FAdo.git"
+  },
+  "author": "Justin Gray",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/just1ngray/SMU-honours-FAdo/issues"
+  },
+  "homepage": "https://github.com/just1ngray/SMU-honours-FAdo#readme",
+  "dependencies": {
+    "regexp-tree": "^0.1.23"
+  }
+}

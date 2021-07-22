@@ -1,3 +1,4 @@
 FAdo
 lark-parser
 future
+regex

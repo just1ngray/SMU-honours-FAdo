@@ -5,6 +5,27 @@ import copy
 import bisect
 
 
+class uatom(reex.atom):
+    def __init__(self, val, sigma=None):
+        super(uatom, self).__init__(val, sigma=sigma)
+
+    def __str__(self):
+        return self.val.encode("utf-8")
+
+    _strP = __str__
+
+    def __unicode__(self):
+        print "\n"*10 + "__unicode__ called" + "\n"*10 # TODO remove if unnecessary
+        return self.val
+
+    def derivative(self, sigma):
+        if ord(unicode(sigma)) == ord(unicode(self)):
+            return reex.epsilon(self.Sigma)
+        return reex.emptyset(self.Sigma)
+
+    def stringLength(self):
+        return len(unicode(self))
+
 class chars(reex.regexp):
     """A character class which can match any single atom or a range of symbols
     contained within it
@@ -23,7 +44,7 @@ class chars(reex.regexp):
         super(chars, self).__init__()
 
         self.neg = neg
-        self.str = ""
+        self.str = u""
         self.atoms = list()  # ordinals
         self.ranges = list() # ordinal ranges as 2-tuples
         for s in symbols:
@@ -51,7 +72,7 @@ class chars(reex.regexp):
             if len(symbol) == 0:
                 return False
             else:
-                symbol = ord(str(symbol))
+                symbol = ord(unicode(symbol))
         if bisect_eq(self.atoms, symbol) > -1:
             return not self.neg
         for s, e in self.ranges:
@@ -144,7 +165,7 @@ class chars(reex.regexp):
             m = min(filter(lambda x: x is not None, [a, r]))
             return None if m is None else chr(m)
         if type(current) is not int:
-            current = ord(str(current))
+            current = ord(unicode(current))
 
         if self.neg:
             offset = 1

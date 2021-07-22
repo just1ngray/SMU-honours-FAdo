@@ -3,3 +3,5 @@
 *.db
 .vscode/
 .tablereg
+node_modules/
+package-lock.json

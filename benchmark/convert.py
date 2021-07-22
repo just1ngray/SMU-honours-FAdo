@@ -1,8 +1,10 @@
+# coding: utf8
 from lark import Lark, Transformer
 from FAdo import reex
 from copy import deepcopy
 
-from reex_ext import chars, dotany, anchor
+import reex_ext as ext
+from sample.util import FAdoize
 
 class Converter(object):
     """ A class to convert from `export.csv` regular expressions in the `re.lark`
@@ -14,24 +16,29 @@ class Converter(object):
 
     def one(self, expression, partialMatch=False):
         """Get the FAdo regexp from an expression
-        :arg expression: the expression to parse into FAdo
-        :arg partialMatch:  if true, partial matches are allowed such as "a" matches "   a"
+        :param expression: the expression to parse into FAdo (can be a FAdoized expression,
+                        or a programmer's ambiguous expression)
+        :param partialMatch: if true, partial matches are allowed (i.e., "a" matches "   a")
                             if false, perfect matches must be found (mathematical definition)
         :rtype: reex.regexp
         :throws: if parsing error
         """
-        re = self.parser.parse(expression)
-        formatter = RegexpFormatter(re)
+        try:
+            re = self.parser.parse(expression)
+        except:
+            formatted = FAdoize(expression)
+            re = self.parser.parse(formatted)
 
+        formatter = RegexpFormatter(re)
         if partialMatch: formatter.allowPartialMatches()
         formatter.replaceAnchors()
-
         return formatter.get()
 
     def all(self, expressions, partialMatch=False):
         """Get FAdo regexps from a list of expressions.
-        :arg expressions: the list of expressions to parse into FAdo
-        :arg partialMatch:  if true, partial matches are allowed such as "a" matches "   a"
+        :param expressions: the list of expressions to parse into FAdo (can be a FAdoized
+                        expression, or a programmer's ambiguous expression)
+        :param partialMatch: if true, partial matches are allowed (i.e., "a" matches "   a")
                             if false, perfect matches must be found (mathematical definition)
         :rtype: list<reex.regexp or None when parsing error>
         """
@@ -57,9 +64,9 @@ class RegexpFormatter(object):
         """Allow partialMatches for this reex.regexp by adding `(@any*)` at the start and
         end positions (using concatenation only) where no anchor is found.
         """
-        anyStar = lambda: reex.star(dotany())
+        anyStar = lambda: reex.star(ext.dotany())
         def repl(current, concat):
-            if type(current) is anchor:
+            if type(current) is ext.anchor:
                 return reex.epsilon()
             elif type(current) is reex.epsilon:
                 return anyStar()
@@ -75,7 +82,7 @@ class RegexpFormatter(object):
         other than the leftmost leaf or rightmost leaf.
         """
         def repl(current):
-            if type(current) is anchor:
+            if type(current) is ext.anchor:
                 return reex.epsilon()
             else:
                 return current
@@ -85,7 +92,7 @@ class RegexpFormatter(object):
         stack = [self.re]
         while len(stack) > 0:
             current = stack.pop()
-            if type(current) is anchor:
+            if type(current) is ext.anchor:
                 raise Exception("Unexpected anchor in found in " + str(self.re))
             if getattr(current, "arg", None):
                 stack.append(current.arg)
@@ -119,8 +126,15 @@ class RegexpFormatter(object):
 
 
 class LarkToFAdo(Transformer):
-    def expression(self, expr):
-        return expr[0]
+    """Used with parser="lalr" to transform the tree in real-time into FAdo
+    objects.
+    ..see: `benchmark/re.lark`
+    """
+    def expression(self, e):
+        return e[0]
+
+    def option(self, e):
+        return reex.option(e[0])
 
     def kleene(self, e):
         return reex.star(e[0])
@@ -128,23 +142,29 @@ class LarkToFAdo(Transformer):
     def concat(self, e):
         return reex.concat(e[0], e[1])
 
-    def disjunction(self, d):
-        return reex.disj(d[0], d[1])
+    def disjunction(self, e):
+        return reex.disj(e[0], e[1])
 
-    def char_class(self, items):
-        neg = items[0] == "^"
-        items = list(map(lambda c: str(c) if type(c) is reex.atom else c, items))
-        return chars(items[(1 if neg else 0):], neg=neg)
+    def chars(self, items):
+        items = list(map(lambda c: c.val if isinstance(c, reex.atom) else c, items))
+        return ext.chars(items, neg=False)
 
-    def CHAR_RANGE(self, rng):
-        start, end = str(rng).split("-")
+    def neg_chars(self, items):
+        items = list(map(lambda c: c.val if isinstance(c, reex.atom) else c, items))
+        return ext.chars(items, neg=True)
+
+    def CHAR_RANGE(self, s):
+        start, end = s.value.split("-")
         return (start, end)
 
     def SYMBOL(self, s):
-        s = str(s)
-        if s == "@epsilon": return reex.epsilon()
-        elif s == "@any": return dotany()
-        return reex.atom(s)
+        return ext.uatom(s.value)
+
+    def EPSILON(self, _):
+        return reex.epsilon()
+
+    def DOTANY(self, _):
+        return ext.dotany()
 
     def ANCHOR(self, a):
-        return anchor(a)
+        return ext.anchor(a)

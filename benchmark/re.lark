@@ -1,20 +1,28 @@
-%import common.WS
-%ignore WS
-
 // start
 expression  : SYMBOL
             | ANCHOR
-            | "[" char_class "]"
-            | "(" kleene ")"
-            | "(" concat ")"
-            | "(" disjunction ")"
+            | EPSILON
+            | DOTANY
+            | chars
+            | neg_chars
+            | kleene
+            | option
+            | concat
+            | disjunction
 
-kleene      : expression "*"
-concat      : expression expression       | concat expression
-disjunction : (expression "+" expression) | (disjunction "+" expression)
+// regex rules
+kleene      :     expression  "*"
+option      : "(" expression ")?"
+concat      : "(" expression  " "  expression ")"
+disjunction : "(" expression " + " expression ")"
 
-!char_class : ["^"] (CHAR_RANGE | SYMBOL)+
-
+// character classes
+chars       : "["  (CHAR_RANGE | SYMBOL)+ "]"
+neg_chars   : "[^" (CHAR_RANGE | SYMBOL)+ "]"
 CHAR_RANGE  : SYMBOL "-" SYMBOL
-SYMBOL      : "@epsilon" | "@any"   | "a".."z"  | "A".."Z"  | "0".."9"
+
+// terminals
+SYMBOL.0    : /\\?./
+EPSILON     : "@epsilon"
+DOTANY      : "@any"
 ANCHOR      : "<ASTART>" | "<AEND>"
