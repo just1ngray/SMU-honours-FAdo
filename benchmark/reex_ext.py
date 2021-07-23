@@ -8,23 +8,20 @@ import bisect
 class uatom(reex.atom):
     def __init__(self, val, sigma=None):
         super(uatom, self).__init__(val, sigma=sigma)
+        assert type(val) is unicode, "uatoms strictly represent unicode type, not " + str(type(val))
 
     def __str__(self):
         return self.val.encode("utf-8")
 
     _strP = __str__
 
-    def __unicode__(self):
-        print "\n"*10 + "__unicode__ called" + "\n"*10 # TODO remove if unnecessary
-        return self.val
-
     def derivative(self, sigma):
-        if ord(unicode(sigma)) == ord(unicode(self)):
+        if unicode_ord(sigma) == unicode_ord(self.val):
             return reex.epsilon(self.Sigma)
         return reex.emptyset(self.Sigma)
 
     def stringLength(self):
-        return len(unicode(self))
+        return len(self.val)
 
 class chars(reex.regexp):
     """A character class which can match any single atom or a range of symbols
@@ -36,7 +33,7 @@ class chars(reex.regexp):
 
     def __init__(self, symbols, neg=False):
         """Create a new chars class
-        :param symbols: an iterable collection of symbols (single-character strings),
+        :param list<unicode> symbols: an iterable collection of symbols (single-character strings),
                         and 2-tuple ranges of symbols - i.e., ("a", "z")
         :param bool neg: if the chars class matches everything except the listed symbols
                          i.e., [^abc] would use the neg=True option
@@ -50,29 +47,29 @@ class chars(reex.regexp):
         for s in symbols:
             if type(s) is tuple:
                 self.str += s[0] + "-" + s[1]
-                self.ranges.append((ord(s[0]), ord(s[1])))
-            elif type(s) is str or type(s) is unicode:
+                self.ranges.append((unicode_ord(s[0]), unicode_ord(s[1])))
+            elif type(s) is unicode: # removed: type(s) is str or TODO remove this comment
                 self.str += s
-                bisect.insort(self.atoms, ord(s))
+                bisect.insort(self.atoms, unicode_ord(s))
             else:
-                raise TypeError(str(s) + " must be str/2-tuple of str's, not " + str(type(s)))
+                raise TypeError("Unknown type 's', must be unicode/2-tuple of unicode's, not " + str(type(s)))
 
         self.ranges = merge_intervals(self.ranges) # note: this function returns sorted ranges
 
     def __str__(self):
-        return "[" + ("^" if self.neg else "") + self.str + "]"
+        return "[" + ("^" if self.neg else "") + self.str.encode("utf-8") + "]"
 
     _strP = __str__
 
     def __repr__(self):
-        return "chars(" + ("^" if self.neg else "") + self.str + ")"
+        return "chars(" + ("^" if self.neg else "") + self.str.encode("utf-8") + ")"
 
     def __contains__(self, symbol):
         if type(symbol) is not int:
             if len(symbol) == 0:
                 return False
             else:
-                symbol = ord(unicode(symbol))
+                symbol = unicode_ord(unicode(symbol))
         if bisect_eq(self.atoms, symbol) > -1:
             return not self.neg
         for s, e in self.ranges:
@@ -163,9 +160,9 @@ class chars(reex.regexp):
             a = None if len(self.atoms) < 1 else self.atoms[0]
             r = None if len(self.ranges) < 1 else self.ranges[0][0]
             m = min(filter(lambda x: x is not None, [a, r]))
-            return None if m is None else chr(m)
+            return None if m is None else unicode_chr(m)
         if type(current) is not int:
-            current = ord(unicode(current))
+            current = unicode_ord(unicode(current))
 
         if self.neg:
             offset = 1
@@ -181,7 +178,7 @@ class chars(reex.regexp):
                         inRange = True
                         break
                 if not inRange:
-                    return chr(n)
+                    return unicode_chr(n)
 
         else: # not neg
             for i in xrange(bisect_gt(self.ranges, current), len(self.ranges)):
@@ -193,14 +190,14 @@ class chars(reex.regexp):
                         if nxt is None: nxt = self.atoms[atom_index]
                         else: nxt = min(nxt, self.atoms[atom_index])
 
-                    return None if nxt is None else chr(nxt)
+                    return None if nxt is None else unicode_chr(nxt)
 
                 elif s <= current and current < e:
-                    return chr(current + 1)
+                    return unicode_chr(current + 1)
 
             index = bisect_eq(self.atoms, current)
             if index > -1 and index + 1 < len(self.atoms):
-                return chr(current + 1)
+                return unicode_chr(current + 1)
             else:
                 return None
 
@@ -356,11 +353,11 @@ def to_chr(item):
     respectively
     """
     if type(item) is int:
-        return chr(item)
+        return unicode_chr(item)
     elif type(item) is tuple:
         l = []
         for i in item:
-            l.append(chr(i))
+            l.append(unicode_chr(i))
         return tuple(l)
     else:
         raise TypeError("Unrecognized type " + str(type(item)))
@@ -424,3 +421,18 @@ def merge_intervals(intervals):
                 # we have found our merged interval
                 merged.append((start[0], d[0]))
     return merged
+
+def unicode_ord(c):
+    try:
+        return ord(c)
+    except:
+        return int(repr(c)[4:-1], 16)
+
+def unicode_chr(i):
+    """https://stackoverflow.com/a/7107319"""
+    try:
+        return unichr(i)
+    except:
+        s = "\\U%08x" % i
+        c = s.decode("unicode-escape")
+        return c.encode("utf-8")

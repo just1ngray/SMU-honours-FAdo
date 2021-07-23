@@ -14,7 +14,7 @@ Escaping notes:
 const regexp = require("regexp-tree")
 
 function nodeToString(node, chars=null) {
-    console.log(node)
+    console.log("nodeToString:", node)
 
     switch (node.type) {
         case "Alternative":
@@ -134,7 +134,12 @@ function nodeToString(node, chars=null) {
     }
 }
 
-let expression = process.argv[2].substring(1, process.argv[2].length - 1)
-console.log("Parsing expression /" + expression + "/ ... ")
-const ast = regexp.parse("/" + expression + "/")
-console.log("\n\nOUTPUT:\n" + nodeToString(ast.body))
+if (process.argv.length > 3)
+    throw new Error("Too many arguments provided in process.argv: "
+        + JSON.stringify(process.argv, null, 2))
+
+console.log("Parsing expression /" + process.argv[2] + "/ ... ")
+const ast = regexp.parse("/" + process.argv[2] + "/")
+console.log("OUTPUT:")
+const formatted = nodeToString(ast.body)
+console.log(formatted)

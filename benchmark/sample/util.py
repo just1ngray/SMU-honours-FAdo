@@ -65,7 +65,7 @@ class OSCommand():
 
     def run(self, command):
         try:
-            output = subprocess.check_output(command.split(), stderr=subprocess.STDOUT)
+            output = subprocess.check_output(command, stderr=subprocess.STDOUT)
             self.out = output
             self.code = 0
         except subprocess.CalledProcessError as e:
@@ -83,8 +83,11 @@ def FAdoize(expression, log=lambda *m: None):
     :throws: if `benchmark/sample/parse.js` throws
     """
     cmd = OSCommand()
-    output, exitcode = cmd.run('node benchmark/sample/parse.js "'
-        + expression.replace('"', '\\"') + '"')
+    output, exitcode = cmd.run([
+        'node',
+        'benchmark/sample/parse.js',
+        expression # automatically handles escaping
+    ])
 
     log("FAdoize output:--------\n", output, "\nend output--------")
     output = output[:-1].splitlines()[-1] # remove the \n and focus on last line

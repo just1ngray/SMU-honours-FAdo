@@ -1,7 +1,5 @@
-# coding: utf8
 from lark import Lark, Transformer
 from FAdo import reex
-from copy import deepcopy
 
 import reex_ext as ext
 from sample.util import FAdoize
@@ -11,54 +9,60 @@ class Converter(object):
         grammar to FAdo classes using the `reex` & `reex_ext` modules.
     """
     def __init__(self):
-        self.parser = Lark.open("benchmark/re.lark", start="expression",
+        self._parser = Lark.open("benchmark/re.lark", start="expression",
             parser="lalr", transformer=LarkToFAdo())
 
-    def one(self, expression, partialMatch=False):
-        """Get the FAdo regexp from an expression
-        :param expression: the expression to parse into FAdo (can be a FAdoized expression,
-                        or a programmer's ambiguous expression)
-        :param partialMatch: if true, partial matches are allowed (i.e., "a" matches "   a")
-                            if false, perfect matches must be found (mathematical definition)
+    def math(self, expression, partialMatch=False):
+        """Convert a `benchmark/re.lark` formatted string into a FAdo regexp tree.
+        :param unicode|str expression: the expression to convert
+        ..note: if there are non-ascii symbols in the expression, it must be passed
+                as unicode type (i.e., u"non-ascii")
+        ..note: all symbols must be representable in <= 4 bytes using utf-8 (this
+                excludes emoji flags and maybe some other characters)
+        :param bool partialMatch: given any text T, U, and word weL(expression),
+                                  should the regexp tree match text 'TwL'?
+        :returns: the parsed regexp tree
         :rtype: reex.regexp
-        :throws: if parsing error
+        :raises: if there's a parsing error, or if anchors are found in non-"edge"
+                 leaf positions
         """
-        try:
-            re = self.parser.parse(expression)
-        except:
-            formatted = FAdoize(expression)
-            re = self.parser.parse(formatted)
-
+        # print "\n\nCONVERTING", expression
+        re = self._parser.parse(repr(expression.encode("utf-8"))[1:-1])
         formatter = RegexpFormatter(re)
+
         if partialMatch: formatter.allowPartialMatches()
         formatter.replaceAnchors()
-        return formatter.get()
+        return formatter.re
 
-    def all(self, expressions, partialMatch=False):
-        """Get FAdo regexps from a list of expressions.
-        :param expressions: the list of expressions to parse into FAdo (can be a FAdoized
-                        expression, or a programmer's ambiguous expression)
-        :param partialMatch: if true, partial matches are allowed (i.e., "a" matches "   a")
-                            if false, perfect matches must be found (mathematical definition)
-        :rtype: list<reex.regexp or None when parsing error>
+    def prog(self, expression, partialMatch=True):
+        r"""Convert a regular expression used in programming into a FAdo regexp tree.
+            i.e., supports [+,*,?,{x},{x,},{x,y},{,y}] repetitions,
+                  character classes like \d,
+                  ^ and $ are used as anchors,
+                  and uses the | (pipe) for disjunctive "or's"
+        :param unicode|str expression: the expression to convert
+        :param bool partialMatch: given any text T, U, and word weL(expression),
+                                  should the regexp tree match text 'TwL'?
+        :returns: the parsed regexp tree
+        :rtype: reex.regexp
+        :raises: if there's a parsing error, or if anchors are found in non-"edge"
+                 leaf positions
+        ..note: self.prog is much slower than self.math since it has to spin up a
+            NodeJS process in order to execute additional logic
         """
-        converted = []
-        for expr in expressions:
-            try:    converted.append(self.one(expr, partialMatch=partialMatch))
-            except: converted.append(None)
-
-        return converted
+        formatted = FAdoize(expression)
+        return self.math(formatted, partialMatch=partialMatch)
 
 
 class RegexpFormatter(object):
     """A class to format a `reex.regexp` object"""
 
-    def __init__(self, re):
+    def __init__(self, re=None):
         """Create a new RegexpFormatter
         :arg re: the reex.regexp to deep copy and modify in place
         """
         super(RegexpFormatter, self).__init__()
-        self.re = deepcopy(re)
+        self.re = re
 
     def allowPartialMatches(self):
         """Allow partialMatches for this reex.regexp by adding `(@any*)` at the start and
@@ -99,10 +103,6 @@ class RegexpFormatter(object):
             elif getattr(current, "arg1", None):
                 stack.append(current.arg2)
                 stack.append(current.arg1)
-
-    def get(self):
-        """Gets the formatted & modified reex.regexp"""
-        return self.re
 
     def _anchorReplace(self, arg, repl):
         """Replaces anchors found recursively in concat operations defined by the `arg` direction.
@@ -153,12 +153,15 @@ class LarkToFAdo(Transformer):
         items = list(map(lambda c: c.val if isinstance(c, reex.atom) else c, items))
         return ext.chars(items, neg=True)
 
-    def CHAR_RANGE(self, s):
-        start, end = s.value.split("-")
-        return (start, end)
+    def char_range(self, s):
+        return (s[0].val, s[1].val)
 
     def SYMBOL(self, s):
-        return ext.uatom(s.value)
+        # print ""
+        # print "SYMBOL", s.value
+        # print s.value.decode("string-escape"), type(s.value.decode("string-escape"))
+        # print s.value.decode("string-escape").decode("utf-8")
+        return ext.uatom(s.value.decode("string-escape").decode("utf-8"))
 
     def EPSILON(self, _):
         return reex.epsilon()
