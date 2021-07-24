@@ -1,3 +1,27 @@
+setTimeout(() => {
+    process.exit(1)
+}, 1000*10*60)
+
+process.stdin.on("data", (data) => {
+    data = data.toString()
+    if (data.endsWith("\r\n")) data = data.substr(-2)
+    else if (data.endsWith("\n")) data = data.substr(-1)
+
+    try {
+        console.log("Parsing expression /" + data + "/ ... ")
+        const ast = regexp.parse("/" + data + "/")
+        const formatted = nodeToString(ast.body)
+        console.log(formatted)
+    }
+    catch (e) {
+        console.log(e)
+        console.log("ERROR ^^^^")
+    }
+    finally {
+        console.log("Done")
+    }
+});
+
 /*
 The regexp-tree library is very widely used (over 900,000 public GitHub projects use it).
 
@@ -14,7 +38,7 @@ Escaping notes:
 const regexp = require("regexp-tree")
 
 function nodeToString(node, chars=null) {
-    console.log("nodeToString:", node)
+    // console.log("nodeToString:", node) // uncomment for debugging (performance penalty)
 
     switch (node.type) {
         case "Alternative":
@@ -129,17 +153,6 @@ function nodeToString(node, chars=null) {
             }
 
         default:
-            console.error("Unrecognized", node)
-            process.exit(1)
+            console.log("Unrecognized", node)
     }
 }
-
-if (process.argv.length > 3)
-    throw new Error("Too many arguments provided in process.argv: "
-        + JSON.stringify(process.argv, null, 2))
-
-console.log("Parsing expression /" + process.argv[2] + "/ ... ")
-const ast = regexp.parse("/" + process.argv[2] + "/")
-console.log("OUTPUT:")
-const formatted = nodeToString(ast.body)
-console.log(formatted)

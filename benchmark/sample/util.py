@@ -1,5 +1,7 @@
 import sqlite3
 import subprocess
+import time
+import atexit
 
 class DBWrapper(object):
     def __init__(self):
@@ -55,25 +57,35 @@ class DBWrapper(object):
             self._connection.rollback()
             raise
 
-class OSCommand():
-    def __init__(self, cmd=None):
-        self.out = ""
-        self.code = 0
+class NodeJSProcess():
+    def __init__(self, filename):
+        self.cmd = filename
+        self.proc = subprocess.Popen(["node", filename],
+            stderr=subprocess.STDOUT,
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE)
 
-        if cmd is not None:
-            self.run(cmd)
+        atexit.register(lambda: self.proc.terminate())
 
-    def run(self, command):
-        try:
-            output = subprocess.check_output(command, stderr=subprocess.STDOUT)
-            self.out = output
-            self.code = 0
-        except subprocess.CalledProcessError as e:
-            self.out = e.output
-            self.code = e.returncode
+    def send(self, data):
+        """Send data to the NodeJS process, read stdout until "Done\n"
+        """
+        self.proc.stdin.write(data.encode("utf-8"))
+        self.proc.stdin.flush()
 
-        return (self.out, self.code)
+        lines = [""]
+        while lines[-1] != "Done\n":
+            # very short-duration "spinlock"
+            t = time.time()
+            while time.time() - t < 0.00001:
+                continue
 
+            lines.append(self.proc.stdout.readline())
+
+        return list(map(lambda x: x[0:-1], lines))
+
+
+proc = None
 def FAdoize(expression, log=lambda *m: None):
     """Convert an "ambiguous" expression used by a programmer into an expression
     ready to parse into FAdo via the `benchmark/convert.py#Converter` using the
@@ -81,18 +93,18 @@ def FAdoize(expression, log=lambda *m: None):
     :param str expression: the expression to convert into unambiguous FAdo
     :returns unicode: the parenthesized and formatted expression
     :throws: if `benchmark/sample/parse.js` throws
+    ..note: FAdoize will include a cold start time as the NodeJS process is created.
+            Subsequent calls will not incur this cost until this Python process finishes.
     """
-    cmd = OSCommand()
-    output, exitcode = cmd.run([
-        'node',
-        'benchmark/sample/parse.js',
-        expression # automatically handles escaping
-    ])
+    if globals()["proc"] is None:
+        globals()["proc"] = NodeJSProcess("benchmark/sample/parse.js")
+
+    output = globals()["proc"].send(expression)
 
     log("FAdoize output:--------\n", output, "\nend output--------")
-    output = output[:-1].splitlines()[-1] # remove the \n and focus on last line
+    output = output[-2]
 
-    if exitcode == 0:
+    if not output.startswith("ERROR"):
         return output.decode("utf-8")
     else:
-        raise RuntimeError(str(exitcode) + " Could not FAdoize `" + expression + "`\n" + output)
+        raise RuntimeError("Could not FAdoize `" + expression + "`\n" + output)
