@@ -1,6 +1,7 @@
 # coding: utf-8
 import unittest
 from FAdo import reex
+from lark import LarkError
 
 from benchmark.convert import Converter
 
@@ -30,6 +31,11 @@ class TestConverter(unittest.TestCase):
     def test_programmers_simple_str(self):
         self.runtest(self.convert.prog, [
             ("a", "a"),
+            ("a+", "a a*"),
+            ("a{3}", "(a a) a"),
+            ("a{3,}", "((a a) a) a*"),
+            ("a{3,9}", "((a a) a) ((((@epsilon + a) (@epsilon + (a a))) (@epsilon + a)) (@epsilon + (a a)))"),
+            ("a{,9}", "((((@epsilon + a) (@epsilon + (a a))) (@epsilon + (((a a) a) a))) (@epsilon + a)) (@epsilon + a)"),
             ("a*", "a*"),
             ("a|b", "a + b"),
             ("ab", "a b"),
@@ -50,7 +56,6 @@ class TestConverter(unittest.TestCase):
             (u"@epsilon", u"@epsilon"),
             (u"@any", u"@any"),
             (u"🚀*", u"🚀*"),
-            # (u"(🇨🇦 + 🇵🇹)", u"🇨🇦 + 🇵🇹"), # no support for 8-byte characters
             (u"(ë + Ĥ)", u"ë + Ĥ"),
             (u"(ǿ Ȍ)", u"ǿ Ȍ"),
             (u"(Ͽ)?", u"(Ͽ)?"),
@@ -78,44 +83,64 @@ class TestConverter(unittest.TestCase):
             (u"€ᾔ¢◎øℓ   тℯ|ϰт", u"((((((((((€ ᾔ) ¢) ◎) ø) ℓ)  )  )  ) т) ℯ) + (ϰ т)"),
         ])
 
+    def test_prog_errs(self):
+        exprs = [
+            r"a \b",        r"a \B",        "a(?=b)",       "a(?!b)",       "(?<=a)b",
+            "(?<!a)b",      r"(ab)\1",      r"[^\D]",       "[z-a]",        "*",
+            "a{3,2}"
+        ]
+        for expr in exprs:
+            try:
+                re = self.convert.prog(expr)
+                raise Exception(expr + " should raise, but instead returns " + str(re))
+            except RuntimeError as err:
+                self.assertTrue(str(err.message).startswith("Could not FAdoize"))
 
+    def test_lark_errors(self):
+        exprs = [
+            '\\"',          # will attempt to parse \\\\" and raise UnexpectedToken "
+            u"(🇨🇦 + 🇵🇹)",   # no support for 8-byte paired characters 🇨🇦 = '\U0001f1e8\U0001f1e6'
+            "(a b",         "(ab c)",       "a + b",    "[0-9",     "^a]"
+        ]
+        for expr in exprs:
+            try:
+                re = self.convert.math(expr)
+                raise Exception(expr + " should raise, but instead returns " + str(re))
+            except LarkError:
+                pass
 
+    def test_anchor_noPartialMatch(self):
+        exprs = [
+            ("<ASTART>",                "@epsilon"),
+            ("<AEND>",                  "@epsilon"),
+            ("a",                       "a"),
+            ("@any",                    "@any"),
+            ("(<ASTART> a*)",           "@epsilon a*"),
+            ("((<ASTART> a*) <AEND>)",  "(@epsilon a*) @epsilon"),
+            ("(a* (0 + 1))",            "a* (0 + 1)"),
+            ("((a* (0 + 1)) <AEND>)",   "(a* (0 + 1)) @epsilon"),
+        ]
+        self.runtest(self.convert.math, exprs, partialMatch=False)
 
+    def test_anchor_yesPartialMatch(self):
+        exprs = [
+            ("<ASTART>",                "@epsilon @any*"),
+            ("<AEND>",                  "@any* @epsilon"),
+            ("a",                       "(@any* a) @any*"),
+            ("@any",                    "(@any* @any) @any*"),
+            ("(<ASTART> a*)",           "@epsilon (a* @any*)"),
+            ("((<ASTART> a*) <AEND>)",  "(@epsilon a*) @epsilon"),
+            ("(a* (0 + 1))",            "(@any* a*) ((0 @any*) + (1 @any*))"),
+            ("((a* (0 + 1)) <AEND>)",   "((@any* a*) (0 + 1)) @epsilon"),
+        ]
+        self.runtest(self.convert.math, exprs, partialMatch=True)
 
 
     def runtest(self, convert, expressions, partialMatch=False):
         for prog, fado in expressions:
-            val = convert(prog, partialMatch=False)
-            # self.assertEqual(str(val), fado.encode("utf-8")) # this shows byte string
-            self.assertEqual(str(val), fado.encode("utf-8"), str(val) + " != " + fado.encode("utf-8"))
-
-    # def test_anchor_noPartialMatch(self):
-    #     eq = lambda expr, expected: self.eq(expr, expected, False)
-    #     eq("<ASTART>",                          "@epsilon")
-    #     eq("<AEND>",                            "@epsilon")
-    #     eq("a",                                 "a")
-    #     eq("@any",                              "@any")
-    #     eq("(<ASTART>(a*))",                    "@epsilon a*")
-    #     eq("(<ASTART>(a*)<AEND>)",              "(@epsilon a*) @epsilon")
-    #     eq("((a*)(0+1)(0+1)(0+1))",             "((a* (0 + 1)) (0 + 1)) (0 + 1)")
-    #     eq("((a*)(0+1)(0+1)(0+1)<AEND>)",       "(((a* (0 + 1)) (0 + 1)) (0 + 1)) @epsilon")
-
-    # def test_anchor_yesPartialMatch(self):
-    #     eq = lambda expr, expected: self.eq(expr, expected, True)
-    #     eq("<ASTART>",                          "@any*")
-    #     eq("<AEND>",                            "@any*")
-    #     eq("a",                                 "@any* (a @any*)")
-    #     eq("@any",                              "@any* (@any @any*)")
-    #     eq("(<ASTART>(a*))",                    "@epsilon (a* @any*)")
-    #     eq("(<ASTART>(a*)<AEND>)",              "(@epsilon a*) @epsilon")
-    #     eq("((a*)(0+1)(0+1)(0+1))",             "(((@any* a*) (0 + 1)) (0 + 1)) ((0 + 1) @any*)")
-    #     eq("((a*)(0+1)(0+1)(0+1)<AEND>)",       "((((@any* a*) (0 + 1)) (0 + 1)) (0 + 1)) @epsilon")
-
-    # def test_error(self):
-    #     errors = ["(abc", "abc)", "a*", "a + b", "*", "[0-9", "^a]", "(<ASTART> + A)", "(<AEND>*)"]
-    #     regexps = self.convert.all(errors)
-    #     for i in range(len(errors)):
-    #         self.assertIsNone(regexps[i])
+            val = convert(prog, partialMatch=partialMatch)
+            self.assertEqual(str(val), fado.encode("utf-8"), prog.encode("utf-8") + " => "
+                + str(val) + " != " + fado.encode("utf-8"))
 
 
 if __name__ == "__main__":

@@ -4,10 +4,11 @@ from builtins import chr
 import copy
 import bisect
 
+from .util import unicode_chr, unicode_ord, SortedList
 
 class uatom(reex.atom):
-    def __init__(self, val, sigma=None):
-        super(uatom, self).__init__(val, sigma=sigma)
+    def __init__(self, val):
+        super(uatom, self).__init__(val, sigma=None)
         assert type(val) is unicode, "uatoms strictly represent unicode type, not " + str(type(val))
 
     def __str__(self):
@@ -15,96 +16,49 @@ class uatom(reex.atom):
 
     _strP = __str__
 
+    def repr(self):
+        return "uatom(" + str(self.val) + ")"
+
     def derivative(self, sigma):
-        if unicode_ord(sigma) == unicode_ord(self.val):
-            return reex.epsilon(self.Sigma)
-        return reex.emptyset(self.Sigma)
+        return reex.epsilon() if sigma in self else reex.emptyset()
+
+    def linearForm(self):
+        return {self: {reex.epsilon()}}
+
+    def __contains__(self, other):
+        """Returns if the character other is accepted by self"""
+        return other == self.val
 
     def stringLength(self):
         return len(self.val)
 
-class chars(reex.regexp):
-    """A character class which can match any single atom or a range of symbols
-    contained within it
-    i.e., [abc] will match a, b, or c - and nothing else.
-          [0-9] will match any symbol between 0 to 9 (inclusive)
-          [^13579] will match anything except odd digits
-    """
-
-    def __init__(self, symbols, neg=False):
-        """Create a new chars class
-        :param list<unicode> symbols: an iterable collection of symbols (single-character strings),
-                        and 2-tuple ranges of symbols - i.e., ("a", "z")
-        :param bool neg: if the chars class matches everything except the listed symbols
-                         i.e., [^abc] would use the neg=True option
+    def next(self, current=None):
+        """Finds the next character accepted by self after current
+        :param str|unicode|None current: character to succeed
+        :returns unicode: the next allowable character (ascending)
+        ..note: if current is not accepted by self, the "first" character is returned
         """
-        super(chars, self).__init__()
+        return None if current in self else self.val
 
-        self.neg = neg
-        self.str = u""
-        self.atoms = list()  # ordinals
-        self.ranges = list() # ordinal ranges as 2-tuples
-        for s in symbols:
-            if type(s) is tuple:
-                self.str += s[0] + "-" + s[1]
-                self.ranges.append((unicode_ord(s[0]), unicode_ord(s[1])))
-            elif type(s) is unicode: # removed: type(s) is str or TODO remove this comment
-                self.str += s
-                bisect.insort(self.atoms, unicode_ord(s))
-            else:
-                raise TypeError("Unknown type 's', must be unicode/2-tuple of unicode's, not " + str(type(s)))
-
-        self.ranges = merge_intervals(self.ranges) # note: this function returns sorted ranges
-
-    def __str__(self):
-        return "[" + ("^" if self.neg else "") + self.str.encode("utf-8") + "]"
-
-    _strP = __str__
-
-    def __repr__(self):
-        return "chars(" + ("^" if self.neg else "") + self.str.encode("utf-8") + ")"
-
-    def __contains__(self, symbol):
-        if type(symbol) is not int:
-            if len(symbol) == 0:
-                return False
-            else:
-                symbol = unicode_ord(unicode(symbol))
-        if bisect_eq(self.atoms, symbol) > -1:
-            return not self.neg
-        for s, e in self.ranges:
-            if s <= symbol and symbol <= e:
-                return not self.neg
-        return self.neg
-
-    def derivative(self, sigma):
-        """Overridden:
-        Derivative of the regular expression in relation to the given symbol.
-        :param sigma: an arbitrary symbol.
-        :rtype: Union[reex.epsilon, reex.emptyset]
+    def intersect(self, other):
+        """Find the intersection of another regexp leaf instance object.
+        :param other: can be an atom, epsilon, dotany, or chars
+        :returns: the intersection between self and other
+        :rtype: Union(reex.regexp, NoneType)
         """
-        return reex.epsilon() if sigma in self else reex.emptyset()
-
-    def treeLength(self):
-        """Overridden:
-        Number of nodes of the regular expression's syntactical tree.
-        :rtype: integer
-        """
-        return 1
-
-    def linearForm(self):
-        """Overridden:
-        Linear form of the regular expression.
-        ..note: Used for nfaPD/nfaPDO constructions
-        """
-        return {self: {reex.epsilon()}}
+        t = type(other)
+        if t is uatom:
+            return self if other.val == self.val else None
+        elif t is dotany:
+            return self
+        elif t is chars:
+            return self if self.val in other else None
+        elif t is reex.epsilon:
+            return None
+        else:
+            raise Exception("Could not intersect: other object unrecognized! " + str(type(other)))
 
     def nfaThompson(self):
-        """Overridden:
-        Epsilon-NFA constructed with Thompson's method that accepts the regular
-        expression's language.
-        :rtype: fa.NFA
-        """
         aut = fa.NFA()
         i = aut.addState()
         aut.addInitial(i)
@@ -114,15 +68,6 @@ class chars(reex.regexp):
         return aut
 
     def _nfaGlushkovStep(self, nfa, initial, final):
-        """Overridden:
-        Append transitions onto initial to a distinct state accepting self
-        :param fa.NFA nfa: the NFA to add to
-        :param initial: an iterable collection of state indices
-        :param set final: TODO: figure out
-        :returns: ...
-        :rtype: Tuple(..., ...)
-        ..note: Used by nfaGlushkov construction
-        """
         try:
             target = nfa.addState(self)
         except common.DuplicateName:
@@ -135,27 +80,66 @@ class chars(reex.regexp):
         return initial, final
 
     def _memoLF(self):
-        """Overridden:
-        Sets the attribute `_lf` to the linear form of self
-        ..note: Used by nfaPDO
-        """
         if not hasattr(self, "_lf"):
             self._lf = self.linearForm()
 
     def _nfaFollowEpsilonStep(self, conditions):
-        """Overridden:
-        ..note: Used by nfaFollow
-        """
         nfa, initial, final = conditions
         nfa.addTransition(initial, self, final)
 
-    def next(self, current=None):
-        """Finds the next symbol accepted by self after current
-        :param str current: unicode/str/None character to succeed
-        :returns: the next allowable character (ascending)
-        :rtype: str
-        ..note: if current is not in self, the first character is returned
+
+class chars(uatom):
+    """A character class which can match any single character or a range of characters contained within it
+    i.e., [abc] will match a, b, or c - and nothing else.
+          [0-9] will match any symbol between 0 to 9 (inclusive)
+          [^13579] will match anything of length 1 except odd digits
+    ..note: Internally, characters are converted into their ordinal value to simplify merging intervals
+    """
+
+    def __init__(self, symbols, neg=False):
+        """Create a new chars class
+        :param list<unicode> symbols: an iterable collection of symbols (single-character strings),
+                        and 2-tuple ranges of symbols - i.e., ("a", "z")
+        :param bool neg: if the chars class matches everything except the listed symbols
+                         i.e., [^abc] would use the neg=True option
         """
+        super(chars, self).__init__(u"") # self.val set later in __init__
+
+        self.neg = neg
+        self.val = u""
+        self.atoms = SortedList() # ordinals
+        self.ranges = SortedList(lambda x: x[0]) # ordinal ranges as 2-tuples
+        for s in symbols:
+            if type(s) is tuple:
+                self.val += s[0] + "-" + s[1]
+                self.ranges.add((unicode_ord(s[0]), unicode_ord(s[1])))
+            elif type(s) is unicode:
+                self.val += s
+                self.atoms.add(unicode_ord(s))
+            else:
+                raise TypeError("Unknown type 's', must be unicode/2-tuple of unicode's, not " + str(type(s)))
+
+        self.val = "[" + ("^" if self.neg else "") + self.val+ "]"
+
+        # merge overlapping ranges TODO understand the algorithm behind this and maybe re-write
+        self.ranges.set(merge_intervals(self.ranges))
+
+    def __repr__(self):
+        return "chars(" + self.val + ")"
+
+    def __contains__(self, symbol):
+        if type(symbol) is not int:
+            if len(symbol) == 0:
+                return False
+            else:
+                symbol = unicode_ord(symbol)
+
+        if self.ranges[self.ranges.index_lte(symbol)][1] > symbol or self.atoms.index(symbol) > -1:
+            return not self.neg
+
+        return self.neg
+
+    def next(self, current=None):
         if current is None or current not in self:
             a = None if len(self.atoms) < 1 else self.atoms[0]
             r = None if len(self.ranges) < 1 else self.ranges[0][0]
@@ -202,11 +186,6 @@ class chars(reex.regexp):
                 return None
 
     def intersect(self, other):
-        """Find the intersection of another regexp leaf.
-        :param other: can be an atom, epsilon, any_sym, or chars
-        :returns: the intersection between self and other
-        :rtype: Union(reex.regexp, NoneType)
-        """
         if type(other) is dotany:
             return self
         if type(other) is reex.atom:
@@ -283,11 +262,11 @@ class chars(reex.regexp):
         return None
 
 
-class dotany(chars):
+class dotany(uatom):
     """Class that represents the wildcard symbol that accepts everything.
     """
-    def __init__(self, sigma=None):
-        super(dotany, self).__init__([("0", "9"), ("A", "Z"), ("a", "z")])
+    def __init__(self):
+        super(dotany, self).__init__(u" ")
 
     def __repr__(self):
         return "dotany()"
@@ -304,30 +283,22 @@ class dotany(chars):
         return hash(self.__str__())
 
     def derivative(self, sigma):
-        """Overridden:
-        Derivative of the regular expression in relation to the given symbol.
-        :param sigma: an arbitrary symbol.
-        :rtype: reex.epsilon
-        """
         return reex.epsilon()
 
     def linearForm(self):
-        """Overridden:
-        Linear form of the regular expression.
-        ..note: Used for nfaPD/nfaPDO constructions
-        """
         return {self: {reex.epsilon()}}
 
-    def intersect(self, other):
-        """Find the intersection of another regexp leaf.
-        :param other: can be an atom, epsilon, any_sym, or chars
-        :returns: the intersection between self and other
-        :rtype: Union(reex.regexp, NoneType)
-        """
-        if type(other) is not reex.epsilon:
-            return other
+    def __contains__(self, symbol):
+        return len(symbol) == 1
+
+    def next(self, current=None):
+        if current is None:
+            return u" " # the first printable character
         else:
-            return None
+            return unicode_chr(unicode_ord(current) + 1)
+
+    def intersect(self, other):
+        return None if type(other) is reex.epsilon else other
 
 
 class anchor(reex.regexp):
@@ -362,50 +333,20 @@ def to_chr(item):
     else:
         raise TypeError("Unrecognized type " + str(type(item)))
 
-def bisect_eq(a, x):
-    """Locate the leftmost *index* exactly equal to `x`
-    https://docs.python.org/3/library/bisect.html
-    :param list a: the list to search through
-    :param x: the item to search for
-    :returns: the index of the item x in a, or -1 if not found
-    :rtype: int
-    """
-    i = bisect.bisect_left(a, x)
-    if i != len(a) and a[i] == x:
-        return i
-    return -1
-
-def bisect_gt(a, x):
-    """Locate the leftmost *index* of an item greater than value `x`
-    https://docs.python.org/3/library/bisect.html
-    :param list a: the list to search through
-    :param x: the item's value to get an index gt for
-    :returns: the index of the item greater than x in a, or len(a) if not found
-    :rtype: int
-    """
-    i = bisect.bisect_left(a, x)
-    if i != len(a):
-        return i
-    return len(a)
-
 def merge_intervals(intervals):
     """Merge overlapping numeric intervals
     https://gist.github.com/praveen97uma/8a4398dd42fb7b8497fb866190360998#file-merge-overlapping-intervals
-    Modified to expect (mostly) sorted intervals
+    Modified to expect sorted intervals
     """
     if not intervals:
         return []
 
-    data = [float("-inf")]
-    isSorted = True
+    data = []
     for interval in intervals:
         data.append((interval[0], 0))
         data.append((interval[1], 1))
-        isSorted = isSorted and data[-3] <= data[-2] and data[-2] <= data[-1]
 
-    data = data[1:]
-    if not isSorted:
-        data.sort()
+    data.sort()
 
     merged = []
     stack = [data[0]]
@@ -421,18 +362,3 @@ def merge_intervals(intervals):
                 # we have found our merged interval
                 merged.append((start[0], d[0]))
     return merged
-
-def unicode_ord(c):
-    try:
-        return ord(c)
-    except:
-        return int(repr(c)[4:-1], 16)
-
-def unicode_chr(i):
-    """https://stackoverflow.com/a/7107319"""
-    try:
-        return unichr(i)
-    except:
-        s = "\\U%08x" % i
-        c = s.decode("unicode-escape")
-        return c.encode("utf-8")

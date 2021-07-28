@@ -4,7 +4,7 @@ import sqlite3
 import lark.exceptions
 import regex
 
-from util import DBWrapper, FAdoize
+from .util import DBWrapper, FAdoize
 
 class Sampler(object):
     def __init__(self, language, search, verbose=0):
@@ -177,7 +177,10 @@ class PythonSampler(Sampler):
             return None
 
         expression = match.group(0)[:-2] # remove ["'][,)]
-        expression = expression.replace("(?:", "(") # non-referencing group
         expression = expression.replace("(?i", "(") # local case insensitive
 
         return expression
+
+
+if __name__ == "__main__":
+    pass

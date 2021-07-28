@@ -7,17 +7,18 @@ init:
 
 sample:
 	@make break
-	python2 -m benchmark.sample
+	python2 benchmark/sample.py
 	@make clean
 
 test:
 	@make break
 
-	@# python2 -m tests.test_convert
-	@# python2 -m tests.test_reex_ext
+	python2 -m tests.test_convert
+	python2 -m tests.test_sample
+	python2 -m tests.test_reex_ext
 	@# python2 -m tests.test_fa_ext
-	python2 -m unittest discover tests
 
+	@# python2 -m unittest discover tests
 	@make clean
 
 clean:

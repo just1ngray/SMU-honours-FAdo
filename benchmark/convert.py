@@ -2,7 +2,7 @@ from lark import Lark, Transformer
 from FAdo import reex
 
 import reex_ext as ext
-from sample.util import FAdoize
+from .util import FAdoize
 
 class Converter(object):
     """ A class to convert from `export.csv` regular expressions in the `re.lark`
@@ -26,13 +26,56 @@ class Converter(object):
         :raises: if there's a parsing error, or if anchors are found in non-"edge"
                  leaf positions
         """
-        # print "\n\nCONVERTING", expression
+        # print "CONVERTING", expression, "\t\t", repr(expression.encode("utf-8"))[1:-1]
         re = self._parser.parse(repr(expression.encode("utf-8"))[1:-1])
-        formatter = RegexpFormatter(re)
 
-        if partialMatch: formatter.allowPartialMatches()
-        formatter.replaceAnchors()
-        return formatter.re
+        class DummyClass():
+            def __init__(self, arg):
+                self.arg = arg
+        d = DummyClass(re)
+
+        stack = [(d, "arg", True, True)]
+        while len(stack) > 0:
+            parent, attr, anchorAllowedLeft, anchorAllowedRight = stack.pop()
+            current = getattr(parent, attr)
+            expand = False
+
+            # non-terminals
+            if type(current) is reex.concat:
+                stack.append((current, "arg2", False, anchorAllowedRight))
+                stack.append((current, "arg1", anchorAllowedLeft, False))
+            elif type(current) is reex.disj:
+                stack.append((current, "arg2", anchorAllowedLeft, anchorAllowedRight))
+                stack.append((current, "arg1", anchorAllowedLeft, anchorAllowedRight))
+            elif type(current) is reex.star \
+              or type(current) is reex.option:
+                stack.append((current, "arg", False, False))
+                expand = True
+
+            # terminals
+            elif type(current) is ext.anchor:
+                if ((attr[-1] == "2" and anchorAllowedRight and current.label == "<AEND>")
+                    or (attr[-1] == "1" and anchorAllowedLeft and current.label == "<ASTART>")
+                    or (attr == "arg" and (anchorAllowedLeft or anchorAllowedRight))):
+
+                    setattr(parent, attr, reex.epsilon())
+                    stack.append((parent, attr, current.label == "<AEND>" and anchorAllowedLeft,
+                            current.label == "<ASTART>" and anchorAllowedRight))
+                else:
+                    raise Exception("Unexpected anchor found in " + expression)
+            elif isinstance(current, ext.uatom) \
+              or type(current) is reex.epsilon:
+                expand = True
+            else:
+                raise Exception("Unknown item in tree: " + str(type(current)))
+
+            if partialMatch and expand:
+                if anchorAllowedLeft:
+                    setattr(parent, attr, reex.concat(reex.star(ext.dotany()), getattr(parent, attr)))
+                if anchorAllowedRight:
+                    setattr(parent, attr, reex.concat(getattr(parent, attr), reex.star(ext.dotany())))
+
+        return d.arg
 
     def prog(self, expression, partialMatch=True):
         r"""Convert a regular expression used in programming into a FAdo regexp tree.
@@ -54,80 +97,8 @@ class Converter(object):
         return self.math(formatted, partialMatch=partialMatch)
 
 
-class RegexpFormatter(object):
-    """A class to format a `reex.regexp` object"""
-
-    def __init__(self, re=None):
-        """Create a new RegexpFormatter
-        :arg re: the reex.regexp to deep copy and modify in place
-        """
-        super(RegexpFormatter, self).__init__()
-        self.re = re
-
-    def allowPartialMatches(self):
-        """Allow partialMatches for this reex.regexp by adding `(@any*)` at the start and
-        end positions (using concatenation only) where no anchor is found.
-        """
-        anyStar = lambda: reex.star(ext.dotany())
-        def repl(current, concat):
-            if type(current) is ext.anchor:
-                return reex.epsilon()
-            elif type(current) is reex.epsilon:
-                return anyStar()
-            else:
-                return concat
-
-        self._anchorReplace("arg1", lambda c: repl(c, reex.concat(anyStar(), c)))
-        self._anchorReplace("arg2", lambda c: repl(c, reex.concat(c, anyStar())))
-
-    def replaceAnchors(self):
-        """Replace "allowed" anchors with `@epsilon`.
-        Raise an error if there is an unexpected anchor. An anchor is unexpected if it's in a position
-        other than the leftmost leaf or rightmost leaf.
-        """
-        def repl(current):
-            if type(current) is ext.anchor:
-                return reex.epsilon()
-            else:
-                return current
-        self._anchorReplace("arg1", repl)
-        self._anchorReplace("arg2", repl)
-
-        stack = [self.re]
-        while len(stack) > 0:
-            current = stack.pop()
-            if type(current) is ext.anchor:
-                raise Exception("Unexpected anchor in found in " + str(self.re))
-            if getattr(current, "arg", None):
-                stack.append(current.arg)
-            elif getattr(current, "arg1", None):
-                stack.append(current.arg2)
-                stack.append(current.arg1)
-
-    def _anchorReplace(self, arg, repl):
-        """Replaces anchors found recursively in concat operations defined by the `arg` direction.
-        :arg str arg: "arg1" or "arg2" depending on the direction to search
-        :arg function repl: (leafnode) => replacement for that leafnode
-        """
-        if self.re.treeLength() <= 1:
-            self.re = repl(self.re)
-            return
-
-        current = self.re
-        while current is not None:
-            if type(current) is reex.concat:
-                child = getattr(current, arg)
-                if child.treeLength() <= 1 or type(child) is reex.star or type(child) is reex.disj:
-                    setattr(current, arg, repl(getattr(current, arg)))
-                    break
-                current = getattr(current, arg, None)
-            else:
-                current = None
-
-
 class LarkToFAdo(Transformer):
-    """Used with parser="lalr" to transform the tree in real-time into FAdo
-    objects.
+    """Used with parser="lalr" to transform the tree in real-time into FAdo objects.
     ..see: `benchmark/re.lark`
     """
     def expression(self, e):
@@ -157,10 +128,6 @@ class LarkToFAdo(Transformer):
         return (s[0].val, s[1].val)
 
     def SYMBOL(self, s):
-        # print ""
-        # print "SYMBOL", s.value
-        # print s.value.decode("string-escape"), type(s.value.decode("string-escape"))
-        # print s.value.decode("string-escape").decode("utf-8")
         return ext.uatom(s.value.decode("string-escape").decode("utf-8"))
 
     def EPSILON(self, _):

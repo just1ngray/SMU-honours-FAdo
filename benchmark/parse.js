@@ -1,7 +1,17 @@
-setTimeout(() => {
-    process.exit(1)
-}, 1000*10*60)
+/*
+The regexp-tree library is very widely used (over 900,000 public GitHub projects use it).
 
+This process is created from the main Python process, and listens to stdin expressions to
+parse. The expressions are parsed and formatted, then printed into stdout. Finally, the
+line "> Done0! <\n" is printed to stdout to signal the input expression has been finished.
+
+See details in benchmark/util.py#FAdoize
+*/
+const regexp = require("regexp-tree")
+
+/*
+LISTEN AND RESPOND TO DATA INPUTS
+*/
 process.stdin.on("data", (data) => {
     data = data.toString()
     if (data.endsWith("\r\n")) data = data.substr(-2)
@@ -18,42 +28,40 @@ process.stdin.on("data", (data) => {
         console.log("ERROR ^^^^")
     }
     finally {
-        console.log("Done")
+        console.log("> Done0! <")
     }
 });
 
-/*
-The regexp-tree library is very widely used (over 900,000 public GitHub projects use it).
+/**
+ * Creates left-recursive concatenation with an array of tokens.
+ * @param tokens the string tokens to left-recursively concatenate
+ * @returns the FAdo-accepting string of the concatenation
+ */
+function buildConcatRecursively(tokens) {
+    function f() {
+        if (tokens.length <= 2)
+            return `(${tokens[0]} ${tokens[1]})`
+        else {
+            const next = tokens.pop()
+            return `(${f()} ${next})`
+        }
+    }
+    return f()
+}
 
-This is called within a python benchmark.sample.sample#Sampler instance. The expression to
-parse is passed as a command-line argument.
-
-Escaping notes:
-    - \d* is passed as \d*
-    - In languages like Java where the \ is inside a pair of double-quotes, the first \
-        needs to be filtered out:
-        Java expression: "\\d*" should be passed as \d*
-    - If a double-quote appears inside the passed argument, they must be escaped.
-*/
-const regexp = require("regexp-tree")
-
+/**
+ * Convert a regexp-tree parsed AST into a formatted string
+ * @param node the node of the tree to convert
+ * @param chars null if not in char-class, true if in char-class, and false if the char-class
+ *  is negated
+ * @returns the formatted string
+ */
 function nodeToString(node, chars=null) {
-    // console.log("nodeToString:", node) // uncomment for debugging (performance penalty)
+    // console.log("nodeToString:", node, chars) // uncomment for debugging (performance penalty)
 
     switch (node.type) {
         case "Alternative":
-            const tokens = node.expressions.map(nodeToString)
-            function buildRecursively() {
-                if (tokens.length <= 2) {
-                    return `(${tokens[0]} ${tokens[1]})`
-                }
-                else {
-                    const next = tokens.pop()
-                    return `(${buildRecursively()} ${next})`
-                }
-            }
-
-            return buildRecursively()
+            return buildConcatRecursively(node.expressions.map(nodeToString))
 
         case "Assertion":
             switch (node.kind) {
@@ -98,12 +106,10 @@ function nodeToString(node, chars=null) {
                 return `${node.escaped ? "\\" : ""}${String.fromCharCode(node.codePoint)}`
 
         case "CharacterClass":
-            return `[${node.negative ? "^" : ""}${
-                node.expressions.map((e) => nodeToString(e, node.negative)).join("")}]`
+            children = node.expressions.map((e) => nodeToString(e, node.negative ? true : false))
+            return `[${node.negative ? "^" : ""}${children.join("")}]`
 
         case "ClassRange":
-            if (node.from > node.to)
-                throw new Error("Ill-formed ClassRange " + JSON.stringify(node))
             return `${nodeToString(node.from)}-${nodeToString(node.to)}`
 
         case "Disjunction":
@@ -142,17 +148,25 @@ function nodeToString(node, chars=null) {
             else {
                 function xMore(x) {
                     let maxChosen = 0
-                    let concat = ""
+                    let concat = []
                     for (let i = 1; i + maxChosen <= x; i *= 2) {
-                        concat += `(@epsilon + ${xReps(i)})`
+                        concat.push(`(@epsilon + ${xReps(i)})`)
                         maxChosen += i
                     }
-                    return (x - maxChosen == 0) ? concat : `${concat} ${xMore(x - maxChosen)}`
+
+                    if (x - maxChosen > 0)
+                        for (const token of xMore(x - maxChosen))
+                            concat.push(token)
+
+                    return concat
                 }
-                return `(${xReps(from)} ${xMore(to - from)})`
+                if (from == 0)
+                    return buildConcatRecursively(xMore(to - from))
+                else
+                    return `(${xReps(from)} ${buildConcatRecursively(xMore(to - from))})`
             }
 
         default:
-            console.log("Unrecognized", node)
+            throw new Error("Unrecognized " + JSON.stringify(node))
     }
 }
