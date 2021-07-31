@@ -1,6 +1,5 @@
-from FAdo import fa, reex, graphs
+from FAdo import fa, graphs
 from copy import copy, deepcopy
-from builtins import chr
 
 from reex_ext import chars, dotany
 

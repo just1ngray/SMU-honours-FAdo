@@ -1,10 +1,7 @@
 from FAdo import reex, fa, common
-from lark import Lark, Transformer
-from builtins import chr
 import copy
-import bisect
 
-from .util import unicode_chr, unicode_ord, SortedList
+from .util import unicode_chr, unicode_ord, RangeList
 
 class uatom(reex.atom):
     def __init__(self, val):
@@ -17,7 +14,7 @@ class uatom(reex.atom):
     _strP = __str__
 
     def repr(self):
-        return "uatom(" + str(self.val) + ")"
+        return 'uatom(u"' + str(self.val) + '")'
 
     def derivative(self, sigma):
         return reex.epsilon() if sigma in self else reex.emptyset()
@@ -26,7 +23,7 @@ class uatom(reex.atom):
         return {self: {reex.epsilon()}}
 
     def __contains__(self, other):
-        """Returns if the character other is accepted by self"""
+        """Returns if the character other is listed (or included) in self"""
         return other == self.val
 
     def stringLength(self):
@@ -34,7 +31,7 @@ class uatom(reex.atom):
 
     def next(self, current=None):
         """Finds the next character accepted by self after current
-        :param str|unicode|None current: character to succeed
+        :param unicode|None current: character to succeed
         :returns unicode: the next allowable character (ascending)
         ..note: if current is not accepted by self, the "first" character is returned
         """
@@ -46,17 +43,7 @@ class uatom(reex.atom):
         :returns: the intersection between self and other
         :rtype: Union(reex.regexp, NoneType)
         """
-        t = type(other)
-        if t is uatom:
-            return self if other.val == self.val else None
-        elif t is dotany:
-            return self
-        elif t is chars:
-            return self if self.val in other else None
-        elif t is reex.epsilon:
-            return None
-        else:
-            raise Exception("Could not intersect: other object unrecognized! " + str(type(other)))
+        return self if other.derivative(self.val) == reex.epsilon() else None
 
     def nfaThompson(self):
         aut = fa.NFA()
@@ -107,164 +94,108 @@ class chars(uatom):
 
         self.neg = neg
         self.val = u""
-        self.atoms = SortedList() # ordinals
-        self.ranges = SortedList(lambda x: x[0]) # ordinal ranges as 2-tuples
-        for s in symbols:
-            if type(s) is tuple:
-                self.val += s[0] + "-" + s[1]
-                self.ranges.add((unicode_ord(s[0]), unicode_ord(s[1])))
-            elif type(s) is unicode:
-                self.val += s
-                self.atoms.add(unicode_ord(s))
-            else:
-                raise TypeError("Unknown type 's', must be unicode/2-tuple of unicode's, not " + str(type(s)))
+        if type(symbols) is RangeList:
+            self.ranges = symbols
+            for a, b in self.ranges:
+                if a == b:
+                    self.val += a
+                else:
+                    self.val += a + u"-" + b
+        else:
+            self.ranges = RangeList(inc=lambda x: unicode_chr(unicode_ord(x)+1), dec=lambda x: unicode_chr(unicode_ord(x)-1))
+            for s in symbols:
+                if type(s) is tuple:
+                    if s[0] == s[1]:
+                        self.val += s[0]
+                    else:
+                        self.val += s[0] + "-" + s[1]
+                    self.ranges.add(s[0], s[1])
+                elif type(s) is unicode:
+                    self.val += s
+                    self.ranges.add(s)
+                else:
+                    raise TypeError("Unknown type 's', must be unicode/2-tuple of unicode's, not " + str(type(s)))
 
-        self.val = "[" + ("^" if self.neg else "") + self.val+ "]"
-
-        # merge overlapping ranges TODO understand the algorithm behind this and maybe re-write
-        self.ranges.set(merge_intervals(self.ranges))
+        self.val = "[" + ("^" if self.neg else "") + self.val + "]"
 
     def __repr__(self):
-        return "chars(" + self.val + ")"
+        return "chars(" + str(self) + ")"
 
     def __contains__(self, symbol):
-        if type(symbol) is not int:
-            if len(symbol) == 0:
-                return False
-            else:
-                symbol = unicode_ord(symbol)
+        return self.ranges.indexOf(symbol) > -1
 
-        if self.ranges[self.ranges.index_lte(symbol)][1] > symbol or self.atoms.index(symbol) > -1:
-            return not self.neg
-
-        return self.neg
+    def derivative(self, sigma):
+        if self.neg:
+            return reex.emptyset() if sigma in self else reex.epsilon()
+        else:
+            return reex.epsilon() if sigma in self else reex.emptyset()
 
     def next(self, current=None):
-        if current is None or current not in self:
-            a = None if len(self.atoms) < 1 else self.atoms[0]
-            r = None if len(self.ranges) < 1 else self.ranges[0][0]
-            m = min(filter(lambda x: x is not None, [a, r]))
-            return None if m is None else unicode_chr(m)
-        if type(current) is not int:
-            current = unicode_ord(unicode(current))
-
-        if self.neg:
-            offset = 1
-            while current + offset < 10000:
-                n = current + offset
-                if bisect_eq(self.atoms, n) != -1:
-                    offset += 1
-                    break
-                inRange = False
-                for s, e in self.ranges:
-                    if s <= n and n <= e:
-                        offset += e - n + 1
-                        inRange = True
-                        break
-                if not inRange:
-                    return unicode_chr(n)
-
-        else: # not neg
-            for i in xrange(bisect_gt(self.ranges, current), len(self.ranges)):
-                s, e = self.ranges[i]
-                if current == e: # at the end of this range => pick the next lowest
-                    nxt = None if i+1 >= len(self.ranges) else self.ranges[i + 1][0]
-                    atom_index = bisect_gt(self.atoms, current)
-                    if atom_index < len(self.atoms):
-                        if nxt is None: nxt = self.atoms[atom_index]
-                        else: nxt = min(nxt, self.atoms[atom_index])
-
-                    return None if nxt is None else unicode_chr(nxt)
-
-                elif s <= current and current < e:
-                    return unicode_chr(current + 1)
-
-            index = bisect_eq(self.atoms, current)
-            if index > -1 and index + 1 < len(self.atoms):
-                return unicode_chr(current + 1)
-            else:
+        if not self.neg:
+            i = self.ranges.indexOf(current)
+            if i is -1: # return the first character
+                if len(self.ranges) >= 1:
+                    return self.ranges[0][0]
+                else:
+                    return None
+            rnge = self.ranges[i]
+            nxt = unicode_chr(unicode_ord(current) + 1)
+            if nxt < rnge[1]: # incrmement by one in this range
+                return nxt
+            elif i + 1 < len(self.ranges): # go to next range
+                return self.ranges[i + 1][0]
+            else: # no ranges left
                 return None
+
+        else: # negative
+            if current is None:
+                current = unicode_chr(unicode_ord(u" ") - 1) # one less than first printable character
+
+            nxt = unicode_chr(unicode_ord(current) + 1)
+            i = self.ranges.search(nxt)
+            while i <= len(self.ranges):
+                if self.ranges.indexContains(i, nxt):
+                    nxt = unicode_chr(unicode_ord(self.ranges[i][1]) + 1)
+                    i += 1
+                else:
+                    return nxt
+            return None
 
     def intersect(self, other):
         if type(other) is dotany:
             return self
-        if type(other) is reex.atom:
-            if other.val in self: return other
-            else: return None
-        if type(other) is chars:
-            ranges = set()
-            atoms = set()
-            if self.neg == other.neg:
-                # s_ is for self; o_ is for other
-                for s_s, s_e in self.ranges: # find overlap of ranges
-                    for o_s, o_e in other.ranges:
-                        if s_s > o_s:
-                            break
-                        s = max(s_s, o_s)
-                        e = min(s_e, o_e)
-                        if s < e:
-                            ranges.add((s, e))
-                        elif s == e:
-                            atoms.add(s)
-
-                for a in self.atoms:
-                    if a in other:
-                        included = False
-                        for s, e in ranges:
-                            if s <= a and a <= e:
-                                included = True
-                                break
-                        if not included:
-                            atoms.add(a)
-                for a in other.atoms:
-                    if a in self:
-                        included = False
-                        for s, e in ranges:
-                            if s <= a and a <= e:
-                                included = True
-                                break
-                        if not included:
-                            atoms.add(a)
-
-                return chars(map(to_chr, atoms.union(ranges)), neg=self.neg)
+        elif type(other) is uatom:
+            if type(self.derivative(other.val)) is reex.epsilon:
+                return other
             else:
-                # remove negative chars from the positive chars
-                pos, neg = (other, self) if self.neg else (self, other)
-                ranges = set(copy.copy(pos.ranges))
-                for p_s, p_e in pos.ranges:
-                    for n_s, n_e in neg.ranges:
-                        if n_s <= p_s and p_e <= n_e:
-                            ranges.discard((p_s, p_e))
-                            break
-                        for s, e in [(p_s, min(p_e, n_s - 1)), (max(n_e + 1, p_s), p_e)]:
-                            if s > e:
-                                ranges.discard((s, e))
+                return None
+        elif type(other) is chars:
+            if self.neg == other.neg:
+                intersect = self.ranges.intersection(other.ranges)
+                if len(intersect) == 0:
+                    return None
+                else:
+                    return chars(intersect, neg=self.neg)
+            else:
+                pos = copy.copy(self.ranges)
+                neg = other
+                if self.neg:
+                    pos = copy.copy(other.ranges)
+                    neg = self
 
-                # split ranges while they contain neg.atoms neg.atoms
-                cpy = copy.copy(neg.atoms)
-                while len(cpy) > 0:
-                    a = cpy.pop()
-                    for s, e in ranges:
-                        if s <= a and a <= e: # split the range around a
-                            ranges.remove((s, e))
-                            for r in [(s, a - 1), (a + 1, e)]:
-                                if r[0] < r[1]:
-                                    ranges.add(r)
-                                elif r[0] == r[1]:
-                                    atoms.add(r[0])
-                            break
+                for a, b in neg.ranges:
+                    pos.remove(a, b)
 
-                for a in pos.atoms:
-                    if a in neg:
-                        atoms.add(a)
-
-                return chars(map(to_chr, atoms.union(ranges)))
-        return None
+                if len(pos) == 0:
+                    return None
+                else:
+                    return chars(pos)
+        else:
+            return None
 
 
 class dotany(uatom):
-    """Class that represents the wildcard symbol that accepts everything.
-    """
+    """Class that represents the wildcard symbol that accepts everything."""
     def __init__(self):
         super(dotany, self).__init__(u" ")
 
@@ -282,11 +213,8 @@ class dotany(uatom):
     def __hash__(self):
         return hash(self.__str__())
 
-    def derivative(self, sigma):
+    def derivative(self, _):
         return reex.epsilon()
-
-    def linearForm(self):
-        return {self: {reex.epsilon()}}
 
     def __contains__(self, symbol):
         return len(symbol) == 1
@@ -310,55 +238,7 @@ class anchor(reex.regexp):
         super(anchor, self).__init__()
         self.label = label
 
-    def treeLength(self):
-        return 0
-
     def __str__(self):
         return self.label
 
     _strP = __str__
-
-
-def to_chr(item):
-    """Converts an integer or tuple of integers to a character or tuple of characters
-    respectively
-    """
-    if type(item) is int:
-        return unicode_chr(item)
-    elif type(item) is tuple:
-        l = []
-        for i in item:
-            l.append(unicode_chr(i))
-        return tuple(l)
-    else:
-        raise TypeError("Unrecognized type " + str(type(item)))
-
-def merge_intervals(intervals):
-    """Merge overlapping numeric intervals
-    https://gist.github.com/praveen97uma/8a4398dd42fb7b8497fb866190360998#file-merge-overlapping-intervals
-    Modified to expect sorted intervals
-    """
-    if not intervals:
-        return []
-
-    data = []
-    for interval in intervals:
-        data.append((interval[0], 0))
-        data.append((interval[1], 1))
-
-    data.sort()
-
-    merged = []
-    stack = [data[0]]
-    for i in xrange(1, len(data)):
-        d = data[i]
-        if d[1] == 0:
-            # this is a lower bound, push this onto the stack
-            stack.append(d)
-        elif d[1] == 1:
-            if stack:
-                start = stack.pop()
-            if len(stack) == 0:
-                # we have found our merged interval
-                merged.append((start[0], d[0]))
-    return merged

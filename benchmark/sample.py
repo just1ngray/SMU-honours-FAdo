@@ -1,7 +1,5 @@
 import urllib
 import json
-import sqlite3
-import lark.exceptions
 import regex
 
 from .util import DBWrapper, FAdoize

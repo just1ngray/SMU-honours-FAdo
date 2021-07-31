@@ -2,7 +2,6 @@ import sqlite3
 import subprocess
 import time
 import regex
-import bisect
 
 def unicode_ord(c):
     """Get the unicode ordinal value of any <= 4-byte character.
@@ -13,7 +12,10 @@ def unicode_ord(c):
     try:
         return ord(c)
     except:
-        return int(repr(c)[4:-1], 16)
+        try:
+            return int(repr(c)[4:-1], 16)
+        except ValueError as e:
+            raise UnicodeError("Could not convert '" + c + "' to ordinal:", e)
 
 def unicode_chr(i):
     """Get the unicode character from an ordinal number.
@@ -138,54 +140,185 @@ def FAdoize(expression, log=lambda *m: None):
         raise RuntimeError("Could not FAdoize `" + expression + "`\n"
             + reduce(lambda p, c: p + "\n" + c, output))
 
-class SortedList():
-    """A sorted data structure, where each item is sorted by its representing item.
-    I.e., this can be used to store sorted tuples, where each tuple is sorted by
-        its first value
+
+def FunctionNotDefined(*x):
+    raise NotImplementedError("A required function was not defined")
+
+class RangeList(object):
+    """A sorted range-list which automatically maintains sorted order and combines
+    ranges as needed. Added items need to be:
+        1. Comparable using boolean comparisons
+        2. A member of a countable domain
     """
-    def __init__(self, rep=lambda x: x):
-        super(SortedList, self).__init__()
-        self.list = []
-        self.reps = []
-        self.rep = rep
+    def __init__(self, iterable=[], inc=FunctionNotDefined, dec=FunctionNotDefined):
+        """Create a new RangeList.
+        :param function inc: increment an element
+        :param function dec: decrement an element
+        :param list|set iterable: elements of type T as: Union(T, Tuple(T, T))
+        """
+        super(RangeList, self).__init__()
+        self.inc = inc
+        self.dec = dec
+        self._list = []
+        for i in iterable:
+            if type(i) is tuple:
+                self.add(i[0], i[1])
+            else:
+                self.add(i)
+
+    def __str__(self):
+        return str(self._list)
 
     def __getitem__(self, index):
-        return self.list[index]
+        return self._list[index]
 
-    def add(self, item):
-        """Add item to the internal list while maintaining sorted order
-        :returns int: the index at which the item has been inserted
+    def __len__(self):
+        return len(self._list)
+
+    def __iter__(self):
+        return iter(self._list)
+
+    def search(self, n):
+        """Finds the range's index which contains n. If no range contains n,
+        then the index where the range would be is returned.
+        :param n: the item to search for
+        :returns int: the index as described above
         """
-        index = bisect.insort_left(self.reps, self.rep(item))
-        self.list.insert(index, item)
-        return index
+        lo = 0
+        hi = len(self) # exclusive index, but self._list[X][1] is inclusive
+        mid = (hi + lo) // 2
 
-    def set(self, sortedlist):
-        """Sets the internal list structure
-        :param list sortedlist: the list which is assumed to be sorted
+        while lo <= mid and mid < hi:
+            a, b = self[mid]        # ----a-----b----
+            if n < a:               # -n--a-----b----
+                hi = mid
+            elif b < n:             # ----a-----b--n-
+                lo = mid + 1
+            else: # a <= n <= b     # ----a--n--b----
+                return mid
+            mid = (hi + lo) // 2
+        return mid
+
+    def indexOf(self, n):
+        """Finds the index of item n in ranges
+        :param n: the item to search for
+        :returns int: the index of the range which contains n, or -1 if
+        no range contains n
         """
-        self.list = sortedlist
-        self.reps = list(map(self.rep, sortedlist))
+        i = self.search(n)
+        return i if self.indexContains(i, n) else -1
 
-    def get(self):
-        """:returns list: the interal sorted list"""
-        return self.list
-
-    def index(self, item):
-        """Finds the index of an item in the list
-        :param rep: the item to search for
-        :returns int: the index of the item, or -1 if it doesn't exist
+    def indexContains(self, index, n):
+        """Tests if the range at an index contains n
+        :param int index: the range index to check
+        :param n: the item the range should contain
+        :returns Bool: if the range at index contains n
         """
-        i = bisect.bisect_left(self.reps, self.rep(item))
-        if i != len(self.reps) and self.reps[i] == self.rep(item):
-            return i
-        return -1
+        if index < len(self):
+            a, b = self[index]
+            if a <= n and n <= b:
+                return True
+        return False
 
-    def index_lte(self, item):
-        """Finds the first index of an item in the list where self[index]>=item
-        :param item: the item to search for
-        :returns int|None: the minimum index which satisfies self[index]>=item,
-            or None if no index satisfies this property
+    def add(self, lo, hi=None):
+        """Add a range to this list while maintaining sorted order and merging elements if needed.
+        :param lo: the low-end of the range (inclusive)
+        :param hi: the high-end of the range (inclusive)
+            ..note: if None: defaults to lo
         """
-        i = bisect.bisect_right(self.reps, self.rep(item))
-        return i if i else None
+        if hi is None:
+            hi = lo
+        assert lo <= hi, "Illegally formed range has a lower bound greater than its upper!"
+
+        lo_i = self.search(lo)
+        hi_i = lo_i if lo == hi else self.search(hi)
+
+        if lo_i == hi_i:
+            i = lo_i
+            if i >= len(self) or hi < self[i][0] or lo > self[i][1]:
+                # "insert no-overlap" case
+                self._list.insert(i, (lo, hi))
+            else:
+                # "extend down/contained" case
+                self._list[i] = (min(lo, self[i][0]), max(hi, self[i][1]))
+        elif lo_i + 1 == hi_i and \
+            (hi_i < len(self) and (self[hi_i][0] > hi or hi >= self[hi_i][1])): # eq. indexOf(hi) == -1
+            # "extend up" case
+            self._list[lo_i] = (self[lo_i][0], hi)
+        else:
+            # "merge" case
+            if not (hi_i < len(self) and hi == self[hi_i][1]):
+                hi_i -= 1
+
+            end = self[hi_i][1]
+            del self._list[lo_i + 1:hi_i + 1]
+            self._list[lo_i] = (min(self[lo_i][0], lo), max(end, hi))
+
+    def remove(self, lo, hi=None):
+        """Remove [lo,hi] from this range list.
+        :param lo: the low-end of the range (inclusive)
+        :param hi: the high-end of the range (inclusive)
+            ..note: if None: defaults to lo
+        ..note: this function requires the inc and dec functions to be defined
+        """
+        if hi is None:
+            hi = lo
+        assert lo <= hi, "Illegally formed range has a lower bound greater than its upper!"
+
+        lo_i = self.search(lo)
+        hi_i = lo_i if lo == hi else self.search(hi)
+
+        if lo_i == hi_i:
+            i = lo_i
+            if i < len(self) and hi >= self[i][0] and lo <= self[i][1]:
+                toConsider = [(self[i][0], min(self[i][1], self.dec(lo))),
+                              (max(self[i][0], self.inc(hi)), self[i][1])]
+                del self._list[i]
+                for a, b in toConsider:
+                    if a <= b:
+                        self._list.insert(i, (a, b))
+                        i += 1
+        elif lo_i + 1 == hi_i and \
+            (hi_i < len(self) and (self[hi_i][0] > hi or hi >= self[hi_i][1])):
+            self._list[lo_i] = (self[lo_i][0], self.dec(lo))
+        else:
+            if hi_i >= len(self):
+                hi_i -= 1
+
+            start, end = self[hi_i]
+            del self._list[lo_i + 2:hi_i + 1]
+
+            self._list[lo_i] = (self[lo_i][0], self.dec(lo))
+            self._list[lo_i + 1] = (self.inc(hi) if hi >= start else start, end)
+
+            if self[lo_i][0] > self[lo_i][1]:
+                del self._list[lo_i]
+            if self[lo_i][0] > self[lo_i][1]:
+                del self._list[lo_i]
+
+    def intersection(self, other):
+        """Finds the intersection between self and other
+        :param RangeList other: the other list to intersect with
+        :returns RangeList: with the intersection of self and other
+        ..see: https://leetcode.com/problems/interval-list-intersections/solution/
+        """
+        if type(other) is not RangeList:
+            raise TypeError("Cannot intersection with type: " + str(type(other)))
+
+        inter = []
+        si = 0
+        oi = 0
+        while si < len(self) and oi < len(other):
+            lo = max(self[si][0], other[oi][0])
+            hi = min(self[si][1], other[oi][1])
+            if lo <= hi:
+                inter.append((lo, hi))
+
+            if self[si][1] < other[oi][1]:
+                si += 1
+            else:
+                oi += 1
+
+        intersectList = RangeList(inc=self.inc, dec=self.dec)
+        intersectList._list = inter
+        return intersectList
