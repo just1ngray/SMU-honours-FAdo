@@ -1,7 +1,25 @@
 from FAdo import reex, fa, common
 import copy
 
-from .util import unicode_chr, unicode_ord, RangeList
+from util import RangeList, UniUtil
+
+def wordDerivative(self, word):
+    """Allows taking the word derivative of unicode strings with
+    surrogate pairs.
+    """
+    d = copy.deepcopy(self)
+    for sigma in UniUtil.charlist(word):
+        d = d.derivative(sigma)
+    return d
+
+def u_factory(base, *args):
+    """Creates an instance of base (with arguments args) and sets the method
+    wordDerivative to support surrogate unicode pairs
+    """
+    o = base(*args)
+    o.wordDerivative = lambda w: wordDerivative(o, w)
+    return o
+
 
 class uatom(reex.atom):
     def __init__(self, val):
@@ -18,6 +36,8 @@ class uatom(reex.atom):
 
     def derivative(self, sigma):
         return reex.epsilon() if sigma in self else reex.emptyset()
+
+    wordDerivative = wordDerivative
 
     def linearForm(self):
         return {self: {reex.epsilon()}}
@@ -102,7 +122,7 @@ class chars(uatom):
                 else:
                     self.val += a + u"-" + b
         else:
-            self.ranges = RangeList(inc=lambda x: unicode_chr(unicode_ord(x)+1), dec=lambda x: unicode_chr(unicode_ord(x)-1))
+            self.ranges = RangeList(inc=lambda x: UniUtil.chr(UniUtil.ord(x)+1), dec=lambda x: UniUtil.chr(UniUtil.ord(x)-1))
             for s in symbols:
                 if type(s) is tuple:
                     if s[0] == s[1]:
@@ -139,7 +159,7 @@ class chars(uatom):
                 else:
                     return None
             rnge = self.ranges[i]
-            nxt = unicode_chr(unicode_ord(current) + 1)
+            nxt = UniUtil.chr(UniUtil.ord(current) + 1)
             if nxt < rnge[1]: # incrmement by one in this range
                 return nxt
             elif i + 1 < len(self.ranges): # go to next range
@@ -149,13 +169,13 @@ class chars(uatom):
 
         else: # negative
             if current is None:
-                current = unicode_chr(unicode_ord(u" ") - 1) # one less than first printable character
+                current = UniUtil.chr(UniUtil.ord(u" ") - 1) # one less than first printable character
 
-            nxt = unicode_chr(unicode_ord(current) + 1)
+            nxt = UniUtil.chr(UniUtil.ord(current) + 1)
             i = self.ranges.search(nxt)
             while i <= len(self.ranges):
                 if self.ranges.indexContains(i, nxt):
-                    nxt = unicode_chr(unicode_ord(self.ranges[i][1]) + 1)
+                    nxt = UniUtil.chr(UniUtil.ord(self.ranges[i][1]) + 1)
                     i += 1
                 else:
                     return nxt
@@ -223,7 +243,7 @@ class dotany(uatom):
         if current is None:
             return u" " # the first printable character
         else:
-            return unicode_chr(unicode_ord(current) + 1)
+            return UniUtil.chr(UniUtil.ord(current) + 1)
 
     def intersect(self, other):
         return None if type(other) is reex.epsilon else other

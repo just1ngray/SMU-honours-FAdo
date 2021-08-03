@@ -14,12 +14,21 @@ LISTEN AND RESPOND TO DATA INPUTS
 */
 process.stdin.on("data", (data) => {
     data = data.toString()
-    if (data.endsWith("\r\n")) data = data.substr(-2)
-    else if (data.endsWith("\n")) data = data.substr(-1)
+    if (data.endsWith("\r\n")) data = data.substring(0, data.length - 2)
+    else if (data.endsWith("\n")) data = data.substring(0, data.length - 1)
+
+    for (const c of data)
+        console.log(c)
 
     try {
         console.log("Parsing expression /" + data + "/ ... ")
-        const ast = regexp.parse("/" + data + "/")
+
+        let str = ""
+        for (const c of data)
+            if (c.length > 1) str += `\\u\{${c.codePointAt(0).toString(16)}}`
+            else              str += c
+
+        const ast = regexp.parse("/" + str + "/u")
         const formatted = nodeToString(ast.body)
         console.log(formatted)
     }
@@ -102,8 +111,12 @@ function nodeToString(node, chars=null) {
                     }
                 return node.value
             }
-            else
-                return `${node.escaped ? "\\" : ""}${String.fromCharCode(node.codePoint)}`
+            else {
+                // return `${node.escaped ? "\\" : ""}${String.fromCodePoint(node.codePoint)}`
+                // is equivalent to:
+                return `${node.escaped ? "\\" : ""}${node.symbol}`
+                // however, the second option requires less look-ups
+            }
 
         case "CharacterClass":
             children = node.expressions.map((e) => nodeToString(e, node.negative ? true : false))

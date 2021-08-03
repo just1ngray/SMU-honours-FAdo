@@ -2,33 +2,67 @@ import sqlite3
 import subprocess
 import time
 import regex
+import lark
 
-def unicode_ord(c):
-    """Get the unicode ordinal value of any <= 4-byte character.
-    :param unicode|str c: the character to analyze
-    :returns int: the ordinal value of c
-    :raises: if c is not length 1
-    """
-    try:
-        return ord(c)
-    except:
+charlist_grammar = None
+class UniUtil():
+    @staticmethod
+    def charlist(word):
+        """Splits a unicode string into its individual displayable
+        characters and returns in list form.
+        :param unicode word: the word to retrieve characters from
+        :returns list<unicode>: the individual characters of word
+        """
+        if globals()["charlist_grammar"] is None:
+            class Transformer(lark.Transformer):
+                start = lambda _, t: t
+                ASCII = lambda _, s: s.value
+                BYTES = lambda _, b: b.value.decode("string-escape").decode("utf-8")
+
+            globals()["charlist_grammar"] = lark.Lark(r"""
+                start       : (BYTES | ASCII)*
+                ASCII       : /\\?./
+                BYTES       : B_PREFIX (B_1 | B_2 | B_3 | B_4)
+                B_PREFIX    : "\\x"
+                HEX         : /[0-9a-f]/
+                B_1         : "0".."7"    HEX
+                B_2         : ("c" | "d") HEX      B_ANOTHER
+                B_3         : "e"         HEX      B_ANOTHER~2
+                B_4         : "f"         "0".."7" B_ANOTHER~3
+                B_ANOTHER   : B_PREFIX /[89a-f]/ HEX
+            """, parser="lalr", transformer=Transformer())
+
+        encoded = repr(word.encode("utf-8"))[1:-1]
+        return globals()["charlist_grammar"].parse(encoded)
+
+    @staticmethod
+    def ord(c):
+        """Get the unicode ordinal value of any <= 4-byte character.
+        :param unicode|str c: the character to analyze
+        :returns int: the ordinal value of c
+        :raises: if c is not length 1
+        """
         try:
-            return int(repr(c)[4:-1], 16)
-        except ValueError as e:
-            raise UnicodeError("Could not convert '" + c + "' to ordinal:", e)
+            return ord(c)
+        except:
+            try:
+                return int(repr(c)[4:-1], 16)
+            except ValueError as e:
+                raise UnicodeError("Could not convert '" + c + "' to ordinal:", e)
 
-def unicode_chr(i):
-    """Get the unicode character from an ordinal number.
-    :param int i: the ordinal to retrieve the character of
-    :returns unicode: the character with ordinal i
-    ..based on: https://stackoverflow.com/a/7107319
-    """
-    try:
-        return unichr(i)
-    except:
-        s = "\\U%08x" % i
-        c = s.decode("unicode-escape")
-        return c.encode("utf-8")
+    @staticmethod
+    def chr(i):
+        """Get the unicode character from an ordinal number.
+        :param int i: the ordinal to retrieve the character of
+        :returns unicode: the character with ordinal i
+        ..based on: https://stackoverflow.com/a/7107319
+        """
+        try:
+            return unichr(i)
+        except:
+            s = "\\U%08x" % i
+            c = s.decode("unicode-escape")
+            return c.encode("utf-8")
 
 class DBWrapper(object):
     def __init__(self):
@@ -137,8 +171,10 @@ def FAdoize(expression, log=lambda *m: None):
     if not converted.startswith("ERROR"):
         return converted.decode("utf-8")
     else:
-        raise RuntimeError("Could not FAdoize `" + expression + "`\n"
-            + reduce(lambda p, c: p + "\n" + c, output))
+        err = ""
+        for o in output:
+            err += "\t> " + o + "\n"
+        raise RuntimeError("Could not FAdoize\n" + err)
 
 
 def FunctionNotDefined(*x):

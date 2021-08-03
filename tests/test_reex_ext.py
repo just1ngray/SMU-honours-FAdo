@@ -4,12 +4,10 @@ from FAdo import reex
 
 from benchmark.reex_ext import uatom, chars, dotany
 import benchmark.util as util
+from benchmark.convert import Converter
 
 
 class TestUAtom(unittest.TestCase):
-    def setUp(self):
-        return super(TestUAtom, self).setUp()
-
     def test_init(self):
         with self.assertRaises(AssertionError):
             uatom("a")
@@ -22,15 +20,15 @@ class TestUAtom(unittest.TestCase):
             + u"ʊᾔї¢ø∂ε @ℓтεґηα⊥ї♥℮ṧ❣ ✨ ASCII :)")
         for a in atoms:
             atom = uatom(a)
-            aord = util.unicode_ord(a)
+            aord = util.UniUtil.ord(a)
 
             # str should not throw
             str(atom)
 
             # derivative
             self.assertEqual(atom.derivative(a), reex.epsilon())
-            self.assertEqual(atom.derivative(util.unicode_chr(aord + 1)), reex.emptyset())
-            self.assertEqual(atom.derivative(util.unicode_chr(aord - 1)), reex.emptyset())
+            self.assertEqual(atom.derivative(util.UniUtil.chr(aord + 1)), reex.emptyset())
+            self.assertEqual(atom.derivative(util.UniUtil.chr(aord - 1)), reex.emptyset())
 
             # __contains__
             self.assertTrue(a in atom)
@@ -118,9 +116,6 @@ class TestChars(unittest.TestCase):
         self.assertEqual(self.negHex.intersect(chars([(u"a", u"z")])).__repr__(), "chars([g-z])")
 
 class TestDotAny(unittest.TestCase):
-    def setUp(self):
-        return super(TestDotAny, self).setUp()
-
     def test_derivative(self):
         self.assertEqual(dotany().derivative(u"a"), reex.epsilon())
         self.assertEqual(dotany().derivative(u"α"), reex.epsilon())
@@ -129,7 +124,7 @@ class TestDotAny(unittest.TestCase):
     def test_next(self):
         arr = [3904, 14987, 24086, 3836, 2205, 3446, 13563, 2749, 1210, 1435, 65]
         for v in arr:
-            self.assertEqual(dotany().next(util.unicode_chr(v)), util.unicode_chr(v + 1))
+            self.assertEqual(dotany().next(util.UniUtil.chr(v)), util.UniUtil.chr(v + 1))
 
         self.assertEqual(dotany().next(), " ")
 
@@ -139,6 +134,46 @@ class TestDotAny(unittest.TestCase):
         self.assertEqual(dotany().intersect(uatom(u"a")), uatom(u"a"))
         self.assertEqual(dotany().intersect(chars(u"a")), chars(u"a"))
 
+class TestEvalWordP(unittest.TestCase):
+    def setUp(self):
+        self.convert = Converter()
+        return super(TestEvalWordP, self).setUp()
+
+    def test_concat(self):
+        re = self.convert.prog(u"abcδεφ")
+        self.assertTrue(re.evalWordP(u"abcδεφ"))
+        self.assertFalse(re.evalWordP("abcdef"))
+        self.assertFalse(re.evalWordP("000111"))
+
+    def test_disj(self):
+        re = self.convert.prog(u"(🏀|⚽|🎾|none)")
+        self.assertTrue(re.evalWordP("none"))
+        self.assertTrue(re.evalWordP(u"⚽"))
+        self.assertTrue(re.evalWordP(u"🏀"))
+        self.assertTrue(re.evalWordP(u"🎾"))
+        self.assertFalse(re.evalWordP(u"🏈"))
+        self.assertFalse(re.evalWordP(u"a"))
+
+    def test_star(self):
+        re = self.convert.math(u"🚗*")
+        self.assertTrue(re.evalWordP(""))
+        self.assertTrue(re.evalWordP(u"🚗"))
+        self.assertTrue(re.evalWordP(u"🚗🚗🚗🚗🚗"))
+        self.assertFalse(re.evalWordP(u"🚗🚗🚓🚗🚗"))
+        self.assertFalse(re.evalWordP(u"traffic"))
+
+    def test_option(self):
+        re = self.convert.math(u"(🄾)?")
+        self.assertTrue(re.evalWordP(""))
+        self.assertTrue(re.evalWordP(u"🄾"))
+        self.assertFalse(re.evalWordP(u"🄾🄾"))
+
+    def test_full(self):
+        re = self.convert.prog(u"😝♣* (тĤ𝐢ş|๏𝐑|Ŧ卄ⓐ𝔱) ☝(🐟)?")
+        self.assertTrue(re.evalWordP(u"😝 тĤ𝐢ş ☝"))
+        self.assertTrue(re.evalWordP(u"😝 ๏𝐑 ☝"))
+        self.assertTrue(re.evalWordP(u"😝 ๏𝐑 ☝🐟"))
+        self.assertTrue(re.evalWordP(u"😝♣♣♣♣ ๏𝐑 ☝"))
 
 
 if __name__ == "__main__":

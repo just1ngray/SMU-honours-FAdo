@@ -1,14 +1,38 @@
 from lark import Lark, Transformer
 from FAdo import reex
 
-import reex_ext as ext
-from .util import FAdoize
+from reex_ext import dotany, chars, uatom, anchor, u_factory
+from util import FAdoize
 
 class Converter(object):
     """ A class to convert from `export.csv` regular expressions in the `re.lark`
         grammar to FAdo classes using the `reex` & `reex_ext` modules.
     """
     def __init__(self):
+        class LarkToFAdo(Transformer):
+            """Used with parser="lalr" to transform the tree in real-time into FAdo objects.
+            ..see: `benchmark/re.lark`
+            """
+            expression = lambda _, e: e[0]
+            option = lambda _, e: u_factory(reex.option, e[0])
+            kleene = lambda _, e: u_factory(reex.star, e[0])
+            concat = lambda _, e: u_factory(reex.concat, e[0], e[1])
+            disjunction = lambda _, e: u_factory(reex.disj, e[0], e[1])
+
+            def chars(self, items):
+                items = list(map(lambda c: c.val if isinstance(c, reex.atom) else c, items))
+                return chars(items, neg=False)
+
+            def neg_chars(self, items):
+                items = list(map(lambda c: c.val if isinstance(c, reex.atom) else c, items))
+                return chars(items, neg=True)
+
+            char_range = lambda _, e: (e[0].val, e[1].val)
+            SYMBOL = lambda _, e: uatom(e.value.decode("string-escape").decode("utf-8"))
+            EPSILON = lambda _0, _1: u_factory(reex.epsilon)
+            DOTANY = lambda _0, _1: dotany()
+            ANCHOR = lambda _, e: anchor(e.value)
+
         self._parser = Lark.open("benchmark/re.lark", start="expression",
             parser="lalr", transformer=LarkToFAdo())
 
@@ -21,12 +45,10 @@ class Converter(object):
                 excludes emoji flags and maybe some other characters)
         :param bool partialMatch: given any text T, U, and word weL(expression),
                                   should the regexp tree match text 'TwL'?
-        :returns: the parsed regexp tree
-        :rtype: reex.regexp
+        :returns reex.regexp: the parsed regexp tree
         :raises: if there's a parsing error, or if anchors are found in non-"edge"
                  leaf positions
         """
-        # print "CONVERTING", expression, "\t\t", repr(expression.encode("utf-8"))[1:-1]
         re = self._parser.parse(repr(expression.encode("utf-8"))[1:-1])
 
         class DummyClass():
@@ -53,7 +75,7 @@ class Converter(object):
                 expand = True
 
             # terminals
-            elif type(current) is ext.anchor:
+            elif type(current) is anchor:
                 if ((attr[-1] == "2" and anchorAllowedRight and current.label == "<AEND>")
                     or (attr[-1] == "1" and anchorAllowedLeft and current.label == "<ASTART>")
                     or (attr == "arg" and (anchorAllowedLeft or anchorAllowedRight))):
@@ -63,7 +85,7 @@ class Converter(object):
                             current.label == "<ASTART>" and anchorAllowedRight))
                 else:
                     raise Exception("Unexpected anchor found in " + expression)
-            elif isinstance(current, ext.uatom) \
+            elif isinstance(current, uatom) \
               or type(current) is reex.epsilon:
                 expand = True
             else:
@@ -71,9 +93,9 @@ class Converter(object):
 
             if partialMatch and expand:
                 if anchorAllowedLeft:
-                    setattr(parent, attr, reex.concat(reex.star(ext.dotany()), getattr(parent, attr)))
+                    setattr(parent, attr, reex.concat(reex.star(dotany()), getattr(parent, attr)))
                 if anchorAllowedRight:
-                    setattr(parent, attr, reex.concat(getattr(parent, attr), reex.star(ext.dotany())))
+                    setattr(parent, attr, reex.concat(getattr(parent, attr), reex.star(dotany())))
 
         return d.arg
 
@@ -86,8 +108,7 @@ class Converter(object):
         :param unicode|str expression: the expression to convert
         :param bool partialMatch: given any text T, U, and word weL(expression),
                                   should the regexp tree match text 'TwL'?
-        :returns: the parsed regexp tree
-        :rtype: reex.regexp
+        :returns reex.regexp: the parsed regexp tree
         :raises: if there's a parsing error, or if anchors are found in non-"edge"
                  leaf positions
         ..note: self.prog is much slower than self.math since it has to spin up a
@@ -95,46 +116,3 @@ class Converter(object):
         """
         formatted = FAdoize(expression)
         return self.math(formatted, partialMatch=partialMatch)
-
-
-class LarkToFAdo(Transformer):
-    """Used with parser="lalr" to transform the tree in real-time into FAdo objects.
-    ..see: `benchmark/re.lark`
-    """
-    def expression(self, e):
-        return e[0]
-
-    def option(self, e):
-        return reex.option(e[0])
-
-    def kleene(self, e):
-        return reex.star(e[0])
-
-    def concat(self, e):
-        return reex.concat(e[0], e[1])
-
-    def disjunction(self, e):
-        return reex.disj(e[0], e[1])
-
-    def chars(self, items):
-        items = list(map(lambda c: c.val if isinstance(c, reex.atom) else c, items))
-        return ext.chars(items, neg=False)
-
-    def neg_chars(self, items):
-        items = list(map(lambda c: c.val if isinstance(c, reex.atom) else c, items))
-        return ext.chars(items, neg=True)
-
-    def char_range(self, s):
-        return (s[0].val, s[1].val)
-
-    def SYMBOL(self, s):
-        return ext.uatom(s.value.decode("string-escape").decode("utf-8"))
-
-    def EPSILON(self, _):
-        return reex.epsilon()
-
-    def DOTANY(self, _):
-        return ext.dotany()
-
-    def ANCHOR(self, a):
-        return ext.anchor(a)

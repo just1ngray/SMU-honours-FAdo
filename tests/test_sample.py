@@ -8,11 +8,11 @@ class TestFAdoize(unittest.TestCase):
         # note: this is also tested in test_convert.py via convert#prog
         return super(TestFAdoize, self).setUp()
 
-    def test_escaping(self):
-        f = sample.FAdoize
-        self.assertEqual(f('\"'), '"')
-        self.assertEqual(f('\\"'), '\\"')
-        self.assertEqual(f('\\t'), '\\t')
+    # def test_escaping(self):
+    #     f = sample.FAdoize
+    #     self.assertEqual(f('\"'), '"')
+    #     self.assertEqual(f('\\"'), '\\"')
+    #     self.assertEqual(f('\\t'), '\\t')
 
     def test_charclass(self):
         f = sample.FAdoize
