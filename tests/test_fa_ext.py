@@ -29,7 +29,7 @@ class TestFAExt(unittest.TestCase):
 
     def runner(self, method):
         self.run_membership(method)
-        # self.run_witness(method) # TODO: not working for nfaThompson
+        self.run_witness(method)
 
     def run_membership(self, method):
         tests = {
@@ -72,6 +72,14 @@ class TestFAExt(unittest.TestCase):
         re = self.convert.math(u"((z + a) + γ)")
         infa = InvariantNFA(re.toNFA(method))
         self.assertEqual(infa.witness(), u"a")
+
+        re = self.convert.math(u"((a b) c)")
+        infa = InvariantNFA(re.toNFA(method))
+        self.assertEqual(infa.witness(), u"abc")
+
+        re = self.convert.math(u"(((a b) c))?")
+        infa = InvariantNFA(re.toNFA(method))
+        self.assertEqual(infa.witness(), u"abc")
 
 
 

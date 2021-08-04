@@ -27,6 +27,11 @@ class uatom(reex.atom):
         super(uatom, self).__init__(val, sigma=None)
         assert type(val) is unicode, "uatoms strictly represent unicode type, not " + str(type(val))
 
+    def __deepcopy__(self, memo):
+        cpy = uatom(self.val)
+        memo[id(self)] = cpy
+        return cpy
+
     def __str__(self):
         return self.val.encode("utf-8")
 
@@ -139,6 +144,14 @@ class chars(uatom):
 
         self.val = "[" + ("^" if self.neg else "") + self.val + "]"
 
+    def __deepcopy__(self, memo):
+        cpy = chars(copy.deepcopy(self.ranges), neg=self.neg)
+        memo[id(cpy)] = cpy
+        return cpy
+
+    def __copy__(self):
+        return chars(self.ranges, neg=self.neg)
+
     def __repr__(self):
         return "chars(" + str(self) + ")"
 
@@ -222,6 +235,13 @@ class dotany(uatom):
     """Class that represents the wildcard symbol that accepts everything."""
     def __init__(self):
         super(dotany, self).__init__(u" ")
+
+    def __deepcopy__(self, memo):
+        cpy = dotany()
+        memo[id(cpy)] = cpy
+        return cpy
+
+    __copy__ = __deepcopy__
 
     def __repr__(self):
         return "dotany()"

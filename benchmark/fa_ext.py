@@ -1,5 +1,6 @@
 from FAdo import fa, reex
 from copy import deepcopy
+from Queue import PriorityQueue
 
 from reex_ext import chars, dotany
 from util import UniUtil
@@ -125,36 +126,43 @@ class InvariantNFA(fa.NFA):
                             new.addFinal(index)
         return new
 
-    def witness(self): # TODO: not working for nfaThompson
-        notDone = list()
-        pref = dict()
-        for si in self.Initial:
-            pref[si] = u""
-            notDone.append(si)
+    def witness(self):
+        """Generates the minimal word w accepted by self where |w|>0
+        Inspired by Dijkstra's algorithm
+        """
+        cpy = self.dup()
+        cpy.elimEpsilon()
+        cpy.trim()
 
-        minWord = None
-        while notDone:
-            si = notDone.pop()
-            if si in self.Final and len(pref[si]) > 0:
-                if minWord is None:
-                    minWord = pref[si]
-                else:
-                    minWord = min(minWord, pref[si])
+        toVisit = PriorityQueue()
+        prefix = dict()
+        for s in cpy.Initial:
+            toVisit.put_nowait((0, s))
 
-            for t in self.delta.get(si, dict()):
-                for so in self.delta[si][t]:
-                    if so in notDone:
+        # propogate
+        while len(toVisit.queue) > 0:
+            _, p = toVisit.get_nowait()
+
+            for t in cpy.delta.get(p, dict()):
+                for q in cpy.delta[p][t]:
+                    if q in toVisit.queue:
                         continue
 
-                    word = pref[si] + ("" if t == "@epsilon" else t.next())
-                    if so not in pref or pref[so] == "" or word < pref[so]:
-                        pref[so] = word
-                        notDone.append(so)
+                    word = prefix.get(p, u"") + t.next()
+                    if q not in prefix.keys() or word < prefix[q]:
+                        prefix[q] = word
+                        toVisit.put_nowait((len(word), q))
+
+        # find the final state with the minimal word
+        minWord = None
+        for s in cpy.Final:
+            try:
+                word = prefix[s]
+                if minWord is None or word < minWord:
+                    minWord = word
+            except KeyError:
+                pass
         return minWord
-
-
-
-
 
 
     def ewp(self):
