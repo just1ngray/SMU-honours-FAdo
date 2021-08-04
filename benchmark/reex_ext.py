@@ -32,8 +32,8 @@ class uatom(reex.atom):
 
     _strP = __str__
 
-    def repr(self):
-        return 'uatom(u"' + str(self.val) + '")'
+    def __repr__(self):
+        return 'uatom(u"' + str(self) + '")'
 
     def derivative(self, sigma):
         return reex.epsilon() if sigma in self else reex.emptyset()
