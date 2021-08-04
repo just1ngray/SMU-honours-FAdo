@@ -100,6 +100,17 @@ class uatom(reex.atom):
         nfa, initial, final = conditions
         nfa.addTransition(initial, self, final)
 
+    def _marked(self, pos):
+        pos += 1
+        self.position = pos
+        return self, pos
+
+    def unmark(self):
+        delattr(self, "position")
+        return self
+
+    def symbol(self):
+        return self
 
 class chars(uatom):
     """A character class which can match any single character or a range of characters contained within it

@@ -25,6 +25,9 @@ class TestFAExt(unittest.TestCase):
     def test_nfaFollow(self):
         self.runner("nfaFollow")
 
+    def test_nfaPosition(self):
+        self.runner("nfaPosition")
+
 
 
     def runner(self, method):
