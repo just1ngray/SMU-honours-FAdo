@@ -46,16 +46,16 @@ class TestUAtom(unittest.TestCase):
 
 
 class TestChars(unittest.TestCase):
-    def setUp(self):
-        self.unicode_source = u"🔑 ✞♄їṧ їṧ @ ẘḯ∂ℯ ґαᾔ❡℮ øƒ ʊᾔї¢øḓε ṧ⑂μß☺ℓṧ ρα﹩ṧℯ∂ ⊥няøʊ❡н αη ℮ᾔ¢◎øʟ" \
+    @classmethod
+    def setUpClass(cls):
+        cls.unicode_source = u"🔑 ✞♄їṧ їṧ @ ẘḯ∂ℯ ґαᾔ❡℮ øƒ ʊᾔї¢øḓε ṧ⑂μß☺ℓṧ ρα﹩ṧℯ∂ ⊥няøʊ❡н αη ℮ᾔ¢◎øʟ" \
             + u"εη¢◎ḓℯґ▣ Ї☂ мα☤ᾔ☂α☤η﹩ ‴ґ℮@ḓ@♭ḯʟḯ⊥¥❞ ♭υ⊥ яε℘ℓα¢εṧ ☂♄ε αṧ¢ḯ☤ ṧƴღ♭◎ʟ﹩ ω☤тℌ " \
             + u"ʊᾔї¢ø∂ε @ℓтεґηα⊥ї♥℮ṧ❣ ✨ ASCII :) 567"
-        self.posUnicode = chars(self.unicode_source)
-        self.negUnicode = chars(self.unicode_source, neg=True)
+        cls.posUnicode = chars(cls.unicode_source)
+        cls.negUnicode = chars(cls.unicode_source, neg=True)
 
-        self.posHex = chars([u"a", u"b", u"c", (u"0", u"9"), u"d", u"e", u"f"])
-        self.negHex = chars([u"a", u"b", u"c", (u"0", u"9"), u"d", u"e", u"f"], neg=True)
-        return super(TestChars, self).setUp()
+        cls.posHex = chars([u"a", u"b", u"c", (u"0", u"9"), u"d", u"e", u"f"])
+        cls.negHex = chars([u"a", u"b", u"c", (u"0", u"9"), u"d", u"e", u"f"], neg=True)
 
     def test_derivative(self):
         for sigma in self.unicode_source:
@@ -135,9 +135,9 @@ class TestDotAny(unittest.TestCase):
         self.assertEqual(dotany().intersect(chars(u"a")), chars(u"a"))
 
 class TestEvalWordP(unittest.TestCase):
-    def setUp(self):
-        self.convert = Converter()
-        return super(TestEvalWordP, self).setUp()
+    @classmethod
+    def setUpClass(cls):
+        cls.convert = Converter()
 
     def test_concat(self):
         re = self.convert.prog(u"abcδεφ")
@@ -174,6 +174,8 @@ class TestEvalWordP(unittest.TestCase):
         self.assertTrue(re.evalWordP(u"😝 ๏𝐑 ☝"))
         self.assertTrue(re.evalWordP(u"😝 ๏𝐑 ☝🐟"))
         self.assertTrue(re.evalWordP(u"😝♣♣♣♣ ๏𝐑 ☝"))
+        self.assertFalse(re.evalWordP(u"😝♣♣♣♣ ๏ ☝"))
+        self.assertFalse(re.evalWordP(u"😝♣♣♣♣ ๏𝐑☝"))
 
 
 if __name__ == "__main__":

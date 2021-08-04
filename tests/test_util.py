@@ -4,11 +4,11 @@ import copy
 from benchmark.util import RangeList
 
 class TestRangeList(unittest.TestCase):
-    def setUp(self):
+    @classmethod
+    def setUpClass(cls):
         inc = lambda x: x+1
         dec = lambda x: x-1
-        self.getRange = lambda: RangeList([(10, 20), (30, 40), (50, 60), (70, 80), (90, 100)], inc=inc, dec=dec)
-        return super(TestRangeList, self).setUp()
+        cls.getRange = lambda _: RangeList([(10, 20), (30, 40), (50, 60), (70, 80), (90, 100)], inc=inc, dec=dec)
 
     def test_add_base(self):
         l = self.getRange()

@@ -4,10 +4,6 @@ from benchmark import sample
 
 
 class TestFAdoize(unittest.TestCase):
-    def setUp(self):
-        # note: this is also tested in test_convert.py via convert#prog
-        return super(TestFAdoize, self).setUp()
-
     def test_charclass(self):
         f = sample.FAdoize
         self.assertEqual(f('\\d'), '[0-9]')

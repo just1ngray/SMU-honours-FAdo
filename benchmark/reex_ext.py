@@ -18,6 +18,7 @@ def u_factory(base, *args):
     """
     o = base(*args)
     o.wordDerivative = lambda w: wordDerivative(o, w)
+    # o.toNFA = lambda method: super(base, o).toNFA(method) #TODO consider something like this
     return o
 
 
@@ -197,11 +198,14 @@ class chars(uatom):
                 else:
                     return chars(intersect, neg=self.neg)
             else:
-                pos = copy.copy(self.ranges)
-                neg = other
+                pos = None
+                neg = None
                 if self.neg:
-                    pos = copy.copy(other.ranges)
+                    pos = copy.deepcopy(other.ranges)
                     neg = self
+                else:
+                    pos = copy.deepcopy(self.ranges)
+                    neg = other
 
                 for a, b in neg.ranges:
                     pos.remove(a, b)

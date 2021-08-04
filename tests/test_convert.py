@@ -7,9 +7,9 @@ from benchmark.convert import Converter
 
 
 class TestConverter(unittest.TestCase):
-    def setUp(self):
-        self.convert = Converter()
-        return super(TestConverter, self).setUp()
+    @classmethod
+    def setUpClass(cls):
+        cls.convert = Converter()
 
     def test_math_simple_str(self):
         self.runtest(self.convert.math, [
