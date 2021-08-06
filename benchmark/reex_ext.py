@@ -3,26 +3,47 @@ import copy
 
 from util import RangeList, UniUtil
 
-def wordDerivative(self, word):
-    """Allows taking the word derivative of unicode strings with
-    surrogate pairs.
-    """
-    d = copy.deepcopy(self)
-    for sigma in UniUtil.charlist(word):
-        d = d.derivative(sigma)
-    return d
+# just so standard FAdo doesn't need to be imported explicitly
+uepsilon = reex.epsilon
+uemptyset = reex.emptyset
 
-def u_factory(base, *args):
-    """Creates an instance of base (with arguments args) and sets the method
-    wordDerivative to support surrogate unicode pairs
-    """
-    o = base(*args)
-    o.wordDerivative = lambda w: wordDerivative(o, w)
-    # o.toNFA = lambda method: super(base, o).toNFA(method) #TODO consider something like this
-    return o
+class uregexp(reex.regexp):
+    def wordDerivative(self, word):
+        """Allows taking the word derivative of unicode strings with
+        surrogate pairs.
+        """
+        d = self
+        for sigma in UniUtil.charlist(word):
+            d = d.derivative(sigma)
+        return d
 
+class uconcat(reex.concat, uregexp):
+    def __init__(self, arg1, arg2):
+        super(uconcat, self).__init__(arg1, arg2, sigma=None)
 
-class uatom(reex.atom):
+    def __deepcopy__(self, memo):
+        cpy = uconcat(copy.deepcopy(self.arg1), copy.deepcopy(self.arg2))
+        memo[id(self)] = cpy
+        return cpy
+
+class udisj(reex.disj, uregexp):
+    def __init__(self, arg1, arg2):
+        super(udisj, self).__init__(arg1, arg2, sigma=None)
+
+class ustar(reex.star, uregexp):
+    def __init__(self, arg):
+        super(ustar, self).__init__(arg, sigma=None)
+
+    def __deepcopy__(self, memo):
+        cpy = ustar(copy.deepcopy(self.arg))
+        memo[id(self)] = cpy
+        return cpy
+
+class uoption(reex.option, uregexp):
+    def __init__(self, arg):
+        super(uoption, self).__init__(arg, sigma=None)
+
+class uatom(reex.atom, uregexp):
     def __init__(self, val):
         super(uatom, self).__init__(val, sigma=None)
         assert type(val) is unicode, "uatoms strictly represent unicode type, not " + str(type(val))
@@ -33,17 +54,18 @@ class uatom(reex.atom):
         return cpy
 
     def __str__(self):
-        return self.val.encode("utf-8")
+        if hasattr(self, "pos"):
+            return "marked({0}, {1})".format(self.val.encode("utf-8"), self.pos)
+        else:
+            return self.val.encode("utf-8")
 
     _strP = __str__
 
     def __repr__(self):
-        return 'uatom(u"' + str(self) + '")'
+        return 'uatom(u"{0}")'.format(str(self))
 
     def derivative(self, sigma):
         return reex.epsilon() if sigma in self else reex.emptyset()
-
-    wordDerivative = wordDerivative
 
     def linearForm(self):
         return {self: {reex.epsilon()}}
@@ -106,11 +128,12 @@ class uatom(reex.atom):
 
     def _marked(self, pos):
         pos += 1
-        self.position = pos
+        assert getattr(self, "pos", pos) == pos
+        self.pos = pos
         return self, pos
 
     def unmark(self):
-        delattr(self, "position")
+        delattr(self, "pos")
         return self
 
     def symbol(self):
@@ -248,7 +271,7 @@ class chars(uatom):
 class dotany(uatom):
     """Class that represents the wildcard symbol that accepts everything."""
     def __init__(self):
-        super(dotany, self).__init__(u" ")
+        super(dotany, self).__init__(u"@any")
 
     def __deepcopy__(self, memo):
         cpy = dotany()
@@ -259,11 +282,6 @@ class dotany(uatom):
 
     def __repr__(self):
         return "dotany()"
-
-    def __str__(self):
-        return "@any"
-
-    _strP = __str__
 
     def __eq__(self, other):
         return type(other) is dotany
@@ -286,8 +304,7 @@ class dotany(uatom):
     def intersect(self, other):
         return None if type(other) is reex.epsilon else other
 
-
-class anchor(reex.regexp):
+class anchor(uregexp):
     """A class used temporarily in the conversion from programmer's string format
     to the equivalent strict mathematical version used in FAdo.
     """
