@@ -10,6 +10,31 @@ class TestConverter(unittest.TestCase):
     def setUpClass(cls):
         cls.convert = Converter()
 
+    def test_rep_expansion(self):
+        re = self.convert.prog("^a{4}$")
+        self.assertTrue(re.evalWordP("aaaa"))
+        self.assertFalse(re.evalWordP("aaa"))
+        self.assertFalse(re.evalWordP("aaaaa"))
+
+        re = self.convert.prog("^a{4,}$")
+        self.assertTrue(re.evalWordP("aaaaa"))
+        self.assertTrue(re.evalWordP("aaaa"))
+        self.assertFalse(re.evalWordP("aaa"))
+        self.assertFalse(re.evalWordP("aa"))
+
+        re = self.convert.prog("^a{,3}$")
+        self.assertTrue(re.evalWordP(""))
+        self.assertTrue(re.evalWordP("a"))
+        self.assertTrue(re.evalWordP("aa"))
+        self.assertTrue(re.evalWordP("aaa"))
+        self.assertFalse(re.evalWordP("aaaa"))
+
+        re = self.convert.prog("^a{5,29}$")
+        self.assertFalse(re.evalWordP("a"*4))
+        for i in range(5, 30):
+            self.assertTrue(re.evalWordP("a"*i))
+        self.assertFalse(re.evalWordP("a"*30))
+
     def test_math_simple_str(self):
         self.runtest(self.convert.math, [
             ("a", "a"),
