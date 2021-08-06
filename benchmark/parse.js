@@ -45,7 +45,9 @@ process.stdin.on("data", (data) => {
  */
 function buildConcatRecursively(tokens) {
     function f() {
-        if (tokens.length <= 2)
+        if (tokens.length == 1)
+            return tokens[0]
+        else if (tokens.length == 2)
             return `(${tokens[0]} ${tokens[1]})`
         else {
             const next = tokens.pop()
