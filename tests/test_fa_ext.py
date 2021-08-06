@@ -1,6 +1,5 @@
 # coding: utf-8
 import unittest
-import copy
 
 from benchmark.convert import Converter
 from benchmark.fa_ext import InvariantNFA
@@ -102,10 +101,10 @@ class TestEnumInvariantNFA(unittest.TestCase):
         cls.infa = get_infa
 
         def verifyRadixOrder(self, lang, size):
-            cpy = copy.copy(lang)
-            cpy.sort(radixOrder)
-            self.assertListEqual(lang, cpy)
             self.assertEqual(len(lang), size)
+            for i in range(1, len(lang)):
+                self.assertLess(radixOrder(lang[i-1], lang[i]), 0,
+                    "'{0}' should be < '{1}'".format(lang[i-1].encode("utf-8"), lang[i].encode("utf-8")))
         cls.verifyRadixOrder = verifyRadixOrder
 
     def test_nfaPD(self):
@@ -130,6 +129,7 @@ class TestEnumInvariantNFA(unittest.TestCase):
 
     def runner(self, method):
         self.run_simple(method)
+        self.run_unicode(method)
         self.run_complex(method)
 
     def run_simple(self, method):
@@ -148,21 +148,27 @@ class TestEnumInvariantNFA(unittest.TestCase):
         self.verifyRadixOrder([x for x in enum.enumCrossSection(5)], 2**5)
         self.verifyRadixOrder([x for x in enum.enum(0, 4)], sum(2**x for x in range(0, 5)))
 
-    def run_complex(self, method): # TODO: THIS PART IS NOT WORKING
+    def run_unicode(self, method):
+        enum = self.infa(u"\\d{1,2}% => (α|β)+( !)?", method).enumNFA()
+        self.assertFalse(enum.ewp())
+        self.assertEqual(enum.witness(), u"0% => α")
+
+        self.assertEqual(enum.minWord(7), u"0% => α")
+        words = [u"0% => α", u"0% => β", u"1% => α", u"1% => β", u"2% => α", u"2% => β"]
+        for i in range(1, len(words)):
+            self.assertEqual(enum.nextWord(words[i-1]), words[i])
+
+        self.verifyRadixOrder([x for x in enum.enum(0, 8)], 216)
+
+    def run_complex(self, method):
         enum = self.infa(u"(x[αβψδεφ0-9]{2,4} :: (😀|😄|😊😊)?)*", method).enumNFA()
         self.assertTrue(enum.ewp())
         self.assertEqual(enum.witness(), "x00 :: ")
 
-        # self.assertEqual(enum.minWord(50), "0"*50)
-        # for i in range(10):
-        #     self.assertEqual(enum.minWord(i), "0"*i)
+        self.assertEqual(enum.minWord(7), u"x00 :: ")
+        self.assertEqual(enum.nextWord(u"x00 :: "), u"x01 :: ")
 
-        # self.assertEqual(enum.nextWord("00010"), "00011")
-        # self.assertEqual(enum.nextWord("01101"), "01110")
-        # self.assertEqual(enum.nextWord("0111111111111"), "1000000000000")
-
-        # self.verifyRadixOrder([x for x in enum.enumCrossSection(5)], 2**5)
-        # self.verifyRadixOrder([x for x in enum.enum(0, 4)], sum(2**x for x in range(0, 5)))
+        self.verifyRadixOrder([x for x in enum.enumCrossSection(7)], 225)
 
 
 if __name__ == "__main__":
