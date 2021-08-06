@@ -4,7 +4,7 @@ import unittest
 from benchmark.convert import Converter
 from benchmark.fa_ext import InvariantNFA
 
-def radixOrder(a, b):
+def radixOrder(a, b): # this fails for some unicode when len=2
     if len(a) == len(b):
         return -1 if a < b else 1
     else:
