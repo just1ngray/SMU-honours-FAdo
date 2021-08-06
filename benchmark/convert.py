@@ -1,12 +1,11 @@
 from lark import Lark, Transformer
-from FAdo import reex
+from lark.exceptions import LarkError
 
-from reex_ext import dotany, chars, uatom, anchor, u_factory
+from reex_ext import dotany, chars, uatom, anchor, uconcat, uoption, ustar, udisj, uepsilon
 from util import FAdoize
 
 class Converter(object):
-    """ A class to convert from `export.csv` regular expressions in the `re.lark`
-        grammar to FAdo classes using the `reex` & `reex_ext` modules.
+    """A class to parse a string/unicode expression into FAdo objects.
     """
     def __init__(self):
         class LarkToFAdo(Transformer):
@@ -14,22 +13,22 @@ class Converter(object):
             ..see: `benchmark/re.lark`
             """
             expression = lambda _, e: e[0]
-            option = lambda _, e: u_factory(reex.option, e[0])
-            kleene = lambda _, e: u_factory(reex.star, e[0])
-            concat = lambda _, e: u_factory(reex.concat, e[0], e[1])
-            disjunction = lambda _, e: u_factory(reex.disj, e[0], e[1])
+            option = lambda _, e: uoption(e[0])
+            kleene = lambda _, e: ustar(e[0])
+            concat = lambda _, e: uconcat(e[0], e[1])
+            disjunction = lambda _, e: udisj(e[0], e[1])
 
             def chars(self, items):
-                items = list(map(lambda c: c.val if isinstance(c, reex.atom) else c, items))
+                items = list(map(lambda c: c.val if isinstance(c, uatom) else c, items))
                 return chars(items, neg=False)
 
             def neg_chars(self, items):
-                items = list(map(lambda c: c.val if isinstance(c, reex.atom) else c, items))
+                items = list(map(lambda c: c.val if isinstance(c, uatom) else c, items))
                 return chars(items, neg=True)
 
             char_range = lambda _, e: (e[0].val, e[1].val)
             SYMBOL = lambda _, e: uatom(e.value.decode("string-escape").decode("utf-8"))
-            EPSILON = lambda _0, _1: u_factory(reex.epsilon)
+            EPSILON = lambda _0, _1: uepsilon()
             DOTANY = lambda _0, _1: dotany()
             ANCHOR = lambda _, e: anchor(e.value)
 
@@ -41,10 +40,10 @@ class Converter(object):
         :param unicode|str expression: the expression to convert
         ..note: if there are non-ascii symbols in the expression, it must be passed
                 as unicode type (i.e., u"non-ascii")
-        ..note: all symbols must be representable in <= 4 bytes using utf-8 (this
-                excludes emoji flags and maybe some other characters)
+        ..note: all symbols must be representable in <= 4 bytes using utf-8
+                (ordinals up to 2**16 (65,536) exclusive)
         :param bool partialMatch: given any text T, U, and word weL(expression),
-                                  should the regexp tree match text 'TwL'?
+                                  should the regexp tree match text 'TwU'?
         :returns reex.regexp: the parsed regexp tree
         :raises: if there's a parsing error, or if anchors are found in non-"edge"
                  leaf positions
@@ -63,14 +62,14 @@ class Converter(object):
             expand = False
 
             # non-terminals
-            if type(current) is reex.concat:
+            if type(current) is uconcat:
                 stack.append((current, "arg2", False, anchorAllowedRight))
                 stack.append((current, "arg1", anchorAllowedLeft, False))
-            elif type(current) is reex.disj:
+            elif type(current) is udisj:
                 stack.append((current, "arg2", anchorAllowedLeft, anchorAllowedRight))
                 stack.append((current, "arg1", anchorAllowedLeft, anchorAllowedRight))
-            elif type(current) is reex.star \
-              or type(current) is reex.option:
+            elif type(current) is ustar \
+              or type(current) is uoption:
                 stack.append((current, "arg", False, False))
                 expand = True
 
@@ -80,22 +79,22 @@ class Converter(object):
                     or (attr[-1] == "1" and anchorAllowedLeft and current.label == "<ASTART>")
                     or (attr == "arg" and (anchorAllowedLeft or anchorAllowedRight))):
 
-                    setattr(parent, attr, reex.epsilon())
+                    setattr(parent, attr, uepsilon())
                     stack.append((parent, attr, current.label == "<AEND>" and anchorAllowedLeft,
                             current.label == "<ASTART>" and anchorAllowedRight))
                 else:
                     raise Exception("Unexpected anchor found in " + expression)
             elif isinstance(current, uatom) \
-              or type(current) is reex.epsilon:
+              or type(current) is uepsilon:
                 expand = True
             else:
                 raise Exception("Unknown item in tree: " + str(type(current)))
 
             if partialMatch and expand:
                 if anchorAllowedLeft:
-                    setattr(parent, attr, reex.concat(reex.star(dotany()), getattr(parent, attr)))
+                    setattr(parent, attr, uconcat(ustar(dotany()), getattr(parent, attr)))
                 if anchorAllowedRight:
-                    setattr(parent, attr, reex.concat(getattr(parent, attr), reex.star(dotany())))
+                    setattr(parent, attr, uconcat(getattr(parent, attr), ustar(dotany())))
 
         return d.arg
 
@@ -107,7 +106,7 @@ class Converter(object):
                   and uses the | (pipe) for disjunctive "or's"
         :param unicode|str expression: the expression to convert
         :param bool partialMatch: given any text T, U, and word weL(expression),
-                                  should the regexp tree match text 'TwL'?
+                                  should the regexp tree match text 'TwU'?
         :returns reex.regexp: the parsed regexp tree
         :raises: if there's a parsing error, or if anchors are found in non-"edge"
                  leaf positions
@@ -115,4 +114,8 @@ class Converter(object):
             NodeJS process in order to execute additional logic
         """
         formatted = FAdoize(expression)
-        return self.math(formatted, partialMatch=partialMatch)
+        try:
+            return self.math(formatted, partialMatch=partialMatch)
+        except LarkError as e:
+            print expression, "was formatted as", formatted
+            raise e
