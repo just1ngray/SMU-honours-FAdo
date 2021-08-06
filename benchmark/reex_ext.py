@@ -128,9 +128,9 @@ class uatom(reex.atom, uregexp):
 
     def _marked(self, pos):
         pos += 1
-        assert getattr(self, "pos", pos) == pos
-        self.pos = pos
-        return self, pos
+        cpy = copy.deepcopy(self)
+        cpy.pos = pos
+        return cpy, pos
 
     def unmark(self):
         delattr(self, "pos")
