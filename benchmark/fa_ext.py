@@ -50,6 +50,10 @@ class InvariantNFA(fa.NFA):
     def dup(self):
         return deepcopy(self)
 
+    def succintTransitions(self):
+        transitions = super(InvariantNFA, self).succintTransitions()
+        return list(map(lambda x: (x[0], "SPACE", x[2]) if x[1] == " " else x, transitions))
+
     def evalWordP(self, word):
         ilist = self.epsilonClosure(self.Initial)
         for c in UniUtil.charlist(word):
@@ -157,7 +161,6 @@ class InvariantNFA(fa.NFA):
                     toVisit.put_nowait((word, q))
         return None
 
-
     def ewp(self):
         """Returns if the empty word is accepted by this automaton"""
         for i in self.Initial:
@@ -187,7 +190,7 @@ class InvariantNFA(fa.NFA):
         words directly)
         :returns EnumInvariantNFA: access to an enumeration object (with internal memoization for speed)
         """
-        cpy = deepcopy(self)
+        cpy = self.dup()
         cpy.elimEpsilon()
         cpy.trim()
         return EnumInvariantNFA(cpy)
@@ -250,23 +253,46 @@ class EnumInvariantNFA(object):
             return u"" if self.aut.ewp() else None
         nfa = self._sized(length)
 
-        current = start if start is not None else next(iter(nfa.Initial))
-        start = current
-        memoized = self.tmin.get(length, dict()).get(start, None)
-        if memoized is not None:
-            return memoized
+        # nfa.Initial always has 1 initial state
+        current = [(start, u"")] if start is not None else [(next(iter(nfa.Initial)), u"")]
+        start = current[0][0]
 
-        word = u""
-        while not nfa.finalP(current):
-            t, states = nfa.minTransition(current)
-            if t is None:
-                return None
-            word += t
-            assert len(states)==1, "EnumInvariantNFA#minWord cannot rely on len(states)=1" # TODO:remove
-            current = next(iter(states))
+        while len(current) > 0:
+            candidates = []
+            nxt = []
+            for s, word in current:
+                # check if final
+                if nfa.finalP(s):
+                    candidates.append(word)
+                    continue
 
-        self.tmin[length][start] = word
-        return word
+                # expect tmin to sometimes store memoized @ length,s
+                memoized = self.tmin.get(length, dict()).get(s, None)
+                if memoized is not None:
+                    candidates.append(word + memoized)
+                    continue
+
+                # find the next transition to take
+                t, states = nfa.minTransition(s)
+                if t is None:
+                    continue
+                word += t
+
+                # update nxt for next iteration
+                minNxtWord = None if len(nxt) == 0 else nxt[0][1]
+                if minNxtWord is None or word <= minNxtWord:
+                    if word == minNxtWord: # tie for the minNxtWord
+                        nxt.extend([(u, word) for u in states])
+                    else: # new minWord found
+                        nxt = [(u, word) for u in states]
+
+            current = nxt
+            if len(candidates) > 0:
+                word = min(candidates)
+                self.tmin[length][start] = word
+                return word
+
+        return None
 
     def nextWord(self, current):
         """Finds the next word in L(aut) with the same length of current according to radix order.
