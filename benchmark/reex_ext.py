@@ -59,9 +59,13 @@ class uatom(reex.atom):
         """Finds the next character accepted by self after current
         :param unicode|None current: character to succeed
         :returns unicode: the next allowable character (ascending)
-        ..note: if current is not accepted by self, the "first" character is returned
         """
-        return None if current in self else self.val
+        if current is None:
+            return self.val
+        elif current < self.val:
+            return self.val
+        else:
+            return None
 
     def intersect(self, other):
         """Find the intersection of another regexp leaf instance object.
@@ -240,7 +244,6 @@ class chars(uatom):
                     return chars(pos)
         else:
             return None
-
 
 class dotany(uatom):
     """Class that represents the wildcard symbol that accepts everything."""

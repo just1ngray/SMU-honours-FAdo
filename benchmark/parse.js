@@ -17,9 +17,6 @@ process.stdin.on("data", (data) => {
     if (data.endsWith("\r\n")) data = data.substring(0, data.length - 2)
     else if (data.endsWith("\n")) data = data.substring(0, data.length - 1)
 
-    for (const c of data)
-        console.log(c)
-
     try {
         console.log("Parsing expression /" + data + "/ ... ")
 

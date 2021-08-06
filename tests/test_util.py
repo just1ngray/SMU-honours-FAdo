@@ -1,5 +1,4 @@
 import unittest
-import copy
 
 from benchmark.util import RangeList
 

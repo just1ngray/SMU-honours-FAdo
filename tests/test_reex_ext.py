@@ -37,7 +37,8 @@ class TestUAtom(unittest.TestCase):
             # next
             self.assertIsNone(atom.next(a))
             self.assertEqual(atom.next(None), a)
-            self.assertEqual(atom.next(u"a"), a)
+            self.assertEqual(atom.next(util.UniUtil.chr(31)), a)
+            self.assertEqual(atom.next(util.UniUtil.chr(2**16 - 1)), None)
 
             # intersect
             self.assertIsNone(atom.intersect(reex.epsilon()), None)

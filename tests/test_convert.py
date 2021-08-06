@@ -1,6 +1,5 @@
 # coding: utf-8
 import unittest
-from FAdo import reex
 from lark import LarkError
 
 from benchmark.convert import Converter

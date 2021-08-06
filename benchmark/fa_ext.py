@@ -2,7 +2,7 @@ from FAdo import fa, reex
 from copy import deepcopy
 from Queue import PriorityQueue
 
-from reex_ext import chars, dotany
+from reex_ext import dotany
 from util import UniUtil
 
 class InvariantNFA(fa.NFA):
@@ -18,23 +18,29 @@ class InvariantNFA(fa.NFA):
         :returns: the InvariantNFA which accepts any word of length s: n <= s <= m
         :rtype: InvariantNFA
         """
-        if m is None: m = n
+        if m is None:
+            m = n
         lengthNFA = InvariantNFA()
         lengthNFA.addInitial(lengthNFA.addState())
-        if n == 0: lengthNFA.addFinal(0)
+        if n == 0:
+            lengthNFA.addFinal(0)
+
         for i in range(1, m + 1):
             lengthNFA.addState()
             lengthNFA.addTransition(i - 1, dotany(), i)
             if i >= n: lengthNFA.addFinal(i)
         return lengthNFA
 
-    def __init__(self, nfa=fa.NFA()):
+    def __init__(self, nfa=None):
         """Create an InvariantNFA.
         :param fa.NFA nfa: the NFA which includes `chars` transitions
         ..note: there is no deep copying involved; deep copy the NFA before
                 passing as an argument if the NFA must be preserved
         """
         super(InvariantNFA, self).__init__()
+        if nfa is None:
+            nfa = fa.NFA()
+
         self.Final = nfa.Final
         self.Initial = nfa.Initial
         self.Final = nfa.Final
@@ -88,14 +94,14 @@ class InvariantNFA(fa.NFA):
     def product(self, other):
         # note: s_... refers to `self` variables, and o_... refers to `other` variables
         new = InvariantNFA()
-        notDone = []
+        notDone = set()
 
         # initial state(s)
         for s_initial in self.Initial:
             for o_initial in other.Initial:
-                index = new.addState((s_initial, o_initial))
-                new.addInitial(index)
-                notDone.append((s_initial, o_initial, index))
+                so_index = new.addState((s_initial, o_initial))
+                new.addInitial(so_index)
+                notDone.add((s_initial, o_initial, so_index))
 
         # propagate
         while len(notDone) > 0:
@@ -119,7 +125,7 @@ class InvariantNFA(fa.NFA):
                     for dest in destinations:
                         index = new.stateIndex(dest, autoCreate=True)
                         new.addTransition(so_index, so_trans, index)
-                        notDone.append((dest[0], dest[1], index))
+                        notDone.add((dest[0], dest[1], index))
 
                         # check if final
                         if self.finalP(dest[0]) and other.finalP(dest[1]):
@@ -135,34 +141,21 @@ class InvariantNFA(fa.NFA):
         cpy.trim()
 
         toVisit = PriorityQueue()
-        prefix = dict()
         for s in cpy.Initial:
-            toVisit.put_nowait((0, s))
+            toVisit.put_nowait((u"", s))
 
         # propogate
         while len(toVisit.queue) > 0:
-            _, p = toVisit.get_nowait()
+            w, p = toVisit.get_nowait()
+
+            if cpy.finalP(p) and len(w) > 0:
+                return w
 
             for t in cpy.delta.get(p, dict()):
                 for q in cpy.delta[p][t]:
-                    if q in toVisit.queue:
-                        continue
-
-                    word = prefix.get(p, u"") + t.next()
-                    if q not in prefix.keys() or word < prefix[q]:
-                        prefix[q] = word
-                        toVisit.put_nowait((len(word), q))
-
-        # find the final state with the minimal word
-        minWord = None
-        for s in cpy.Final:
-            try:
-                word = prefix[s]
-                if minWord is None or word < minWord:
-                    minWord = word
-            except KeyError:
-                pass
-        return minWord
+                    word = w + t.next()
+                    toVisit.put_nowait((word, q))
+        return None
 
 
     def ewp(self):
@@ -199,79 +192,125 @@ class InvariantNFA(fa.NFA):
         cpy.trim()
         return EnumInvariantNFA(cpy)
 
+    def minTransition(self, state, label=None):
+        """Find the minimum transition outgoing from state greater than label
+        ..note: @epsilon is considered minimal and returned as u""
+
+        :param int state: the current index
+        :param unicode label: the non-inclusive lower-bound for the return value
+        :returns Tuple(unicode, set<int>): the minimal transition > label outgoing from state
+        """
+        curMin = None
+        successors = None
+        for t, qs in self.delta.get(state, dict()).items():
+            sigma = None
+            if t == "@epsilon":
+                sigma = u""
+            else:
+                sigma = t.next(label)
+            if sigma is None:
+                continue
+
+            if curMin is None or (label < sigma and sigma < curMin):
+                curMin = sigma
+                successors = qs
+
+        if curMin is None:
+            return None, set()
+        else:
+            return curMin, deepcopy(successors)
+
 
 class EnumInvariantNFA(object):
     """An object to enumerate an InvariantNFA efficiently.
+    ..note: InvariantNFA's can rely on the @any transition instead of an entire alphabet
     """
     def __init__(self, aut):
-        """:param aut: must be an e-free InvariantNFA
-        """
+        """:param InvariantNFA aut: must be an e-free InvariantNFA"""
         self.aut = aut
         self.lengthProductTrim = dict()
+        self.tmin = dict() # k: length, v: (k: index, minWord)
 
-    def minWord(self, m):
-        """Finds the minimal word of length m
-        :param int m: the length of the desired word
-        :returns: the minimal word of length m
-        :rtype: str|NoneType
+    def ewp(self):
+        """:returns bool: if L(aut) includes the empty word"""
+        return self.aut.ewp()
+
+    def witness(self):
+        """:returns unicode|NoneType: witness word of non-emptiness"""
+        return self.aut.witness()
+
+    def minWord(self, length, start=None):
+        """Finds the minimal word of length in L(aut) and memoizes the value
+        :param int length: the length of the desired word
+        :param int|NoneType start: the index to get the minimal word from (defaults to Initial)
+        :returns unicode|NoneType: the minimal word of in the length cross-section of L(aut)
+        that starts at `start` and ends at any final state
         """
-        if m == 0: return "" if self.aut.ewp() else None
-        nfa = self._sized(m)
+        if length == 0:
+            return u"" if self.aut.ewp() else None
+        nfa = self._sized(length)
 
-        current = next(iter(nfa.Initial))
-        word = ""
-        for _ in xrange(0, m):
-            t, s = self._minTransition(nfa, current)
-            if t is None: return None
+        current = start if start is not None else next(iter(nfa.Initial))
+        start = current
+        memoized = self.tmin.get(length, dict()).get(start, None)
+        if memoized is not None:
+            return memoized
+
+        word = u""
+        while not nfa.finalP(current):
+            t, states = nfa.minTransition(current)
+            if t is None:
+                return None
             word += t
-            current = s
+            assert len(states)==1, "EnumInvariantNFA#minWord cannot rely on len(states)=1" # TODO:remove
+            current = next(iter(states))
 
+        self.tmin[length][start] = word
         return word
 
     def nextWord(self, current):
-        """Given an word, returns next word in the the nth cross-section of L(aut)
-        according to the radix order
-        :param str w: non-empty word
-        :rtype: str or None
-        :returns: the next word in radix order if it exists
+        """Finds the next word in L(aut) with the same length of current according to radix order.
+        :param unicode current: the current word to succeed
+        :returns unicode|NoneType: the next word after current, or None if current is the last
+        word in its cross-section
         """
         nfa = self._sized(len(current))
+        stack = [nfa.Initial] # possible set of states after processing each letter in current
+        current = UniUtil.charlist(current)
+        length = len(current)
 
-        stack = [nfa.Initial]
-        for c in current: # TODO: add cacheing to improve speed
+        for c in current[:-1]:
             stack.append(nfa.evalSymbol(stack[-1], c))
 
-        # "backtrack"
         while len(stack) > 0:
-            numBacktracked = len(current) - len(stack) + 2
-            lastSym = current[1 - numBacktracked]
-            baseword = current[:1 - numBacktracked]
             states = stack.pop()
+            lastSym = None if len(current) == 0 else current.pop() # to succeed
 
-            minT = None
-            minS = None
-            for state in states:
-                t, s = self._minTransition(nfa, state, lastSym)
-                if t is not None and (minT is None or t < minT):
-                    minT = t
-                    minS = s
-            if minT is not None:
-                # "forward track"
-                while not nfa.finalP(minS):
-                    t, minS = self._minTransition(nfa, minS)
-                    minT += t
-                return baseword + minT
+            for s in states:
+                t, states = nfa.minTransition(s, lastSym)
+                if t is None:
+                    continue
+
+                # find tmin from any in states
+                minWord = None
+                for st in states:
+                    word = self.minWord(length, start=st)
+                    if word is not None and (minWord is None or word < minWord):
+                        minWord = word
+
+                if minWord is not None:
+                    return reduce(lambda p, c: p + c, current, u"") + t + minWord
 
         return None
 
     def enumCrossSection(self, n):
-        """Enumerates the nth cross-section of L(A)
-        :param int n: nonnegative integer representing the size of yielded words
-        :yields str: words in the nth cross-section of L(A)
+        """Yield words of length n in L(aut)
+        :param int n: the length of the cross-section
+        :yields unicode: words in n-cross-section of L(aut)
         """
         if n == 0:
             if self.aut.ewp():
-                yield ""
+                yield u""
             return
 
         current = self.minWord(n)
@@ -283,46 +322,20 @@ class EnumInvariantNFA(object):
         """Enumerate all words such that each yielded word w has length |w| in [lo, hi]
         :param int lo: the smallest length of a desired yielded word
         :param int hi: the highest length of a desired yielded word
-        :yields str: words in L(self.aut)
+        :yields unicode: words in L(aut) where each word w has length in [lo, hi]
         """
-        for l in xrange(lo, hi + 1):
+        for l in range(lo, hi + 1):
             for word in self.enumCrossSection(l):
                 yield word
-
-    def _minTransition(self, infa, stateIndex, sym=None):
-        """Finds the minimum transition from a state (optionally greater than sym)
-        :param int stateIndex: the index of the origin state
-        :param string sym: the lower bounding symbol (i.e., if sym="b", "c" will be accepted but "a" will not)
-        :returns: (label, next state index) 2-tuple
-        :rtype: Tuple(str, int)
-        """
-        minNextLabel = None
-        minNextState = None
-        successors = infa.transitionFunction(stateIndex).items()
-
-        for transition, nextStates in successors:
-            if len(nextStates) == 0:
-                raise Exception("TODO: remove if not necessary")
-            if isinstance(transition, chars):
-                nextSym = transition.next(sym)
-                if nextSym is not None and (nextSym < minNextLabel or minNextLabel is None):
-                    minNextLabel = nextSym
-                    minNextState = next(iter(nextStates))
-            else:
-                if sym < str(transition) and (str(transition) < minNextLabel or minNextLabel is None):
-                    minNextLabel = str(transition)
-                    minNextState = next(iter(nextStates))
-
-        return (None, None) if minNextState is None else (minNextLabel, minNextState)
 
     def _sized(self, size):
         """Computes and memoizes the product of self.aut and lengthNFA of size `size`
         :param int size: the size of the words to be accepted
-        :returns: the trim InvariantNFA that only accepts words of length `size` in the
+        :returns InvariantNFA: the trim InvariantNFA that only accepts words of length `size` in the
         language defined by self.aut
-        :rtype: InvariantNFA
         """
         if not self.lengthProductTrim.has_key(size):
             nfa = self.aut.product(InvariantNFA.lengthNFA(size)).trim()
             self.lengthProductTrim[size] = nfa
+            self.tmin[size] = dict()
         return self.lengthProductTrim[size]
