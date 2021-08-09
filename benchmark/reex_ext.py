@@ -26,9 +26,58 @@ class uconcat(reex.concat, uregexp):
         memo[id(self)] = cpy
         return cpy
 
+    def linearForm(self):
+        arg1_lf = self.arg1.linearForm()
+        lf = {}
+        for head in arg1_lf:
+            lf[head] = set()
+            for tail in arg1_lf[head]:
+                if tail.emptysetP():
+                    lf[head].add(uemptyset(self.Sigma))
+                elif tail.epsilonP():
+                    lf[head].add(self.arg2)
+                else:
+                    lf[head].add(uconcat(tail, self.arg2))
+        if self.arg1.ewp():
+            arg2_lf = self.arg2.linearForm()
+            for head in arg2_lf:
+                if head in lf:
+                    lf[head].update(arg2_lf[head])
+                else:
+                    lf[head] = set(arg2_lf[head])
+        return lf
+
+    def _memoLF(self):
+        if hasattr(self, "_lf"):
+            return
+        self.arg1._memoLF()
+        self._lf = {}
+        for head in self.arg1._lf:
+            pd_set = set()
+            self._lf[head] = pd_set
+            for tail in self.arg1._lf[head]:
+                if tail.emptysetP():
+                    pd_set.add(uemptyset(self.Sigma))
+                elif tail.epsilonP():
+                    pd_set.add(self.arg2)
+                else:
+                    pd_set.add(uconcat(tail, self.arg2))
+        if self.arg1.ewp():
+            self.arg2._memoLF()
+            for head in self.arg2._lf:
+                if head in self._lf:
+                    self._lf[head].update(self.arg2._lf[head])
+                else:
+                    self._lf[head] = set(self.arg2._lf[head])
+
 class udisj(reex.disj, uregexp):
     def __init__(self, arg1, arg2):
         super(udisj, self).__init__(arg1, arg2, sigma=None)
+
+    def __deepcopy__(self, memo):
+        cpy = udisj(copy.deepcopy(self.arg1), copy.deepcopy(self.arg2))
+        memo[id(self)] = cpy
+        return cpy
 
 class ustar(reex.star, uregexp):
     def __init__(self, arg):
@@ -39,9 +88,50 @@ class ustar(reex.star, uregexp):
         memo[id(self)] = cpy
         return cpy
 
+    def linearForm(self):
+        arg_lf = self.arg.linearForm()
+        lf = {}
+        for head in arg_lf:
+            lf[head] = set()
+            for tail in arg_lf[head]:
+                if tail.emptysetP():
+                    lf[head].add(uemptyset(self.Sigma))
+                elif tail.epsilonP():
+                    lf[head].add(self)
+                else:
+                    lf[head].add(uconcat(tail, self))
+        return lf
+
+    def _memoLF(self):
+        if hasattr(self, "_lf"):
+            return
+        self.arg._memoLF()
+        self._lf = {}
+        for head in self.arg._lf:
+            pd_set = set()
+            self._lf[head] = pd_set
+            for tail in self.arg._lf[head]:
+                if tail.emptysetP():
+                    pd_set.add(uemptyset(self.Sigma))
+                elif tail.epsilonP():
+                    pd_set.add(self)
+                else:
+                    pd_set.add(uconcat(tail, self))
+
+    def __repr__(self):
+        return "u" + super(ustar, self).__repr__()
+
 class uoption(reex.option, uregexp):
     def __init__(self, arg):
         super(uoption, self).__init__(arg, sigma=None)
+
+    def __deepcopy__(self, memo):
+        cpy = uoption(copy.deepcopy(self.arg))
+        memo[id(self)] = cpy
+        return cpy
+
+    def __repr__(self):
+        return "u" + super(uoption, self).__repr__()
 
 class uatom(reex.atom, uregexp):
     def __init__(self, val):
