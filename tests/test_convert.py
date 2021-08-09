@@ -117,7 +117,7 @@ class TestConverter(unittest.TestCase):
             try:
                 re = self.convert.prog(expr)
                 raise Exception(expr + " should raise, but instead returns " + str(re))
-            except RuntimeError as err:
+            except Exception as err:
                 self.assertTrue(str(err.message).startswith("Could not FAdoize"))
 
     def test_lark_errors(self):

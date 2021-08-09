@@ -3,6 +3,7 @@ import subprocess
 import time
 import regex
 import lark
+import sys
 
 charlist_grammar = None
 class UniUtil():
@@ -64,11 +65,25 @@ class UniUtil():
             c = s.decode("unicode-escape")
             return c.encode("utf-8")
 
-class DBWrapper(object):
+class ConsoleOverwrite():
+    """Print to console and overwrite the last printed item."""
     def __init__(self):
+        self.lastlen = 0
+
+    def overwrite(self, items):
+        print "\r" + " "*self.lastlen + "\r",
+        content = reduce(lambda p, c: p + " " + str(c), items, "")
+        self.lastlen = len(content)
+        print content,
+        sys.stdout.flush()
+
+
+class DBWrapper(object):
+    def __init__(self, name="database.db"):
         super(DBWrapper, self).__init__()
-        self.name = "database.db"
+        self.name = name
         self._connection = sqlite3.connect(self.name)
+        self._connection.text_factory = str
         self._cursor = self._connection.cursor()
 
         # setup tables
@@ -93,6 +108,7 @@ class DBWrapper(object):
 
             CREATE TABLE IF NOT EXISTS expressions (
                 re      TEXT PRIMARY KEY,
+                line    TEXT,
                 url     TEXT,
                 lineNum INTEGER,
                 lang    TEXT,
@@ -136,6 +152,20 @@ def FAdoize(expression, log=lambda *m: None):
         return "{0," + match[2:-1] + "}"
     expression = regex.sub(r"\{,[0-9]+\}", lambda x: repl(x.group()), expression)
 
+    # remove redundant (and invalid) escapes
+    valids = set("sSwWdDtnrfvuU\\-^$.()[]+*{}bB0123456789")
+    i = 0
+    while True:
+        try:
+            index = expression.index("\\", i)
+            if expression[index + 1] not in valids:
+                expression = expression[:index] + expression[index+1:]
+                i = index
+            else:
+                i = index + 1
+        except:
+            break
+
     if globals()["nodejs_proc"] is None:
         import atexit
         class NodeJSProcess():
@@ -164,6 +194,9 @@ def FAdoize(expression, log=lambda *m: None):
 
         globals()["nodejs_proc"] = NodeJSProcess("benchmark/parse.js")
 
+    if len(expression) == 0:
+        raise Exception("Expression must have a length > 0")
+
     output = globals()["nodejs_proc"].send(expression)
     log("FAdoize output:--------\n", output, "\nend output--------")
     converted = output[-2]
@@ -174,7 +207,7 @@ def FAdoize(expression, log=lambda *m: None):
         err = ""
         for o in output:
             err += "\t> " + o + "\n"
-        raise RuntimeError("Could not FAdoize\n" + err)
+        raise Exception("Could not FAdoize\n" + err)
 
 
 def FunctionNotDefined(*x):
