@@ -118,8 +118,11 @@ function nodeToString(node, chars=null) {
             }
 
         case "CharacterClass":
-            children = node.expressions.map((e) => nodeToString(e, node.negative ? true : false))
-            return `[${node.negative ? "^" : ""}${children.join("")}]`
+            children = node.expressions.map((e) => nodeToString(e, node.negative ? true : false)).join("")
+            if (children.length == 0)
+                throw Error("Empty CharacterClass")
+
+            return `[${node.negative ? "^" : ""}${children}]`
 
         case "ClassRange":
             return `${nodeToString(node.from)}-${nodeToString(node.to)}`
