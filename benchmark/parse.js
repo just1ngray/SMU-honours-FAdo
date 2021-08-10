@@ -22,8 +22,9 @@ process.stdin.on("data", (data) => {
 
         let str = ""
         for (const c of data)
-            if (c.length > 1) str += `\\u\{${c.codePointAt(0).toString(16)}}`
-            else              str += c
+            if (c == "/")          str += "\\/"
+            else if (c.length > 1) str += `\\u\{${c.codePointAt(0).toString(16)}}`
+            else                   str += c
 
         const ast = regexp.parse("/" + str + "/u")
         const formatted = nodeToString(ast.body)

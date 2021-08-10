@@ -32,6 +32,9 @@ class TestFAdoize(unittest.TestCase):
         self.assertEqual(f('\\\\W'), '(\\ W)')
         self.assertEqual(f('[\\\\w]'), '[\\w]')
 
+    def test_forwardslash(self):
+        self.assertEqual(FAdoize('//'), '(/ /)')
+
 
 class TestRangeList(unittest.TestCase):
     @classmethod
