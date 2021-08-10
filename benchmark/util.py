@@ -68,13 +68,18 @@ class UniUtil():
 class ConsoleOverwrite():
     """Print to console and overwrite the last printed item."""
     def __init__(self, prefix=""):
-        self.lastlen = 0
         self.prefix = prefix
+        self._lastlen = 0
+        self._width = terminal_size()[0] - 1
 
     def overwrite(self, *items):
-        print "\r" + " "*self.lastlen + "\r",
+        print "\r" + " "*self._lastlen + "\r",
+
         content = self.prefix + reduce(lambda p, c: p + " " + str(c), items, "")
-        self.lastlen = len(content)
+        if len(content) > self._width:
+            content = content[:self._width - 3] + "..."
+        self._lastlen = len(content)
+
         print content,
         sys.stdout.flush()
 
@@ -399,3 +404,13 @@ class RangeList(object):
         intersectList = RangeList(inc=self.inc, dec=self.dec)
         intersectList._list = inter
         return intersectList
+
+def terminal_size():
+    """Finds terminal size.
+    https://www.w3resource.com/python-exercises/python-basic-exercise-56.php
+    """
+    import fcntl, termios, struct
+    th, tw, hp, wp = struct.unpack('HHHH',
+        fcntl.ioctl(0, termios.TIOCGWINSZ,
+        struct.pack('HHHH', 0, 0, 0, 0)))
+    return tw, th
