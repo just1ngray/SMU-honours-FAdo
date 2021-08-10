@@ -110,6 +110,21 @@ class CodeSampler(object):
         """, [fromFile])
         return expressions
 
+    def reprocess_lines(self):
+        """Reprocesses all previously collected lines to ensure they're up to date with the
+        current FAdoize spec."""
+        rows = self.db.selectall("SELECT re, line, url, lineNum, lang FROM expressions WHERE lang=?;", [self.language])
+
+        for re, line, url, lineNum, _ in rows:
+            self.output.overwrite("reprocess_lines:", line)
+
+            self.db.execute("DELETE FROM expressions WHERE re=?;", [re])
+            expr = self.get_line_expression(line)
+            formatted = FAdoize(expr)
+            self.db.execute("""
+                INSERT OR IGNORE INTO expressions (re, url, lineNum, line, lang)
+                VALUES (?, ?, ?, ?, ?);""", [formatted, url, lineNum, line, self.language])
+
     # abstractmethod
     def get_line_expression(self, line):
         """Extracts a regular expression from a line of code, or None if the line
@@ -187,9 +202,11 @@ if __name__ == "__main__":
         print "\n\nSampling: ", sampler.__name__
 
         obj.grep_search(300)
+        obj.reprocess_lines()
         for url in obj.get_urls():
             code = obj.get_github_code(url)
             obj.process_code(code, url)
+            obj.output.overwrite("")
         print "Done!"
 
     print "\n"*3, "Done - Sampled All"
