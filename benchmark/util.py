@@ -67,12 +67,13 @@ class UniUtil():
 
 class ConsoleOverwrite():
     """Print to console and overwrite the last printed item."""
-    def __init__(self):
+    def __init__(self, prefix=""):
         self.lastlen = 0
+        self.prefix = prefix
 
-    def overwrite(self, items):
+    def overwrite(self, *items):
         print "\r" + " "*self.lastlen + "\r",
-        content = reduce(lambda p, c: p + " " + str(c), items, "")
+        content = self.prefix + reduce(lambda p, c: p + " " + str(c), items, "")
         self.lastlen = len(content)
         print content,
         sys.stdout.flush()
@@ -103,7 +104,9 @@ class DBWrapper(object):
 
             CREATE TABLE IF NOT EXISTS github_urls (
                 url         TEXT PRIMARY KEY,
-                searched    INTEGER DEFAULT -1
+                lang        TEXT,
+                searched    INTEGER DEFAULT -1,
+                FOREIGN KEY (lang) REFERENCES languages (lang)
             );
 
             CREATE TABLE IF NOT EXISTS expressions (
@@ -118,12 +121,12 @@ class DBWrapper(object):
         """)
 
     def executescript(self, script):
+        """Executes a script that can have extra parameters, but cannot contain
+        dynamic data"""
         self._commit_rollback(lambda: self._cursor.executescript(script))
 
-    # def executemany(self, cmd, params=[]):
-    #     self._commit_rollback(lambda: self._cursor.executemany(cmd, params))
-
     def execute(self, cmd, params=[]):
+        """Executes a command with optional parameters"""
         self._commit_rollback(lambda: self._cursor.execute(cmd, params))
 
     def _commit_rollback(self, ftn):
@@ -133,6 +136,11 @@ class DBWrapper(object):
         except:
             self._connection.rollback()
             raise
+
+    def selectall(self, cmd, params=[]):
+        """Query via SELECT cmd all that match predicate"""
+        self._cursor.execute(cmd, params)
+        return self._cursor.fetchall()
 
 
 nodejs_proc = None

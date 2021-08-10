@@ -17,82 +17,73 @@ class CodeSampler(object):
         super(CodeSampler, self).__init__()
         self.language = language
         self.search_expr = search
-        self.cow = ConsoleOverwrite()
+        self.output = ConsoleOverwrite(self.language + "Sampler: ")
+        self.db = DBWrapper()
 
-    def _printTask(self, *items):
-        items = list(items)
-        items.insert(0, self.language + "Sampler:")
-        self.cow.overwrite(items)
-
-    def grep_search(self, re, minMatches):
-        """A function that collects GitHub URLs that match a language and
+    def grep_search(self, numResults):
+        """A function that populates the database with GitHub URLs that match a language and
         regular expression indexed by the https://grep.app API.
-        :param str re: the RE2 syntax expression for searching
-            (https://github.com/google/re2/wiki/Syntax)
-        :param int minMatches: the minimum number of matches desired (reflects
-            the number of `re` matches, not returned URLs). Note that a search
-            for `re` is not guaranteed to have enough pages of results to meet
-            this number.
-            Additionally - grep.app utilizes a simplified search and will match
-            more lines of code than #get_line_expression
-        :returns set<unicode>: set of raw.githubusercontent.com URLs which
-            contain at least one match of `re`
+        :param int numResults: the desired number of results to retrieve (github links)
         """
-        results = set()
-        matches = 0
+        # first check if we already have sufficient results in the DB
+        urls = list(map(lambda x: x[0],
+            self.db.selectall("SELECT url FROM github_urls WHERE lang=?;", [self.language])))
+        if len(urls) >= numResults:
+            return
 
+        # find results from grep.app
+        results = set()
         params = {
-            'q': re,
-            'lang': self.language,
+            'q': self.search_expr,
+            'f.lang': self.language,
             'regexp': True
         }
         baseurl = "https://grep.app/api/search?" + urllib.urlencode(params)
-        pageNum = 0
-        while matches < minMatches:
+        pageNum = len(urls) // 10
+        lastResponse = "n/a"
+        while len(results) < numResults:
             pageNum += 1
-            self._printTask("grep_search {0}".format(pageNum))
+            self.output.overwrite("grep_search {0}".format(pageNum))
 
             page = urllib.urlopen(baseurl + "&page=" + str(pageNum))
-            content = json.loads("\n".join(page.readlines()))
-            hits = content["hits"]["hits"] # type: list<dict>
-            if len(hits) == 0:
+            response = "\n".join(page.readlines())
+            content = json.loads(response)
+            if response == lastResponse: # pageNum > max will return the last page's info
                 break
+            lastResponse = response
+            hits = content["hits"]["hits"] # type: list<dict>
 
             for hit in hits:
                 user_repo = hit["repo"]["raw"]
                 branch = hit["branch"]["raw"] if hit.has_key("branch") else "master"
                 filename = hit["path"]["raw"]
-                matches += int(hit["total_matches"]["raw"].split("+")[0])
-
                 url = u"https://raw.githubusercontent.com/{user_repo}/{branch}/{path}" \
                     .format(user_repo=user_repo, branch=branch, path=filename)
-                results.add(url)
 
-        # add to DB
-        db = DBWrapper()
-        for res in results:
-            db.execute("INSERT OR IGNORE INTO github_urls (url) VALUES (?);", [res])
+                if len(results) < (results.add(url), len(results))[1]: # if url was added for the first time in results
+                    self.db.execute("INSERT OR IGNORE INTO github_urls (url, lang) VALUES (?, ?);", [url, self.language])
 
-        return results
-
-    def get_github(self, url):
+    def get_github_code(self, url):
         """Gets the code from a raw github page and returns line-delimited list
         :param unicode url: the raw github url where the code can be downloaded
         :returns list<unicode>: the code line by line
         """
-        self._printTask("get_github: " + url)
+        self.output.overwrite("get_github: " + url)
         page = urllib.urlopen(url)
         return page.read().splitlines()
 
-    def process_codefile(self, lines, fromFile="Unspecified"):
+    def get_urls(self):
+        """Retrieves github_urls assigned to `self.language` that have yet to be searched"""
+        return list(map(lambda x: x[0],
+            self.db.selectall("SELECT url FROM github_urls WHERE lang=? AND searched=-1;", [self.language])))
+
+    def process_code(self, lines, fromFile="Unspecified"):
         """Processes lines of code and searches for contained regular expressions using
         the #get_line_expression method.
         :param list<unicode> lines: the lines to search for regular expressions
         :param unicode fromFile: the URL of the codefile to be stored in the database
         :returns list<unicode>: formatted and working expressions
         """
-        self._printTask("process_codefile 0")
-        db = DBWrapper()
         expressions = list()
 
         lineNum = 0
@@ -105,15 +96,15 @@ class CodeSampler(object):
 
             try:
                 formatted = FAdoize(expr)
-                db.execute("""
+                self.db.execute("""
                     INSERT OR IGNORE INTO expressions (re, url, lineNum, line, lang)
                     VALUES (?, ?, ?, ?, ?);""", [formatted, fromFile, lineNum, line, self.language])
                 expressions.append(formatted)
-                self._printTask("process_codefile {1} found - {0}".format(fromFile, len(expressions)))
+                self.output.overwrite("process_codefile {1} found - {0}".format(fromFile, len(expressions)))
             except Exception as e:
                 print e
 
-        db.execute("""
+        self.db.execute("""
             UPDATE github_urls
             SET searched=datetime('now', 'localtime')
             WHERE url=?;
@@ -196,9 +187,9 @@ if __name__ == "__main__":
 
         print "\n\nSampling: ", sampler.__name__, "\n"
 
-        urls = obj.grep_search(obj.search_expr, 10000)
-        for url in urls:
-            code = obj.get_github(url)
-            obj.process_codefile(code, url)
+        obj.grep_search(300)
+        for url in obj.get_urls():
+            code = obj.get_github_code(url)
+            obj.process_code(code, url)
 
     print "\n"*3, "Done!"
