@@ -3,6 +3,7 @@ import unittest
 from lark import LarkError
 
 from benchmark.convert import Converter
+from benchmark.util import FAdoizeError
 
 
 class TestConverter(unittest.TestCase):
@@ -117,8 +118,8 @@ class TestConverter(unittest.TestCase):
             try:
                 re = self.convert.prog(expr)
                 raise Exception(expr + " should raise, but instead returns " + str(re))
-            except Exception as err:
-                self.assertTrue(str(err.message).startswith("Could not FAdoize"))
+            except FAdoizeError:
+                pass
 
     def test_lark_errors(self):
         exprs = [

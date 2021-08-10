@@ -2,7 +2,16 @@ import urllib
 import json
 import regex
 
-from util import DBWrapper, FAdoize, ConsoleOverwrite
+import util
+
+class InvalidExpressionError(ValueError):
+    def __init__(self, line, message):
+        super(InvalidExpressionError, self).__init__()
+        self.line = line
+        self.message = message
+
+    def __str__(self):
+        return "InvalidExpressionError ({0}): {1}".format(self.line, self.message)
 
 class CodeSampler(object):
     def __init__(self, language, search):
@@ -17,8 +26,8 @@ class CodeSampler(object):
         super(CodeSampler, self).__init__()
         self.language = language
         self.search_expr = search
-        self.output = ConsoleOverwrite(self.language + "Sampler: ")
-        self.db = DBWrapper()
+        self.output = util.ConsoleOverwrite(self.language + "Sampler: ")
+        self.db = util.DBWrapper()
 
     def grep_search(self, numResults):
         """A function that populates the database with GitHub URLs that match a language and
@@ -42,9 +51,10 @@ class CodeSampler(object):
         lastResponse = "n/a"
         while len(urls) < numResults:
             pageNum += 1
-            self.output.overwrite("grep_search {0}".format(pageNum))
+            pageAddr = baseurl + "&page=" + str(pageNum)
+            self.output.overwrite("grep_search {0} - {1}".format(pageNum, pageAddr))
 
-            page = urllib.urlopen(baseurl + "&page=" + str(pageNum))
+            page = urllib.urlopen(pageAddr)
             response = "\n".join(page.readlines())
             content = json.loads(response)
             if response == lastResponse: # pageNum > max will return the last page's info
@@ -88,20 +98,7 @@ class CodeSampler(object):
         lineNum = 0
         for line in lines:
             lineNum += 1
-
-            expr = self.get_line_expression(line)
-            if expr is None:
-                continue
-
-            try:
-                formatted = FAdoize(expr)
-                self.db.execute("""
-                    INSERT OR IGNORE INTO expressions (re, url, lineNum, line, lang)
-                    VALUES (?, ?, ?, ?, ?);""", [formatted, fromFile, lineNum, line, self.language])
-                expressions.append(formatted)
-                self.output.overwrite("process_codefile {1} found - {0}".format(fromFile, len(expressions)))
-            except Exception as e:
-                print e
+            self.save_expression(fromFile, line, lineNum)
 
         self.db.execute("""
             UPDATE github_urls
@@ -114,23 +111,36 @@ class CodeSampler(object):
         """Reprocesses all previously collected lines to ensure they're up to date with the
         current FAdoize spec."""
         rows = self.db.selectall("SELECT re, line, url, lineNum, lang FROM expressions WHERE lang=?;", [self.language])
-
-        for re, line, url, lineNum, _ in rows:
+        for _, line, url, lineNum, _ in rows:
             self.output.overwrite("reprocess_lines:", line)
+            self.db.execute("DELETE FROM expressions WHERE url=? AND line=?;", [url, line])
+            self.save_expression(url, line, lineNum)
 
-            self.db.execute("DELETE FROM expressions WHERE re=?;", [re])
+    def save_expression(self, url, line, lineNum):
+        """Save an expression to the database"""
+        self.output.overwrite("save_expression @ " + line)
+        try:
             expr = self.get_line_expression(line)
-            formatted = FAdoize(expr)
+            if expr is None:
+                return None
+
+            formatted = util.FAdoize(expr)
             self.db.execute("""
                 INSERT OR IGNORE INTO expressions (re, url, lineNum, line, lang)
                 VALUES (?, ?, ?, ?, ?);""", [formatted, url, lineNum, line, self.language])
+            return formatted
+        except (InvalidExpressionError, util.FAdoizeError) as err:
+            self.db.execute("""
+                INSERT OR IGNORE INTO expressions (re, url, lineNum, line, lang)
+                VALUES (?, ?, ?, ?, ?);""", [str(err), url, lineNum, line, self.language])
+            return err
 
     # abstractmethod
     def get_line_expression(self, line):
-        """Extracts a regular expression from a line of code, or None if the line
-        doesn't include a regular expression.
+        """Extracts a regular expression from a line of code
         :param unicode line: the line of code on which to search for an expression
-        :returns unicode|None: the extracted expression
+        :returns unicode|None: the extracted expression if it exists, INCOMPLETE_CODE if it's
+        incomplete, and None if there is no sign of a regular expression on this line
 
         >>> sampler = SamplerChild()
         >>> sampler.get_line_expression(u"matchObj = re.match(r'(.*) are (.*?) .*', line, re.M|re.I)")
@@ -165,7 +175,7 @@ class PythonSampler(CodeSampler):
         def getExpr(re, word, endindex):
             match = re.search(word)
             if match is None:
-                return None
+                raise InvalidExpressionError(line, "Incomplete - no end of expression found")
             else:
                 return match.group(0)[:endindex]
 
@@ -178,35 +188,78 @@ class PythonSampler(CodeSampler):
         elif delim.endswith("'"):
             extract = lambda x: getExpr(self.re_expr_single, x, -2)
         else:
-            return None
+            raise InvalidExpressionError(line, "Unknown delimiter: %s" % delim)
 
         expression = extract(end)
         if expression is None:
-            return None
+            print "Doesn't happen TODO remove"
 
         if not isRaw:
             expression = expression.replace("\\\\", "\\")
 
-        try:
-            FAdoize(expression)
-            return expression
-        except:
+        util.FAdoize(expression)
+        return expression
+
+
+class JavaScriptSampler(CodeSampler):
+    def __init__(self):
+        super(JavaScriptSampler, self).__init__("JavaScript",
+            r"""new RegExp\(["'/`].+\)""")
+
+        self.re_begin = regex.compile(r"""new RegExp\(""")
+        self.re_template = regex.compile(r"""\$\{.+\}""")
+
+    def get_line_expression(self, line):
+        match = self.re_begin.search(line)
+        if match is None:
             return None
+        end = line[match.end():] # start of the expression to the end of the line
+        if len(end) == 0:
+            raise InvalidExpressionError(line, "EOL found, expected the expression")
+
+        end = end.decode('utf-8')
+
+        delimiter = end[0]
+        expression = u""
+        i = 1
+        while i < len(end):
+            c = end[i]
+            expression += c
+            if c == "\\":
+                i += 1
+                expression += end[i]
+            elif c == delimiter:
+                expression = expression[:i-1]
+                break
+            i += 1
+
+        lookahead = 2 if delimiter != "/" else 4 # up to 2 flags (technically <=7 allowed)
+        if i >= len(end) or (end.find(",", i, i + lookahead) == -1 and end.find(")", i, i + lookahead) == -1):
+            raise InvalidExpressionError(line, "Could not find terminator of first argument")
+
+        if delimiter != "/":
+            expression = expression.replace("\\\\", "\\")
+        if delimiter == "`" and self.re_template.search(expression) is not None:
+            raise InvalidExpressionError(line, "JS template string introduces variables")
+
+        util.FAdoize(expression)
+        return expression
 
 
 if __name__ == "__main__":
-    samplers = [PythonSampler]
+    SAMPLE_SIZE = 8
+
+    samplers = [JavaScriptSampler, PythonSampler]
     for sampler in samplers:
         obj = sampler()
 
         print "\n\nSampling: ", sampler.__name__
 
-        obj.grep_search(300)
+        obj.grep_search(SAMPLE_SIZE)
         obj.reprocess_lines()
         for url in obj.get_urls():
             code = obj.get_github_code(url)
             obj.process_code(code, url)
-            obj.output.overwrite("")
-        print "Done!"
+        obj.output.overwrite("Done!\n")
 
     print "\n"*3, "Done - Sampled All"

@@ -1,9 +1,9 @@
 import sqlite3
 import subprocess
-import time
 import regex
 import lark
 import sys
+import json
 
 charlist_grammar = None
 class UniUtil():
@@ -115,13 +115,14 @@ class DBWrapper(object):
             );
 
             CREATE TABLE IF NOT EXISTS expressions (
-                re      TEXT PRIMARY KEY,
+                re      TEXT,
                 line    TEXT,
                 url     TEXT,
                 lineNum INTEGER,
                 lang    TEXT,
                 FOREIGN KEY (lang) REFERENCES languages (lang),
-                FOREIGN KEY (url) REFERENCES github_urls (url)
+                FOREIGN KEY (url) REFERENCES github_urls (url),
+                PRIMARY KEY (url, line)
             );
         """)
 
@@ -147,16 +148,25 @@ class DBWrapper(object):
         self._cursor.execute(cmd, params)
         return self._cursor.fetchall()
 
+class FAdoizeError(Exception):
+    def __init__(self, expression, node_callback):
+        super(FAdoizeError, self).__init__()
+        self.expression = expression
+        self.node_callback = node_callback
+
+    def __str__(self):
+        return "FAdoizeError on '{0}':\n{1}".format(
+            self.expression.encode("utf-8"), self.node_callback.encode("utf-8"))
+
 
 nodejs_proc = None
 def FAdoize(expression, log=lambda *m: None):
     """Convert an "ambiguous" expression used by a programmer into an expression
     ready to parse into FAdo via the `benchmark/convert.py#Converter` using the
     `benchmark/re.lark` grammar.
-    :param str expression: the expression to convert into unambiguous FAdo
-        note: Escaped characters must be preceeded with a single backslash
+    :param unicode expression: the expression to convert into unambiguous FAdo
     :returns unicode: the parenthesized and formatted expression
-    :throws: if `benchmark/parse.js` throws
+    :raises FAdoizeError: if `benchmark/parse.js` throws
     ..note: FAdoize will include a cold start time as the NodeJS process is created.
             Subsequent calls will not incur this cost until this Python process finishes.
     """
@@ -176,51 +186,31 @@ def FAdoize(expression, log=lambda *m: None):
                 i = index
             else:
                 i = index + 1
-        except:
+        except ValueError:
             break
 
     if globals()["nodejs_proc"] is None:
+        globals()["nodejs_proc"] = subprocess.Popen(["node", "benchmark/parse.js"],
+            stderr=subprocess.STDOUT,
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE)
+
         import atexit
-        class NodeJSProcess():
-            def __init__(self, filename):
-                self.cmd = filename
-                self.proc = subprocess.Popen(["node", filename],
-                    stderr=subprocess.STDOUT,
-                    stdin=subprocess.PIPE,
-                    stdout=subprocess.PIPE)
-
-                atexit.register(lambda: self.proc.terminate())
-
-            def send(self, data):
-                self.proc.stdin.write(data.encode("utf-8"))
-                self.proc.stdin.flush()
-
-                lines = [""]
-                while lines[-1] != "> Done0! <\n":
-                    # very short-duration "spinlock"
-                    t = time.time()
-                    while time.time() - t < 0.00001:
-                        continue
-
-                    lines.append(self.proc.stdout.readline())
-                return list(map(lambda x: x[0:-1], lines))
-
-        globals()["nodejs_proc"] = NodeJSProcess("benchmark/parse.js")
+        atexit.register(lambda: globals()["nodejs_proc"].terminate())
 
     if len(expression) == 0:
-        raise Exception("Expression must have a length > 0")
+        raise FAdoizeError(expression, "Expression must have a length > 0")
 
-    output = globals()["nodejs_proc"].send(expression)
-    log("FAdoize output:--------\n", output, "\nend output--------")
-    converted = output[-2]
+    proc = globals()["nodejs_proc"]
+    proc.stdin.write(expression.encode("utf-8"))
+    proc.stdin.flush()
+    output = json.loads(proc.stdout.readline())
 
-    if not converted.startswith("ERROR"):
-        return converted.decode("utf-8")
+    if output["error"] != 0:
+        logs = reduce(lambda p, c: p + "\n" + c, output["logs"])
+        raise FAdoizeError(expression, logs + "\n\n" + output["error"])
     else:
-        err = ""
-        for o in output:
-            err += "\t> " + o + "\n"
-        raise Exception("Could not FAdoize\n" + err)
+        return output["formatted"]
 
 
 def FunctionNotDefined(*x):

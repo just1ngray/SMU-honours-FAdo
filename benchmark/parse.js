@@ -2,8 +2,8 @@
 The regexp-tree library is very widely used (over 900,000 public GitHub projects use it).
 
 This process is created from the main Python process, and listens to stdin expressions to
-parse. The expressions are parsed and formatted, then printed into stdout. Finally, the
-line "> Done0! <\n" is printed to stdout to signal the input expression has been finished.
+parse. The expressions are parsed and formatted, then printed into stdout as a standard
+output object.
 
 See details in benchmark/util.py#FAdoize
 */
@@ -17,8 +17,13 @@ process.stdin.on("data", (data) => {
     if (data.endsWith("\r\n")) data = data.substring(0, data.length - 2)
     else if (data.endsWith("\n")) data = data.substring(0, data.length - 1)
 
+    const output = {
+        logs: [],
+        error: 0,
+        formatted: 0
+    }
     try {
-        console.log("Parsing expression /" + data + "/ ... ")
+        output.logs.push("Parsing expression /" + data + "/ ... ")
 
         let str = ""
         for (const c of data)
@@ -27,15 +32,14 @@ process.stdin.on("data", (data) => {
             else                   str += c
 
         const ast = regexp.parse("/" + str + "/u")
-        const formatted = nodeToString(ast.body)
-        console.log(formatted)
+        const formatted = nodeToString(ast.body, output)
+        output.formatted = formatted
     }
     catch (e) {
-        console.log(e)
-        console.log("ERROR ^^^^")
+        output.error = e.stack
     }
     finally {
-        console.log("> Done0! <")
+        console.log(JSON.stringify(output))
     }
 });
 
@@ -65,12 +69,12 @@ function buildConcatRecursively(tokens) {
  *  is negated
  * @returns the formatted string
  */
-function nodeToString(node, chars=null) {
-    // console.log("nodeToString:", node, chars) // uncomment for debugging (performance penalty)
+function nodeToString(node, output, chars=null) {
+    // output.logs.push(`nodeToString: ${chars}\n${JSON.stringify(node)}`)
 
     switch (node.type) {
         case "Alternative":
-            return buildConcatRecursively(node.expressions.map(nodeToString))
+            return buildConcatRecursively(node.expressions.map(x => nodeToString(x, output)))
 
         case "Assertion":
             switch (node.kind) {
@@ -118,23 +122,23 @@ function nodeToString(node, chars=null) {
             }
 
         case "CharacterClass":
-            children = node.expressions.map((e) => nodeToString(e, node.negative ? true : false)).join("")
+            children = node.expressions.map((e) => nodeToString(e, output, node.negative ? true : false)).join("")
             if (children.length == 0)
                 throw Error("Empty CharacterClass")
 
             return `[${node.negative ? "^" : ""}${children}]`
 
         case "ClassRange":
-            return `${nodeToString(node.from)}-${nodeToString(node.to)}`
+            return `${nodeToString(node.from, output)}-${nodeToString(node.to, output)}`
 
         case "Disjunction":
-            return `(${nodeToString(node.left)} + ${nodeToString(node.right)})`
+            return `(${nodeToString(node.left, output)} + ${nodeToString(node.right, output)})`
 
         case "Group":
             return nodeToString(node.expression)
 
         case "Repetition":
-            const expression = nodeToString(node.expression)
+            const expression = nodeToString(node.expression, output)
 
             switch (node.quantifier.kind) {
                 case "*":
@@ -153,7 +157,7 @@ function nodeToString(node, chars=null) {
                 else return nodeToString({
                     type: "Alternative",
                     expressions: new Array(x).fill(node.expression)
-                })
+                }, output)
             }
 
             if (from == to)
