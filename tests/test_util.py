@@ -20,17 +20,17 @@ class TestFAdoize(unittest.TestCase):
 
     def test_almost_charclass(self):
         f = FAdoize
-        self.assertEqual(f('\\\\d'), '(\\\\ d)')
-        self.assertEqual(f('\\\\D'), '(\\\\ D)')
-        self.assertEqual(f('[\\\\d]'), '[\\\\d]')
+        self.assertEqual(f('\\\\d'), '(\\ d)')
+        self.assertEqual(f('\\\\D'), '(\\ D)')
+        self.assertEqual(f('[\\\\d]'), '[\\d]')
 
-        self.assertEqual(f('\\\\s'), '(\\\\ s)')
-        self.assertEqual(f('\\\\S'), '(\\\\ S)')
-        self.assertEqual(f('[\\\\s]'), '[\\\\s]')
+        self.assertEqual(f('\\\\s'), '(\\ s)')
+        self.assertEqual(f('\\\\S'), '(\\ S)')
+        self.assertEqual(f('[\\\\s]'), '[\\s]')
 
-        self.assertEqual(f('\\\\w'), '(\\\\ w)')
-        self.assertEqual(f('\\\\W'), '(\\\\ W)')
-        self.assertEqual(f('[\\\\w]'), '[\\\\w]')
+        self.assertEqual(f('\\\\w'), '(\\ w)')
+        self.assertEqual(f('\\\\W'), '(\\ W)')
+        self.assertEqual(f('[\\\\w]'), '[\\w]')
 
 
 class TestRangeList(unittest.TestCase):
