@@ -111,10 +111,9 @@ function nodeToString(node, chars=null) {
                 return node.value
             }
             else {
-                // return `${node.escaped ? "\\" : ""}${String.fromCodePoint(node.codePoint)}`
-                // is equivalent to:
-                return `${node.escaped ? "\\" : ""}${node.symbol}`
-                // however, the second option requires less look-ups
+                // allowed escape characters    v  ... the rest are understood without \ because non-ambiguous ()
+                const escaped = node.escaped && "rnt".includes(node.symbol)
+                return `${escaped ? "\\" : ""}${node.symbol}`
             }
 
         case "CharacterClass":
