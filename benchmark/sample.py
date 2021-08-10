@@ -26,13 +26,12 @@ class CodeSampler(object):
         :param int numResults: the desired number of results to retrieve (github links)
         """
         # first check if we already have sufficient results in the DB
-        urls = list(map(lambda x: x[0],
+        urls = set(map(lambda x: x[0],
             self.db.selectall("SELECT url FROM github_urls WHERE lang=?;", [self.language])))
         if len(urls) >= numResults:
             return
 
         # find results from grep.app
-        results = set()
         params = {
             'q': self.search_expr,
             'f.lang': self.language,
@@ -41,7 +40,7 @@ class CodeSampler(object):
         baseurl = "https://grep.app/api/search?" + urllib.urlencode(params)
         pageNum = len(urls) // 10
         lastResponse = "n/a"
-        while len(results) < numResults:
+        while len(urls) < numResults:
             pageNum += 1
             self.output.overwrite("grep_search {0}".format(pageNum))
 
@@ -60,7 +59,7 @@ class CodeSampler(object):
                 url = u"https://raw.githubusercontent.com/{user_repo}/{branch}/{path}" \
                     .format(user_repo=user_repo, branch=branch, path=filename)
 
-                if len(results) < (results.add(url), len(results))[1]: # if url was added for the first time in results
+                if len(urls) < (urls.add(url), len(urls))[1]: # if url was added for the first time
                     self.db.execute("INSERT OR IGNORE INTO github_urls (url, lang) VALUES (?, ?);", [url, self.language])
 
     def get_github_code(self, url):
@@ -185,11 +184,12 @@ if __name__ == "__main__":
     for sampler in samplers:
         obj = sampler()
 
-        print "\n\nSampling: ", sampler.__name__, "\n"
+        print "\n\nSampling: ", sampler.__name__
 
         obj.grep_search(300)
         for url in obj.get_urls():
             code = obj.get_github_code(url)
             obj.process_code(code, url)
+        print "Done!"
 
-    print "\n"*3, "Done!"
+    print "\n"*3, "Done - Sampled All"
