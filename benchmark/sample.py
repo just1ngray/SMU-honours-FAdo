@@ -11,7 +11,7 @@ class InvalidExpressionError(ValueError):
         self.message = message
 
     def __str__(self):
-        return "InvalidExpressionError ({0}): {1}".format(self.line, self.message)
+        return "InvalidExpressionError on line {0}\n{1}".format(self.line, self.message)
 
 class CodeSampler(object):
     def __init__(self, language, search):
@@ -117,12 +117,13 @@ class CodeSampler(object):
             self.save_expression(url, line, lineNum)
 
     def save_expression(self, url, line, lineNum):
-        """Save an expression to the database"""
-        self.output.overwrite("save_expression @ " + line)
+        """Save a potential expression to the database if one exists on line"""
         try:
+            self.output.overwrite("get_line_expression @ " + line)
             expr = self.get_line_expression(line)
             if expr is None:
                 return None
+            self.output.overwrite("save_expression @ " + line)
 
             formatted = util.FAdoize(expr)
             self.db.execute("""
@@ -247,7 +248,7 @@ class JavaScriptSampler(CodeSampler):
 
 
 if __name__ == "__main__":
-    SAMPLE_SIZE = 8
+    SAMPLE_SIZE = 300
 
     samplers = [JavaScriptSampler, PythonSampler]
     for sampler in samplers:
