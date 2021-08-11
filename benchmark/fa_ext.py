@@ -221,7 +221,7 @@ class InvariantNFA(fa.NFA):
         if curMin is None:
             return None, set()
         else:
-            return curMin, deepcopy(successors)
+            return curMin, successors
 
 
 class EnumInvariantNFA(object):
