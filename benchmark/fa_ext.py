@@ -1,6 +1,7 @@
 from FAdo import fa, reex
 from copy import deepcopy
 from Queue import PriorityQueue
+from random import randint
 
 from reex_ext import dotany
 from util import UniUtil
@@ -300,10 +301,10 @@ class EnumInvariantNFA(object):
         :returns unicode|NoneType: the next word after current, or None if current is the last
         word in its cross-section
         """
-        nfa = self._sized(len(current))
-        stack = [nfa.Initial] # possible set of states after processing each letter in current
         current = UniUtil.charlist(current)
         length = len(current)
+        nfa = self._sized(length)
+        stack = [nfa.Initial] # possible set of states after processing each letter in current
 
         for c in current[:-1]:
             stack.append(nfa.evalSymbol(stack[-1], c))
@@ -353,6 +354,28 @@ class EnumInvariantNFA(object):
         for l in range(lo, hi + 1):
             for word in self.enumCrossSection(l):
                 yield word
+
+    def randomWord(self, length):
+        """Generates a random word in length's cross-section
+        :param int length: the length of the desired word
+        :returns unicode: the random word, or None if the cross-section is empty
+        """
+        nfa = self._sized(length)
+        if length == 0:
+            return u"" if self.ewp() else None
+        elif len(nfa.Final) == 0:
+            return None
+
+        word = u""
+        current = next(iter(nfa.Initial))
+        while not nfa.finalP(current):
+            transitions = nfa.delta[current]
+            toTake = transitions.keys()[randint(0, len(transitions)-1)]
+            word += toTake.random()
+            successors = list(transitions[toTake])
+            current = successors[randint(0, len(successors)-1)]
+        return word
+
 
     def _sized(self, size):
         """Computes and memoizes the product of self.aut and lengthNFA of size `size`

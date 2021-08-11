@@ -1,5 +1,6 @@
 from FAdo import reex, fa, common
 import copy
+from random import randint
 
 from util import RangeList, UniUtil
 
@@ -187,6 +188,11 @@ class uatom(reex.atom, uregexp):
         """
         return self if other.derivative(self.val) == reex.epsilon() else None
 
+    def random(self):
+        """Retrieves a random symbol accepted by self
+        :returns unicode: the symbol"""
+        return self.val
+
     def nfaThompson(self):
         aut = fa.NFA()
         i = aut.addState()
@@ -358,6 +364,33 @@ class chars(uatom):
         else:
             return None
 
+    def random(self):
+        weight = 0
+        ranges = list() # (weight, s, e)
+        for s, e in self.ranges:
+            s = UniUtil.ord(s)
+            e = UniUtil.ord(e)
+            weight += e - s + 1
+            ranges.append((weight, s, e))
+
+        randweight = randint(1, weight)
+
+        # search for the highest lower val in ranges[...][0]
+        lo, hi = 0, len(ranges)
+        mid = None
+        while lo < hi:
+            mid = (lo + hi) // 2
+            weight = ranges[mid][0]
+            if weight < randweight:
+                hi = mid
+            elif weight > randweight:
+                lo = mid + 1
+            else:
+                break
+
+        s, e = ranges[mid-1][1:]
+        return UniUtil.chr(randint(s, e))
+
 class dotany(uatom):
     """Class that represents the wildcard symbol that accepts everything."""
     def __init__(self):
@@ -393,6 +426,9 @@ class dotany(uatom):
 
     def intersect(self, other):
         return None if type(other) is reex.epsilon else other
+
+    def random(self):
+        return UniUtil.chr(randint(32, 2**16 - 1))
 
 class anchor(uregexp):
     """A class used temporarily in the conversion from programmer's string format

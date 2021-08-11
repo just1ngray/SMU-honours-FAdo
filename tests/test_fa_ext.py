@@ -131,6 +131,7 @@ class TestEnumInvariantNFA(unittest.TestCase):
         self.run_simple(method)
         self.run_unicode(method)
         self.run_complex(method)
+        self.run_randomEnumerate(method)
 
     def run_simple(self, method):
         enum = self.infa("(0|1)*", method).enumNFA()
@@ -169,6 +170,38 @@ class TestEnumInvariantNFA(unittest.TestCase):
         self.assertEqual(enum.nextWord(u"x00 :: "), u"x01 :: ")
 
         self.verifyRadixOrder([x for x in enum.enumCrossSection(7)], 225)
+
+    def run_randomEnumerate(self, method):
+        enum = self.infa(u"([a-z01]㪘(α|β|ψ))*", method).enumNFA()
+
+        self.assertEqual(enum.randomWord(0), u"")
+        for l in range(1, 3):
+            self.assertIsNone(enum.randomWord(l))
+
+        start_count = 0
+        end_count = 0
+        for _ in range(1000):
+            word = enum.randomWord(3)
+            if word[0] == u"0" or word[0] == u"1":
+                start_count += 1
+            if word[-1] == u"α":
+                end_count += 1
+
+        rate = start_count / 1000.0
+        self.assertLess(abs(rate - 2.0/28.0), 0.025, "Non-uniform random word generation "\
+            +"[charclass] - run again to be sure - " + str(rate))
+
+        rate = end_count / 1000.0
+        self.assertLess(abs(rate - 1.0/3.0), 0.05, "Non-uniform random word generation "\
+            +"DISJUNCTION - run again to be sure - " + str(rate))
+
+        for l in range(4, 25):
+            word = enum.randomWord(l)
+            if l % 3 == 0:
+                self.assertIsNotNone(word)
+            else:
+                self.assertIsNone(word)
+
 
 
 if __name__ == "__main__":
