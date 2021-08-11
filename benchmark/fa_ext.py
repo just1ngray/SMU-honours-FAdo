@@ -253,6 +253,8 @@ class EnumInvariantNFA(object):
         if length == 0:
             return u"" if self.aut.ewp() else None
         nfa = self._sized(length)
+        if len(nfa.Final) == 0:
+            return None
 
         # nfa.Initial always has 1 initial state
         current = [(start, u"")] if start is not None else [(next(iter(nfa.Initial)), u"")]
