@@ -4,6 +4,7 @@ import regex
 import lark
 import sys
 import json
+from random import randint
 
 charlist_grammar = None
 class UniUtil():
@@ -407,3 +408,42 @@ def terminal_size():
         fcntl.ioctl(0, termios.TIOCGWINSZ,
         struct.pack('HHHH', 0, 0, 0, 0)))
     return tw, th
+
+class WeightedRandomItem():
+    """A class to choose a random item according to their weight values"""
+    def __init__(self):
+        self.items = list()
+        self.minWeight = None
+        self.totalWeight = 0
+
+    def add(self, weight, item):
+        """Add an item with positive (>0) weight to the collection"""
+        assert weight > 0, "Weight must be an int > 0"
+        if self.minWeight is None:
+            self.minWeight = weight
+
+        self.totalWeight += weight
+        self.items.append((self.totalWeight, item))
+
+    def get(self):
+        """Retrieve a random item from the collection respective to weightage"""
+        if self.minWeight is None:
+            return None
+
+        randweight = randint(self.minWeight, self.totalWeight)
+
+        lo, hi = 0, len(self.items)
+        mid = (lo + hi) // 2
+        while lo <= mid and mid < hi:
+            weight = self.items[mid][0]
+            if weight > randweight:
+                hi = mid # bisect low
+            elif weight < randweight:
+                lo = mid + 1 # bisect high
+            else:
+                break
+            mid = (lo + hi) // 2
+
+        if mid == len(self.items):
+            mid -= 1
+        return self.items[mid][1]

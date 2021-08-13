@@ -1,6 +1,6 @@
 import unittest
 
-from benchmark.util import RangeList, FAdoize
+from benchmark.util import RangeList, FAdoize, WeightedRandomItem
 
 class TestFAdoize(unittest.TestCase):
     # Also tested in `test_convert.py` indirectly
@@ -157,7 +157,6 @@ class TestRangeList(unittest.TestCase):
         l.remove(31, 39)
         self.assertEqual(str(l), "[(10, 20), (30, 30), (40, 40), (50, 60), (70, 80), (90, 100)]")
 
-
     def test_intersection(self):
         # input cases from the leetcode problem
         a = RangeList([(0,2),(5,10),(13,23),(24,25)], inc=lambda x: x+1, dec=lambda x: x-1)
@@ -175,6 +174,79 @@ class TestRangeList(unittest.TestCase):
         a = RangeList([(1, 7)], inc=lambda x: x+1, dec=lambda x: x-1)
         b = RangeList([(3, 10)], inc=lambda x: x+1, dec=lambda x: x-1)
         self.assertEqual(str(a.intersection(b)), "[(3, 7)]")
+
+
+class TestWeightedRandomItem(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.samplesize = 10000.0
+        cls.iterations = range(int(cls.samplesize))
+        cls.threshold = 0.01
+
+    def assertProbabilityClose(self, actual, expected):
+        self.assertGreaterEqual(actual, 0)
+        self.assertLessEqual(actual, 1)
+        self.assertLess(abs(actual - expected), self.threshold)
+
+    def sample(self, rnditem):
+        dist = dict()
+        for _ in self.iterations:
+            item = rnditem.get()
+            dist[item] = dist.get(item, 0) + 1
+        for item, count in dist.items():
+            dist[item] = count / self.samplesize
+        return dist
+
+
+    def test_empty(self):
+        rnditem = WeightedRandomItem()
+        self.assertIsNone(rnditem.get())
+
+    def test_one(self):
+        rnditem = WeightedRandomItem()
+        rnditem.add(1, "a")
+        self.assertProbabilityClose(self.sample(rnditem)["a"], 1.0)
+
+    def test_two_eq(self):
+        rnditem = WeightedRandomItem()
+        rnditem.add(1, "a")
+        rnditem.add(1, "b")
+        self.assertProbabilityClose(self.sample(rnditem)["a"], 0.5)
+
+    def test_two_skew(self):
+        rnditem = WeightedRandomItem()
+        rnditem.add(1, "a")
+        rnditem.add(3, "b")
+        self.assertProbabilityClose(self.sample(rnditem)["a"], 0.25)
+
+    def test_many_uniform(self):
+        rnditem = WeightedRandomItem()
+        rnditem.add(1, "a")
+        rnditem.add(1, "b")
+        rnditem.add(1, "c")
+        rnditem.add(1, "d")
+        rnditem.add(1, "e")
+        rnditem.add(1, "f")
+
+        distribution = self.sample(rnditem)
+        self.assertEqual(len(distribution), 6)
+        for prob in distribution.values():
+            self.assertProbabilityClose(prob, 1.0/6.0)
+
+    def test_very_skew(self):
+        rnditem = WeightedRandomItem()
+        rnditem.add(1, "a")
+        rnditem.add(1, "b")
+        rnditem.add(1, "c")
+        rnditem.add(1, "d")
+        rnditem.add(96, "x")
+
+        distribution = self.sample(rnditem)
+        self.assertProbabilityClose(distribution["x"], 96.0/100.0)
+        self.assertProbabilityClose(distribution["a"], 0.01)
+        self.assertProbabilityClose(distribution["b"], 0.01)
+        self.assertProbabilityClose(distribution["c"], 0.01)
+        self.assertProbabilityClose(distribution["d"], 0.01)
 
 
 if __name__ == "__main__":

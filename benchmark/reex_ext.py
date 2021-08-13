@@ -2,7 +2,7 @@ from FAdo import reex, fa, common
 import copy
 from random import randint
 
-from util import RangeList, UniUtil
+from util import RangeList, UniUtil, WeightedRandomItem
 
 # just so standard FAdo doesn't need to be imported explicitly
 uepsilon = reex.epsilon
@@ -365,30 +365,13 @@ class chars(uatom):
             return None
 
     def random(self):
-        weight = 0
-        ranges = list() # (weight, s, e)
+        randrange = WeightedRandomItem()
         for s, e in self.ranges:
             s = UniUtil.ord(s)
             e = UniUtil.ord(e)
-            weight += e - s + 1
-            ranges.append((weight, s, e))
+            randrange.add(e - s + 1, (s, e))
 
-        randweight = randint(1, weight)
-
-        # search for the highest lower val in ranges[...][0]
-        lo, hi = 0, len(ranges)
-        mid = None
-        while lo < hi:
-            mid = (lo + hi) // 2
-            weight = ranges[mid][0]
-            if weight < randweight:
-                hi = mid
-            elif weight > randweight:
-                lo = mid + 1
-            else:
-                break
-
-        s, e = ranges[mid-1][1:]
+        s, e = randrange.get()
         return UniUtil.chr(randint(s, e))
 
 class dotany(uatom):

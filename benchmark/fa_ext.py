@@ -4,7 +4,7 @@ from Queue import PriorityQueue
 from random import randint
 
 from reex_ext import dotany
-from util import UniUtil
+from util import UniUtil, WeightedRandomItem
 
 class InvariantNFA(fa.NFA):
     """A class that extends NFA to properly handle `chars` and `dotany`
@@ -371,13 +371,15 @@ class EnumInvariantNFA(object):
         word = u""
         current = next(iter(nfa.Initial))
         while not nfa.finalP(current):
+            rndtrans = WeightedRandomItem()
             transitions = nfa.delta[current]
-            toTake = transitions.keys()[randint(0, len(transitions)-1)]
-            word += toTake.random()
-            successors = list(transitions[toTake])
-            current = successors[randint(0, len(successors)-1)]
-        return word
+            for trans, succ in transitions.items():
+                rndtrans.add(len(succ), (trans, succ))
 
+            trans, succ = rndtrans.get()
+            word += trans.random()
+            current = list(succ)[randint(0, len(succ) - 1)]
+        return word
 
     def _sized(self, size):
         """Computes and memoizes the product of self.aut and lengthNFA of size `size`
