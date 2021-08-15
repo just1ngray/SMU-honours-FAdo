@@ -2,11 +2,7 @@ from FAdo import reex, fa, common
 import copy
 from random import randint
 
-from util import RangeList, UniUtil, WeightedRandomItem
-
-# just so standard FAdo doesn't need to be imported explicitly
-uepsilon = reex.epsilon
-uemptyset = reex.emptyset
+from util import RangeList, UniUtil, WeightedRandomItem, pict
 
 class uregexp(reex.regexp):
     def wordDerivative(self, word):
@@ -17,6 +13,16 @@ class uregexp(reex.regexp):
         for sigma in UniUtil.charlist(word):
             d = d.derivative(sigma)
         return d
+
+    def pairGen(self):
+        """Generate the pairwise coverage test words
+        :returns set<unicode>:
+
+        L. Zheng et al., String Generating for Testing Regular Expressions
+        The Computer Journal, Volume 63, Issue 1, January 2020, Pages 41-65
+        https://doi.org/10.1093/comjnl/bxy137
+        """
+        raise NotImplementedError()
 
 class uconcat(reex.concat, uregexp):
     def __init__(self, arg1, arg2):
@@ -71,6 +77,13 @@ class uconcat(reex.concat, uregexp):
                 else:
                     self._lf[head] = set(self.arg2._lf[head])
 
+    def pairGen(self):
+        words = pict([
+            ("arg1", self.arg1.pairGen()),
+            ("arg2", self.arg2.pairGen())
+        ])
+        return words
+
 class udisj(reex.disj, uregexp):
     def __init__(self, arg1, arg2):
         super(udisj, self).__init__(arg1, arg2, sigma=None)
@@ -79,6 +92,9 @@ class udisj(reex.disj, uregexp):
         cpy = udisj(copy.deepcopy(self.arg1), copy.deepcopy(self.arg2))
         memo[id(self)] = cpy
         return cpy
+
+    def pairGen(self):
+        return self.arg1.pairGen().union(self.arg2.pairGen())
 
 class ustar(reex.star, uregexp):
     def __init__(self, arg):
@@ -122,6 +138,24 @@ class ustar(reex.star, uregexp):
     def __repr__(self):
         return "u" + super(ustar, self).__repr__()
 
+    def pairGen(self):
+        uncovered = self.arg.pairGen()
+        covered = copy.copy(uncovered)
+        cross = dict([u"" if len(x) == 0 else x[0], copy.copy(uncovered)] for x in uncovered)
+
+        for word in uncovered:
+            while True:
+                last = "" if len(word) == 0 else word[-1]
+                nxt = cross.get(last, None) # type: set|None
+                if nxt is None:
+                    covered.add(word)
+                    break
+                word += nxt.pop()
+                if len(nxt) == 0:
+                    del cross[last]
+
+        return set([u""]).union(covered)
+
 class uoption(reex.option, uregexp):
     def __init__(self, arg):
         super(uoption, self).__init__(arg, sigma=None)
@@ -133,6 +167,33 @@ class uoption(reex.option, uregexp):
 
     def __repr__(self):
         return "u" + super(uoption, self).__repr__()
+
+    def pairGen(self):
+        return set([u""]).union(self.arg.pairGen())
+
+class uepsilon(reex.epsilon, uregexp):
+    def __init__(self):
+        super(uepsilon, self).__init__(sigma=None)
+
+    def __deepcopy__(self, memo):
+        cpy = uepsilon()
+        memo[id(self)] = cpy
+        return cpy
+
+    def pairGen(self):
+        return set([u""])
+
+class uemptyset(reex.epsilon, uregexp):
+    def __init__(self):
+        super(uemptyset, self).__init__(sigma=None)
+
+    def __deepcopy__(self, memo):
+        cpy = uemptyset()
+        memo[id(self)] = cpy
+        return cpy
+
+    def pairGen(self):
+        return set()
 
 class uatom(reex.atom, uregexp):
     def __init__(self, val):
@@ -234,6 +295,9 @@ class uatom(reex.atom, uregexp):
 
     def symbol(self):
         return self
+
+    def pairGen(self):
+        return set([self.next()])
 
 class chars(uatom):
     """A character class which can match any single character or a range of characters contained within it
