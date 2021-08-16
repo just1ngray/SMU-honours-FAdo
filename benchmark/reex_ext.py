@@ -3,6 +3,7 @@ import copy
 from random import randint
 
 from util import RangeList, UniUtil, WeightedRandomItem, pict
+import fa_ext
 
 class uregexp(reex.regexp):
     def wordDerivative(self, word):
@@ -23,6 +24,11 @@ class uregexp(reex.regexp):
         https://doi.org/10.1093/comjnl/bxy137
         """
         raise NotImplementedError()
+
+    def toInvariantNFA(self, method):
+        """Convert self into an InvariantNFA using a construction method"""
+        nfa = self.toNFA(method)
+        return fa_ext.InvariantNFA(nfa)
 
 class uconcat(reex.concat, uregexp):
     def __init__(self, arg1, arg2):
@@ -141,16 +147,17 @@ class ustar(reex.star, uregexp):
     def pairGen(self):
         uncovered = self.arg.pairGen()
         covered = copy.copy(uncovered)
-        cross = dict([u"" if len(x) == 0 else x[0], copy.copy(uncovered)] for x in uncovered)
+        cross = dict([x, copy.copy(uncovered)] for x in uncovered)
 
         for word in uncovered:
+            word = [word]
             while True:
-                last = "" if len(word) == 0 else word[-1]
+                last = word[-1]
                 nxt = cross.get(last, None) # type: set|None
                 if nxt is None:
-                    covered.add(word)
+                    covered.add(reduce(lambda p,c: p+c, word, u""))
                     break
-                word += nxt.pop()
+                word.append(nxt.pop())
                 if len(nxt) == 0:
                     del cross[last]
 
