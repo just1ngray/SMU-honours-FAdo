@@ -3,7 +3,7 @@ from copy import deepcopy
 from Queue import PriorityQueue
 from random import randint
 
-from reex_ext import dotany
+import reex_ext
 from util import UniUtil, WeightedRandomItem
 
 class InvariantNFA(fa.NFA):
@@ -28,7 +28,7 @@ class InvariantNFA(fa.NFA):
 
         for i in range(1, m + 1):
             lengthNFA.addState()
-            lengthNFA.addTransition(i - 1, dotany(), i)
+            lengthNFA.addTransition(i - 1, reex_ext.dotany(), i)
             if i >= n: lengthNFA.addFinal(i)
         return lengthNFA
 
