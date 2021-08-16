@@ -2,7 +2,7 @@ from FAdo import reex, fa, common
 import copy
 from random import randint
 
-from util import RangeList, UniUtil, WeightedRandomItem, pict
+from util import RangeList, UniUtil, WeightedRandomItem
 import fa_ext
 
 class uregexp(reex.regexp):
