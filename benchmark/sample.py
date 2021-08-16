@@ -110,14 +110,16 @@ class CodeSampler(object):
     def reprocess_lines(self):
         """Reprocesses all previously collected lines to ensure they're up to date with the
         current FAdoize spec."""
-        rows = self.db.selectall("SELECT re, line, url, lineNum, lang FROM expressions WHERE lang=?;", [self.language])
-        for _, line, url, lineNum, _ in rows:
+        rows = self.db.selectall("""SELECT re_math, re_prog, line, url, lineNum, lang
+                                    FROM expressions WHERE lang=?;""", [self.language])
+        for _, _, line, url, lineNum, _ in rows:
             self.output.overwrite("reprocess_lines:", line)
             self.db.execute("DELETE FROM expressions WHERE url=? AND line=?;", [url, line])
             self.save_expression(url, line, lineNum)
 
     def save_expression(self, url, line, lineNum):
         """Save a potential expression to the database if one exists on line"""
+        expr = "none_found"
         try:
             self.output.overwrite("get_line_expression @ " + line)
             expr = self.get_line_expression(line)
@@ -127,21 +129,23 @@ class CodeSampler(object):
 
             formatted = util.FAdoize(expr)
             self.db.execute("""
-                INSERT OR IGNORE INTO expressions (re, url, lineNum, line, lang)
-                VALUES (?, ?, ?, ?, ?);""", [formatted, url, lineNum, line, self.language])
+                INSERT OR IGNORE INTO expressions (re_math, re_prog, url, lineNum, line, lang)
+                VALUES (?, ?, ?, ?, ?, ?);""", [formatted, expr, url, lineNum, line, self.language])
             return formatted
         except (InvalidExpressionError, util.FAdoizeError) as err:
             self.db.execute("""
-                INSERT OR IGNORE INTO expressions (re, url, lineNum, line, lang)
-                VALUES (?, ?, ?, ?, ?);""", [str(err), url, lineNum, line, self.language])
+                INSERT OR IGNORE INTO expressions (re_math, re_prog, url, lineNum, line, lang)
+                VALUES (?, ?, ?, ?, ?, ?);""", [str(err), expr, url, lineNum, line, self.language])
             return err
 
     # abstractmethod
     def get_line_expression(self, line):
         """Extracts a regular expression from a line of code
         :param unicode line: the line of code on which to search for an expression
-        :returns unicode|None: the extracted expression if it exists, INCOMPLETE_CODE if it's
-        incomplete, and None if there is no sign of a regular expression on this line
+        :returns unicode|None: the extracted expression if it exists, None if there is no sign of
+        an expression on the line
+        :raises InvalidExpressionError: if there is an issue with extracting the expression, but
+        there's a good chance one exists on line
 
         >>> sampler = SamplerChild()
         >>> sampler.get_line_expression(u"matchObj = re.match(r'(.*) are (.*?) .*', line, re.M|re.I)")
@@ -192,13 +196,9 @@ class PythonSampler(CodeSampler):
             raise InvalidExpressionError(line, "Unknown delimiter: %s" % delim)
 
         expression = extract(end)
-        if expression is None:
-            print "Doesn't happen TODO remove"
-
         if not isRaw:
             expression = expression.replace("\\\\", "\\")
 
-        util.FAdoize(expression)
         return expression
 
 
@@ -243,12 +243,11 @@ class JavaScriptSampler(CodeSampler):
         if delimiter == "`" and self.re_template.search(expression) is not None:
             raise InvalidExpressionError(line, "JS template string introduces variables")
 
-        util.FAdoize(expression)
         return expression
 
 
 if __name__ == "__main__":
-    SAMPLE_SIZE = 300
+    SAMPLE_SIZE = 3
 
     samplers = [JavaScriptSampler, PythonSampler]
     for sampler in samplers:

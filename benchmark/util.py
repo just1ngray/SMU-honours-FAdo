@@ -116,7 +116,8 @@ class DBWrapper(object):
             );
 
             CREATE TABLE IF NOT EXISTS expressions (
-                re      TEXT,
+                re_math TEXT,
+                re_prog TEXT,
                 line    TEXT,
                 url     TEXT,
                 lineNum INTEGER,

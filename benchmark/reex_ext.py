@@ -6,6 +6,10 @@ from util import RangeList, UniUtil, WeightedRandomItem
 import fa_ext
 
 class uregexp(reex.regexp):
+    def __init__(self):
+        super(uregexp, self).__init__(sigma=None)
+        self.expression = None
+
     def wordDerivative(self, word):
         """Allows taking the word derivative of unicode strings with
         surrogate pairs.

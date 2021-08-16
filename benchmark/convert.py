@@ -96,6 +96,7 @@ class Converter(object):
                 if anchorAllowedRight:
                     setattr(parent, attr, uconcat(getattr(parent, attr), ustar(dotany())))
 
+        d.arg.expression = expression
         return d.arg
 
     def prog(self, expression, partialMatch=True):
@@ -115,7 +116,9 @@ class Converter(object):
         """
         formatted = FAdoize(expression)
         try:
-            return self.math(formatted, partialMatch=partialMatch)
+            re = self.math(formatted, partialMatch=partialMatch)
+            re.expression = expression
+            return re
         except LarkError as e:
             print expression, "was formatted as", formatted
             raise e
