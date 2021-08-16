@@ -40,7 +40,7 @@ class uconcat(reex.concat, uregexp):
             lf[head] = set()
             for tail in arg1_lf[head]:
                 if tail.emptysetP():
-                    lf[head].add(uemptyset(self.Sigma))
+                    lf[head].add(uemptyset())
                 elif tail.epsilonP():
                     lf[head].add(self.arg2)
                 else:
@@ -64,7 +64,7 @@ class uconcat(reex.concat, uregexp):
             self._lf[head] = pd_set
             for tail in self.arg1._lf[head]:
                 if tail.emptysetP():
-                    pd_set.add(uemptyset(self.Sigma))
+                    pd_set.add(uemptyset())
                 elif tail.epsilonP():
                     pd_set.add(self.arg2)
                 else:
@@ -77,7 +77,7 @@ class uconcat(reex.concat, uregexp):
                 else:
                     self._lf[head] = set(self.arg2._lf[head])
 
-    def pairGen(self):
+    def pairGen(self): # TODO: verify
         words = pict([
             ("arg1", self.arg1.pairGen()),
             ("arg2", self.arg2.pairGen())
@@ -112,7 +112,7 @@ class ustar(reex.star, uregexp):
             lf[head] = set()
             for tail in arg_lf[head]:
                 if tail.emptysetP():
-                    lf[head].add(uemptyset(self.Sigma))
+                    lf[head].add(uemptyset())
                 elif tail.epsilonP():
                     lf[head].add(self)
                 else:
@@ -129,7 +129,7 @@ class ustar(reex.star, uregexp):
             self._lf[head] = pd_set
             for tail in self.arg._lf[head]:
                 if tail.emptysetP():
-                    pd_set.add(uemptyset(self.Sigma))
+                    pd_set.add(uemptyset())
                 elif tail.epsilonP():
                     pd_set.add(self)
                 else:
