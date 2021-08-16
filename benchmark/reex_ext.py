@@ -83,11 +83,13 @@ class uconcat(reex.concat, uregexp):
                 else:
                     self._lf[head] = set(self.arg2._lf[head])
 
-    def pairGen(self): # TODO: verify
-        words = pict([
-            ("arg1", self.arg1.pairGen()),
-            ("arg2", self.arg2.pairGen())
-        ])
+    def pairGen(self):
+        # pairwise generation (aka 2-wise) is equivalent to combination generation for
+        # 2 arguments as we have in concat (arg1 & arg2)
+        words = set()
+        for prefix in self.arg1.pairGen():
+            for suffix in self.arg2.pairGen():
+                words.add(prefix + suffix)
         return words
 
 class udisj(reex.disj, uregexp):

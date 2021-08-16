@@ -1,6 +1,5 @@
 import sqlite3
 import subprocess
-import os
 import regex
 import lark
 import sys
@@ -408,37 +407,6 @@ def terminal_size():
         fcntl.ioctl(0, termios.TIOCGWINSZ,
         struct.pack('HHHH', 0, 0, 0, 0)))
     return tw, th
-
-def pict(factors):
-    """Pairwise Independent Combinatorial Testing (PICT)
-    https://github.com/microsoft/pict
-
-    Calls the command-line interface for the pict software installed at a system level.
-    :params list<Tuple(str, list<str>)> factors:
-    :returns list<str>: each row's factor's concatenated with each other
-    """
-    FILE_NAME = "pict_tmp.txt"
-    maxlen = max(map(lambda x: len(x[0]), factors)) + 2
-
-    content = ""
-    for factor, values in factors:
-        content += "{0}: {1}\n".format(factor.ljust(maxlen),
-            reduce(lambda p,c: p +", " + c, values))
-
-    file = open(FILE_NAME, "w")
-    file.write(content)
-    file.close()
-
-    # pict can be installed using homebrew or other package managers!
-    output = subprocess.check_output(["pict", FILE_NAME])
-    concats = set()
-    for line in output.splitlines()[1:]:
-        concats.add(reduce(lambda p, c: p+c, line.split("\t")))
-
-    if os.path.exists(FILE_NAME):
-        os.remove(FILE_NAME)
-
-    return concats
 
 class WeightedRandomItem():
     """A class to choose a random item according to their weight values"""
