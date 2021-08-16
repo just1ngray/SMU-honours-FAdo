@@ -2,8 +2,8 @@
 import unittest
 from FAdo import reex
 
-from benchmark.reex_ext import uatom, chars, dotany
 import benchmark.util as util
+from benchmark.reex_ext import uatom, chars, dotany
 from benchmark.convert import Converter
 
 
@@ -178,6 +178,49 @@ class TestEvalWordP(unittest.TestCase):
         self.assertFalse(re.evalWordP(u"😝♣♣♣♣ ๏ ☝"))
         self.assertFalse(re.evalWordP(u"😝♣♣♣♣ ๏𝐑☝"))
 
+class TestPairGen(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.convert = Converter()
+
+
+    def test_disj_trivial(self):
+        re = self.convert.math("(((0 + 1) + 2) + 3)")
+        self.assertSetEqual(re.pairGen(), set("0123"))
+
+    def test_option_trivial(self):
+        re = self.convert.math("(a)?")
+        self.assertSetEqual(re.pairGen(), set(["", "a"]))
+
+
+    def test_concat_trivial(self):
+        re = self.convert.math("(((0 1) 2) 3)")
+        self.assertSetEqual(re.pairGen(), set(["0123"]))
+
+    def test_concat_nontrivial(self): # {0,1}{a,b,c}
+        re = self.convert.math("((0 + 1) ((a + b) + c))")
+        words = re.pairGen()
+        self.assertEqual(len(words), 2*3)
+        for w in words:
+            self.assertTrue(re.evalWordP(w))
+
+
+    def test_kleene_trivial(self):
+        re = self.convert.math("a*")
+        self.assertSetEqual(re.pairGen(), set(["", "a", "aa"]))
+
+    def test_kleene_nontrivial(self):
+        re = self.convert.math("((0 a) + 1)*")
+        words = re.pairGen()
+        for w in words:
+            self.assertTrue(re.evalWordP(w))
+
+        # length 0: ε
+        # length 1: 0a or 1
+        # length 2: <0a,0a>, <0a,1>, <1,0a>, <1,1>
+        #           11 => 110a => 110a0a (or similar)
+        #           0a1
+        self.assertEqual(len(words), 1 + 2 + 2)
 
 if __name__ == "__main__":
     unittest.main()
