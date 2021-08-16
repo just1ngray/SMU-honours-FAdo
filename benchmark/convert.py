@@ -1,7 +1,7 @@
 from lark import Lark, Transformer
 from lark.exceptions import LarkError
 
-from reex_ext import dotany, chars, uatom, anchor, uconcat, uoption, ustar, udisj, uepsilon
+from reex_ext import dotany, chars, uatom, anchor, uconcat, uoption, ustar, udisj, uepsilon, uregexp
 from util import FAdoize
 
 class Converter(object):
@@ -48,7 +48,7 @@ class Converter(object):
         :raises: if there's a parsing error, or if anchors are found in non-"edge"
                  leaf positions
         """
-        re = self._parser.parse(repr(expression.encode("utf-8"))[1:-1])
+        re = self._parser.parse(repr(expression.encode("utf-8"))[1:-1]) # type: uregexp
 
         class DummyClass():
             def __init__(self, arg):
