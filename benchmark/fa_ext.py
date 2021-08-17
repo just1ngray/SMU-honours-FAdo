@@ -4,7 +4,7 @@ from Queue import PriorityQueue
 from random import randint
 
 import reex_ext
-from util import UniUtil, WeightedRandomItem
+from util import UniUtil, WeightedRandomItem, Deque
 
 class InvariantNFA(fa.NFA):
     """A class that extends NFA to properly handle `chars` and `dotany`
@@ -136,6 +136,27 @@ class InvariantNFA(fa.NFA):
                         if self.finalP(dest[0]) and other.finalP(dest[1]):
                             new.addFinal(index)
         return new
+
+    def stateChildren(self, state, strict=False):
+        """Set of children of a state
+
+        :param bool strict: if not strict a state is never its own child even if a self loop is in place
+        :param int state: state id queried
+        :returns: children states
+        :rtype: Set of int
+
+        ..note: This is a patch-fix of FAdo fa.py module where `set += set` is unsupported, using
+        #update instead"""
+        l = set()
+        if state not in self.delta.keys():
+            return l
+        for c in self.Sigma:
+            if c in self.delta[state]:
+                l.update(self.delta[state][c])
+        if not strict:
+            if state in l:
+                l.remove(state)
+        return l
 
     def witness(self):
         """Generates the minimal word w accepted by self where |w|>0
@@ -306,13 +327,13 @@ class EnumInvariantNFA(object):
         current = UniUtil.charlist(current)
         length = len(current)
         nfa = self._sized(length)
-        stack = [nfa.Initial] # possible set of states after processing each letter in current
+        stack = Deque([nfa.Initial])
 
         for c in current[:-1]:
-            stack.append(nfa.evalSymbol(stack[-1], c))
+            stack.insert_right(nfa.evalSymbol(stack.peek_right(), c))
 
         while len(stack) > 0:
-            states = stack.pop()
+            states = stack.pop_right()
             lastSym = None if len(current) == 0 else current.pop() # to succeed
 
             for s in states:
@@ -380,6 +401,29 @@ class EnumInvariantNFA(object):
             word += trans.random()
             current = list(succ)[randint(0, len(succ) - 1)]
         return word
+
+    def longestWordLength(self):
+        """Finds the length of the longest word accepted by L(aut)
+        ..note: commonly inf
+        """
+        if not self.aut.acyclicP():
+            return float("inf")
+
+        depth = dict([(x, 0) for x in self.aut.Initial])
+        stack = Deque(self.aut.Initial)
+        while len(stack) > 0:
+            u = stack.pop_left() # consider all v's for transitions u --> v
+            for successors in self.aut.delta.get(u, dict()).values():
+                for v in successors:
+                    if depth[u] + 1 > depth.get(v, -1):
+                        depth[v] = depth[u] + 1
+                        stack.insert_right(v)
+
+        maxDepth = 0
+        for s in self.aut.Final:
+            maxDepth = max(maxDepth, depth.get(s, 0))
+
+        return maxDepth
 
     def _sized(self, size):
         """Computes and memoizes the product of self.aut and lengthNFA of size `size`

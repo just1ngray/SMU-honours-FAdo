@@ -132,6 +132,7 @@ class TestEnumInvariantNFA(unittest.TestCase):
         self.run_unicode(method)
         self.run_complex(method)
         self.run_randomEnumerate(method)
+        self.run_longestWordLength(method)
 
     def run_simple(self, method):
         enum = self.infa("(0|1)*", method).enumNFA()
@@ -202,6 +203,11 @@ class TestEnumInvariantNFA(unittest.TestCase):
             else:
                 self.assertIsNone(word)
 
+    def run_longestWordLength(self, method):
+        def expectLen(re, length):
+            self.assertEqual(self.infa(re, method).enumNFA().longestWordLength(), length)
+
+        expectLen(u"(x{3}|x{6}|x{30})", 30)
 
 
 if __name__ == "__main__":
