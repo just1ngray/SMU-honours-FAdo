@@ -15,24 +15,17 @@ class UniUtil():
         :param unicode word: the word to retrieve characters from
         :returns list<unicode>: the individual characters of word
         """
+        if len(word) <= 1:
+            return list(word)
+
         if globals()["charlist_grammar"] is None:
             class Transformer(lark.Transformer):
-                start = lambda _, t: t
+                utf8 = lambda _, t: t
                 ASCII = lambda _, s: s.value
                 BYTES = lambda _, b: b.value.decode("string-escape").decode("utf-8")
 
-            globals()["charlist_grammar"] = lark.Lark(r"""
-                start       : (BYTES | ASCII)*
-                ASCII       : /\\?./
-                BYTES       : B_PREFIX (B_1 | B_2 | B_3 | B_4)
-                B_PREFIX    : "\\x"
-                HEX         : /[0-9a-f]/
-                B_1         : "0".."7"    HEX
-                B_2         : ("c" | "d") HEX      B_ANOTHER
-                B_3         : "e"         HEX      B_ANOTHER~2
-                B_4         : "f"         "0".."7" B_ANOTHER~3
-                B_ANOTHER   : B_PREFIX /[89a-f]/ HEX
-            """, parser="lalr", transformer=Transformer())
+            globals()["charlist_grammar"] = lark.Lark.open("benchmark/re.lark", start="utf8",
+                parser="lalr", transformer=Transformer())
 
         encoded = repr(word.encode("utf-8"))[1:-1]
         return globals()["charlist_grammar"].parse(encoded)

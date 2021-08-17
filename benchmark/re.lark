@@ -29,6 +29,7 @@ DOTANY      : "@any"
 ANCHOR      : "<ASTART>" | "<AEND>"
 
 // utf-8 encoding: https://en.wikipedia.org/wiki/UTF-8
+utf8        : (BYTES | ASCII)+
 BYTES       : B_PREFIX (B_1 | B_2 | B_3 | B_4)
 B_PREFIX    : "\\x"
 HEX         : /[0-9a-f]/
