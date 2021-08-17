@@ -65,7 +65,7 @@ class TestInvariantNFA(unittest.TestCase):
                     + expr.encode("utf-8"))
 
             for word in noes:
-                self.assertFalse(infa.evalWordP(word), word.encode("utf-8") + " should be in "
+                self.assertFalse(infa.evalWordP(word), word.encode("utf-8") + " should NOT be in "
                     + expr.encode("utf-8"))
 
     def run_witness(self, method):
