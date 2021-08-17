@@ -440,3 +440,97 @@ class WeightedRandomItem():
         if mid == len(self.items):
             mid -= 1
         return self.items[mid][1]
+
+class Deque(object):
+    """Double ended-queue implementation with constant-time operations unless
+    otherwise noted.
+    """
+    def __init__(self, iterable=[]):
+        super(Deque, self).__init__()
+        self._head = None
+        self._tail = None
+        self._size = 0
+
+        for item in iterable:
+            self.insert_right(item)
+
+    def __iter__(self):
+        """O(n)"""
+        current = self._head
+        while current is not None:
+            yield current[1]
+            current = current[2]
+
+    def __str__(self):
+        """O(n)"""
+        return "[{0}]".format(reduce(lambda p,c: p+", "+str(c), self, "")[2:])
+
+    def __repr__(self):
+        """O(n)"""
+        return "Deque({0})".format(str(self))
+
+    def __len__(self):
+        return self._size
+
+    def isEmpty(self):
+        return self._size == 0
+
+    def insert_left(self, item):
+        self._size += 1
+
+        mem = [None, item, self._head]
+        if self._head is None:
+            self._head = mem
+        else:
+            self._head[0] = mem
+            self._head = mem
+        if self._tail is None:
+            self._tail = mem
+
+    def insert_right(self, item):
+        self._size += 1
+
+        mem = [self._tail, item, None]
+        if self._tail is None:
+            self._tail = mem
+        else:
+            self._tail[2] = mem
+            self._tail = mem
+        if self._head is None:
+            self._head = mem
+
+    def peek_left(self):
+        return self._head[1]
+
+    def peek_right(self):
+        return self._tail[1]
+
+    def pop_left(self):
+        if self.isEmpty():
+            raise IndexError("Cannot pop an empty deque")
+
+        item = self._head[1]
+        self._head = self._head[2]
+        self._size -= 1
+        if self._size == 0:
+            self._head = None
+            self._tail = None
+        else:
+            self._head[0] = None
+
+        return item
+
+    def pop_right(self):
+        if self.isEmpty():
+            raise IndexError("Cannot pop an empty deque")
+
+        item = self._tail[1]
+        self._tail = self._tail[0]
+        self._size -= 1
+        if self._size == 0:
+            self._head = None
+            self._tail = None
+        else:
+            self._tail[2] = None
+
+        return item

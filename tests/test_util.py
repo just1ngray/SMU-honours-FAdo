@@ -1,6 +1,6 @@
 import unittest
 
-from benchmark.util import RangeList, FAdoize, WeightedRandomItem
+from benchmark.util import RangeList, FAdoize, WeightedRandomItem, Deque
 
 class TestFAdoize(unittest.TestCase):
     # Also tested in `test_convert.py` indirectly
@@ -247,6 +247,60 @@ class TestWeightedRandomItem(unittest.TestCase):
         self.assertProbabilityClose(distribution["b"], 0.01)
         self.assertProbabilityClose(distribution["c"], 0.01)
         self.assertProbabilityClose(distribution["d"], 0.01)
+
+
+class TestDeque(unittest.TestCase):
+    def test_init(self):
+        d = Deque("abcdcba")
+        self.assertEqual(str(d), "[a, b, c, d, c, b, a]")
+        self.assertEqual(len(d), len("abcdcba"))
+
+    def test_peek(self):
+        d = Deque("abcdef0123")
+        self.assertEqual(len(d), len("abcdef0123"))
+        self.assertEqual(d.peek_left(), "a")
+        self.assertEqual(d.peek_right(), "3")
+        self.assertEqual(len(d), len("abcdef0123"))
+
+    def test_inserts(self):
+        d = Deque()
+        d.insert_left("a")
+        self.assertEqual(str(d), "[a]")
+
+        d = Deque()
+        d.insert_right("a")
+        self.assertEqual(str(d), "[a]")
+
+        d.insert_left(-1)
+        self.assertEqual(str(d), "[-1, a]")
+        d.insert_right(1)
+        self.assertEqual(str(d), "[-1, a, 1]")
+
+    def test_pops(self):
+        d = Deque("a")
+        self.assertEqual(d.pop_left(), "a")
+        self.assertEqual(len(d), 0)
+        self.assertEqual(d._head, None)
+        self.assertEqual(d._tail, None)
+
+        d = Deque("a")
+        self.assertEqual(d.pop_right(), "a")
+        self.assertEqual(len(d), 0)
+        self.assertEqual(d._head, None)
+        self.assertEqual(d._tail, None)
+
+        l = list("abcdef")
+        d = Deque(l)
+        while len(d) > 0:
+            self.assertEqual(d.pop_right(), l.pop())
+
+        l = list("abcdef")
+        d = Deque(l)
+        while len(d) > 0:
+            self.assertEqual(d.pop_left(), l[0])
+            l = l[1:]
+
+
 
 
 if __name__ == "__main__":
