@@ -242,7 +242,7 @@ class TestWeightedRandomItem(unittest.TestCase):
         rnditem.add(96, "x")
 
         distribution = self.sample(rnditem)
-        self.assertProbabilityClose(distribution["x"], 96.0/100.0)
+        self.assertProbabilityClose(distribution["x"], 0.96)
         self.assertProbabilityClose(distribution["a"], 0.01)
         self.assertProbabilityClose(distribution["b"], 0.01)
         self.assertProbabilityClose(distribution["c"], 0.01)
