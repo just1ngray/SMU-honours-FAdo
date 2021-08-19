@@ -302,11 +302,10 @@ class uatom(reex.atom, uregexp):
         cpy.pos = pos
         return cpy, pos
 
-    def unmark(self):
-        delattr(self, "pos")
-        return self
-
     def symbol(self):
+        # ensure there is no pos attribute
+        if hasattr(self, "pos"):
+            return copy.deepcopy(self)
         return self
 
     def pairGen(self):
