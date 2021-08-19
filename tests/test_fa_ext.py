@@ -89,6 +89,19 @@ class TestInvariantNFA(unittest.TestCase):
         infa = InvariantNFA(re.toNFA(method))
         self.assertEqual(infa.witness(), u"abc")
 
+    def run_acyclicP(self, method):
+        re = self.convert.math(u"((0 (a + b)*) 0)")
+        infa = re.toInvariantNFA(method)
+        self.assertFalse(infa.acyclicP())
+
+        re = self.convert.math(u"0")
+        infa = re.toInvariantNFA(method)
+        self.assertTrue(infa.acyclicP())
+
+        re = self.convert.math(u"((0 + 1) a)")
+        infa = re.toInvariantNFA(method)
+        self.assertTrue(infa.acyclicP())
+
 class TestEnumInvariantNFA(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -207,7 +220,10 @@ class TestEnumInvariantNFA(unittest.TestCase):
         def expectLen(re, length):
             self.assertEqual(self.infa(re, method).enumNFA().longestWordLength(), length)
 
+        expectLen(u"a*", float("inf"))
+        expectLen(u"abc.*123", float("inf"))
         expectLen(u"(x{3}|x{6}|x{30})", 30)
+        expectLen(u"abc(00){5}", 3 + 2*5)
 
 
 if __name__ == "__main__":

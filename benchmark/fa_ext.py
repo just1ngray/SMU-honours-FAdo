@@ -96,6 +96,39 @@ class InvariantNFA(fa.NFA):
                 else:
                     del self.delta[sti1][sym]
 
+    def acyclicP(self):
+        """Rewritten since its implementation seems incorrect and error-prone
+        :returns bool: if the InvariantNFA is acyclic
+
+        ..see: Introduction to algorithms / Thomas H. Cormen, et al. - 3rd ed.
+        """
+        class CycleFound(Exception):
+            def __init__(self, state):
+                super(CycleFound, self).__init__("Cycle found originating in state " + str(state))
+
+        color = dict()
+        def colorOf(state):
+            return color.get(state, "white")
+
+        def dfsVisit(u):
+            color[u] = "gray"
+            for t in self.delta.get(u, dict()):
+                for v in self.delta[u][t]:
+                    col = colorOf(v)
+                    if col == "white":
+                        dfsVisit(v)
+                    elif col == "gray":
+                        raise CycleFound(u)
+            color[u] = "black"
+
+        try:
+            for u in self.Initial:
+                if colorOf(u) == "white":
+                    dfsVisit(u)
+            return True
+        except CycleFound:
+            return False
+
     def product(self, other):
         # note: s_... refers to `self` variables, and o_... refers to `other` variables
         new = InvariantNFA()
@@ -136,27 +169,6 @@ class InvariantNFA(fa.NFA):
                         if self.finalP(dest[0]) and other.finalP(dest[1]):
                             new.addFinal(index)
         return new
-
-    def stateChildren(self, state, strict=False):
-        """Set of children of a state
-
-        :param bool strict: if not strict a state is never its own child even if a self loop is in place
-        :param int state: state id queried
-        :returns: children states
-        :rtype: Set of int
-
-        ..note: This is a patch-fix of FAdo fa.py module where `set += set` is unsupported, using
-        #update instead"""
-        l = set()
-        if state not in self.delta.keys():
-            return l
-        for c in self.Sigma:
-            if c in self.delta[state]:
-                l.update(self.delta[state][c])
-        if not strict:
-            if state in l:
-                l.remove(state)
-        return l
 
     def witness(self):
         """Generates the minimal word w accepted by self where |w|>0
