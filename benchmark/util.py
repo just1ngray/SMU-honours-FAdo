@@ -64,12 +64,13 @@ class ConsoleOverwrite():
     def __init__(self, prefix=""):
         self.prefix = prefix
         self._lastlen = 0
-        self._width = terminal_size()[0] - 4
+        self._width = self._terminal_size()[0] - 4
 
     def overwrite(self, *items):
         print "\r" + " "*self._lastlen + "\r",
 
         content = self.prefix + reduce(lambda p, c: p + " " + str(c), items, "")
+        content = content.replace("\t", "    ")
         if len(content) > self._width:
             content = content[:self._width - 3] + "..."
         self._lastlen = len(content)
@@ -77,6 +78,15 @@ class ConsoleOverwrite():
         print content,
         sys.stdout.flush()
 
+    def _terminal_size(self):
+        """Finds terminal size.
+        https://www.w3resource.com/python-exercises/python-basic-exercise-56.php
+        """
+        import fcntl, termios, struct
+        th, tw, hp, wp = struct.unpack('HHHH',
+            fcntl.ioctl(0, termios.TIOCGWINSZ,
+            struct.pack('HHHH', 0, 0, 0, 0)))
+        return tw, th
 
 class DBWrapper(object):
     def __init__(self, name="database.db"):
@@ -391,16 +401,6 @@ class RangeList(object):
         intersectList = RangeList(inc=self.inc, dec=self.dec)
         intersectList._list = inter
         return intersectList
-
-def terminal_size():
-    """Finds terminal size.
-    https://www.w3resource.com/python-exercises/python-basic-exercise-56.php
-    """
-    import fcntl, termios, struct
-    th, tw, hp, wp = struct.unpack('HHHH',
-        fcntl.ioctl(0, termios.TIOCGWINSZ,
-        struct.pack('HHHH', 0, 0, 0, 0)))
-    return tw, th
 
 class WeightedRandomItem():
     """A class to choose a random item according to their weight values"""
