@@ -203,51 +203,47 @@ class PythonSampler(CodeSampler):
 
 
 class JavaScriptSampler(CodeSampler):
+    # Note: expressions initialized using `new RegExp(...)` contain many variables and cannot be used
     def __init__(self):
-        super(JavaScriptSampler, self).__init__("JavaScript",
-            r"""new RegExp\(["'/`].+\)""")
-
-        self.re_begin = regex.compile(r"""new RegExp\(""")
-        self.re_template = regex.compile(r"""\$\{.+\}""")
+        super(JavaScriptSampler, self).__init__("JavaScript", r"""\.(search|replace|test|split|match(All)?)\(/.+""")
+        self.start = regex.compile(r"""\.(search|replace|test|split|match(All)?)\(/""")
 
     def get_line_expression(self, line):
-        match = self.re_begin.search(line)
+        match = self.start.search(line)
         if match is None:
             return None
         end = line[match.end():] # start of the expression to the end of the line
         if len(end) == 0:
             raise InvalidExpressionError(line, "EOL found, expected the expression")
 
-        end = end.decode('utf-8')
-
-        delimiter = end[0]
+        end = end.decode("utf-8")
         expression = u""
-        i = 1
+        i = 0
+        success = False
         while i < len(end):
             c = end[i]
-            expression += c
             if c == "\\":
+                if end[i + 1] == "/":
+                    expression += end[i + 1]
+                else:
+                    expression += c + end[i + 1]
                 i += 1
-                expression += end[i]
-            elif c == delimiter:
-                expression = expression[:i-1]
+            elif c == "/":
+                success = True
                 break
+            else:
+                expression += c
+
             i += 1
 
-        lookahead = 2 if delimiter != "/" else 4 # up to 2 flags (technically <=7 allowed)
-        if i >= len(end) or (end.find(",", i, i + lookahead) == -1 and end.find(")", i, i + lookahead) == -1):
-            raise InvalidExpressionError(line, "Could not find terminator of first argument")
-
-        if delimiter != "/":
-            expression = expression.replace("\\\\", "\\")
-        if delimiter == "`" and self.re_template.search(expression) is not None:
-            raise InvalidExpressionError(line, "JS template string introduces variables")
+        if not success:
+            raise InvalidExpressionError(line, "Could not find terminator of the expression")
 
         return expression
 
 
 if __name__ == "__main__":
-    SAMPLE_SIZE = 3
+    SAMPLE_SIZE = 400
 
     samplers = [JavaScriptSampler, PythonSampler]
     for sampler in samplers:

@@ -51,30 +51,20 @@ class TestJavaScriptSampler(unittest.TestCase):
     def test_none(self):
         isNone(self, "abc")
         isNone(self, "")
+        isNone(self, "somevar.search('abc')")
+        isNone(self, "somevar.search(new RegExp(`abc`))")
 
     def test_raises(self):
-        shouldRaise(self, '''myregex = new RegExp(''', InvalidExpressionError)
-        shouldRaise(self, '''myregex = new RegExp()''', InvalidExpressionError)
-        shouldRaise(self, '''myregex = new RegExp(an_object)''', InvalidExpressionError)
-        shouldRaise(self, '''myregex = new RegExp("string" + "another")''', InvalidExpressionError)
-        shouldRaise(self, '''myregex = new RegExp("string" + somevar)''', InvalidExpressionError)
-        shouldRaise(self, '''myregex = new RegExp(somevar + "string")''', InvalidExpressionError)
-        shouldRaise(self, '''myregex = new RegExp("string)''', InvalidExpressionError)
-        shouldRaise(self, '''myregex = new RegExp("string)"''', InvalidExpressionError)
-        shouldRaise(self, '''myregex = new RegExp("string\\")''', InvalidExpressionError)
-        shouldRaise(self, '''       rcomma = new RegExp( "^" + whitespace + "*," + whitespace + "*" ),''', InvalidExpressionError)
+        shouldRaise(self, '''somevar.search(/abcdef''', InvalidExpressionError)
+        shouldRaise(self, '''somevar.search(/   \\/)''', InvalidExpressionError)
 
     def test_extracts(self):
-        isEq(self, '''new RegExp("re")''', 're')
-        isEq(self, '''new RegExp('re')''', 're')
-        isEq(self, '''new RegExp(`re`)''', 're')
-        isEq(self, '''new RegExp(/re/)''', 're')
-        isEq(self, '''new RegExp(/re/ug)''', 're')
-        isEq(self, '''new RegExp("re", "g")''', 're')
-        isEq(self, '''aregexp = new RegExp("\\"re\\"")''', '\\"re\\"')
-        isEq(self, '''aregexp = new RegExp("\\"re\\" more")''', '\\"re\\" more')
-        isEq(self, '''    code: String.raw`var r = new RegExp("[\\uD83D\\uDC4D]", "")`,''', '[\\uD83D\\uDC4D]')
-        isEq(self, '''new RegExp("//")''', '//')
+        isEq(self, '''.match(/abc/)''', 'abc')
+        isEq(self, '''.match(/ab\\/c/)''', 'ab/c')
+        isEq(self, '''.search(/abc/g)''', 'abc')
+        isEq(self, '''.search(/abc/g)''', 'abc')
+        isEq(self, '''.replace(/a(0|1|001)?/gi)''', 'a(0|1|001)?')
+        isEq(self, '''.split(/ /)''', ' ')
 
 if __name__ == "__main__":
     unittest.main()
