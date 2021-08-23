@@ -1,4 +1,4 @@
--- Select distinct non-error re rows
+-- Select distinct non-error re_math rows (export)
 SELECT *
 FROM (
 	SELECT *, ROW_NUMBER() OVER(PARTITION BY re_math ORDER BY url ASC, lineNum ASC) rn
@@ -9,8 +9,23 @@ WHERE rn=1
 ORDER BY re_math ASC;
 
 
--- Count distinct non-error re rows by language
-SELECT lang, count(DISTINCT re_math)
-FROM expressions
-WHERE re_math NOT LIKE '%Error%'
-GROUP BY lang;
+
+-- Statistics --
+SELECT lang, ntotal, ndistinct
+FROM (
+	-- main content --
+	SELECT 0 as rn, lang, count(re_math) as ntotal, count(DISTINCT re_math) as ndistinct
+	FROM expressions
+	WHERE re_math NOT LIKE '%Error%'
+	GROUP BY lang
+
+	-- blank line --
+	UNION SELECT 1 as rn, '', '', ''
+
+	-- total row --
+	UNION SELECT 2 as rn, 'Total', count(re_math), count(DISTINCT re_math)
+	FROM expressions
+	WHERE re_math NOT LIKE '%Error%'
+
+	ORDER BY rn ASC, ntotal DESC
+);
