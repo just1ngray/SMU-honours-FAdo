@@ -242,10 +242,16 @@ class JavaScriptSampler(CodeSampler):
         return expression
 
 
+class TypeScriptSampler(JavaScriptSampler):
+    def __init__(self):
+        super(TypeScriptSampler, self).__init__()
+        self.language = "TypeScript"
+
+
 if __name__ == "__main__":
     SAMPLE_SIZE = 400
 
-    samplers = [JavaScriptSampler, PythonSampler]
+    samplers = [TypeScriptSampler, JavaScriptSampler, PythonSampler]
     for sampler in samplers:
         obj = sampler()
 
