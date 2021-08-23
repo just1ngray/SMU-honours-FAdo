@@ -204,8 +204,8 @@ class PythonSampler(CodeSampler):
 
 class JavaScriptSampler(CodeSampler):
     # Note: expressions initialized using `new RegExp(...)` contain many variables and cannot be used
-    def __init__(self):
-        super(JavaScriptSampler, self).__init__("JavaScript", r"""\.(search|replace|test|split|match(All)?)\(/.+""")
+    def __init__(self, lang="JavaScript"):
+        super(JavaScriptSampler, self).__init__(lang, r"""\.(search|replace|test|split|match(All)?)\(/.+""")
         self.start = regex.compile(r"""\.(search|replace|test|split|match(All)?)\(/""")
 
     def get_line_expression(self, line):
@@ -244,8 +244,7 @@ class JavaScriptSampler(CodeSampler):
 
 class TypeScriptSampler(JavaScriptSampler):
     def __init__(self):
-        super(TypeScriptSampler, self).__init__()
-        self.language = "TypeScript"
+        super(TypeScriptSampler, self).__init__("TypeScript")
 
 
 if __name__ == "__main__":
