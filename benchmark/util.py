@@ -163,7 +163,7 @@ class FAdoizeError(Exception):
         return "FAdoizeError on '{0}':\n{1}".format(self.expression, self.node_callback)
 
 nodejs_proc = None
-def FAdoize(expression, log=lambda *m: None):
+def FAdoize(expression):
     """Convert an "ambiguous" expression used by a programmer into an expression
     ready to parse into FAdo via the `benchmark/convert.py#Converter` using the
     `benchmark/re.lark` grammar.
@@ -179,7 +179,7 @@ def FAdoize(expression, log=lambda *m: None):
     expression = regex.sub(r"\{,[0-9]+\}", lambda x: repl(x.group()), expression)
 
     # remove redundant (and invalid) escapes
-    valids = set("sSwWdDtnrfvuU\\-^$.()[]+*{}bB0123456789")
+    valids = set("sSwWdDtnrfvuU\\^$.()[]+*{}bB0123456789")
     i = 0
     while True:
         try:
