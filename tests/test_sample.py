@@ -66,5 +66,28 @@ class TestJavaScriptSampler(unittest.TestCase):
         isEq(self, '''.replace(/a(0|1|001)?/gi)''', 'a(0|1|001)?')
         isEq(self, '''.split(/ /)''', ' ')
 
+class TestJavaSampler(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.sampler = JavaSampler()
+
+    def test_none(self):
+        isNone(self, "abc")
+        isNone(self, "")
+        isNone(self, "Pattern.compile(var)")
+        isNone(self, 'Pattern.compile(')
+
+    def test_raises(self):
+        shouldRaise(self, '''Pattern.compile("''', InvalidExpressionError)
+        shouldRaise(self, '''Pattern.compile("valid" + bad + "more")''', InvalidExpressionError)
+        shouldRaise(self, '''Pattern.compile("valid" + bad)''', InvalidExpressionError)
+        shouldRaise(self, '''Pattern.compile("esc_closed\\\\")''', InvalidExpressionError)
+
+    def test_extracts(self):
+        isEq(self, '''Pattern.compile("valid\\\\"")''', 'valid\\"')
+        isEq(self, '''Pattern.compile("simple")''', 'simple')
+        isEq(self, '''Pattern.compile("simple", FLAGS)''', 'simple')
+        isEq(self, '''Pattern.compile("\\\\w", FLAGS)''', '\\w')
+
 if __name__ == "__main__":
     unittest.main()

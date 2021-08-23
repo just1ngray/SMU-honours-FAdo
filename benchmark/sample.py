@@ -247,10 +247,31 @@ class TypeScriptSampler(JavaScriptSampler):
         super(TypeScriptSampler, self).__init__("TypeScript")
 
 
+class JavaSampler(CodeSampler):
+    def __init__(self):
+        super(JavaSampler, self).__init__("Java", r"""Pattern\.compile\("/.+\)""")
+        self.start = regex.compile(r'''Pattern\.compile\("''')
+        self.extract = regex.compile(r'''(\\.|[^"])+"[,)]''')
+
+    def get_line_expression(self, line):
+        match = self.start.search(line)
+        if match is None:
+            return None
+        end = line[match.end():] # start of the expression to the end of the line
+        if len(end) == 0:
+            raise InvalidExpressionError(line, "EOL found, expected the expression")
+
+        expression = self.extract.search(end)
+        if expression is None:
+            raise InvalidExpressionError(line, "Could not extract the expression")
+        expression = expression.group(0).decode("utf-8")[:-2] # remove the `"[,)]` from end
+
+        return expression.replace("\\\\", "\\")
+
 if __name__ == "__main__":
     SAMPLE_SIZE = 400
 
-    samplers = [TypeScriptSampler, JavaScriptSampler, PythonSampler]
+    samplers = [JavaSampler, TypeScriptSampler, JavaScriptSampler, PythonSampler]
     for sampler in samplers:
         obj = sampler()
 
