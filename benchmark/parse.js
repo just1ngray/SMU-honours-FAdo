@@ -135,7 +135,10 @@ function nodeToString(node, output, chars=null) {
             return `(${nodeToString(node.left, output)} + ${nodeToString(node.right, output)})`
 
         case "Group":
-            return nodeToString(node.expression)
+            if ("expression" in node) // empty group "()"
+                return nodeToString(node.expression)
+            else
+                return ""
 
         case "Repetition":
             const expression = nodeToString(node.expression, output)
