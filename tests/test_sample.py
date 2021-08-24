@@ -89,5 +89,23 @@ class TestJavaSampler(unittest.TestCase):
         isEq(self, '''Pattern.compile("simple", FLAGS)''', 'simple')
         isEq(self, '''Pattern.compile("\\\\w", FLAGS)''', '\\w')
 
+class TestPerlSampler(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.sampler = PerlSampler()
+
+    def test_none(self):
+        isNone(self, "abc")
+        isNone(self, "")
+        isNone(self, "$var =~ bad_flags/abc/")
+
+    def test_raises(self):
+        shouldRaise(self, "$var =~ /abc", InvalidExpressionError)
+        shouldRaise(self, '$var =~ /abc\\/', InvalidExpressionError)
+
+    def test_extracts(self):
+        isEq(self, '$var =~ /abc/', 'abc')
+        isEq(self, '$var =~ /abc\\//', 'abc/')
+
 if __name__ == "__main__":
     unittest.main()

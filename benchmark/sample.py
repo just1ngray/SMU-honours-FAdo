@@ -268,10 +268,32 @@ class JavaSampler(CodeSampler):
 
         return expression.replace("\\\\", "\\")
 
+
+class PerlSampler(CodeSampler):
+    def __init__(self, lang="Perl"):
+        super(PerlSampler, self).__init__(lang, r"""\$.+ =~ [miosg]*/.+/""")
+        self.start = regex.compile(r"""\$.+ =~ [miosg]*/""")
+        self.extract = regex.compile(r"""(\\.|[^/])+/""")
+
+    def get_line_expression(self, line):
+        match = self.start.search(line)
+        if match is None:
+            return None
+        end = line[match.end():] # start of the expression to the end of the line
+        if len(end) == 0:
+            raise InvalidExpressionError(line, "EOL found, expected the expression")
+
+        expression = self.extract.search(end)
+        if expression is None:
+            raise InvalidExpressionError(line, "Could not extract the expression")
+        expression = expression.group(0).decode("utf-8")[:-1] # remove the `/` from end
+
+        return expression.replace("\\/", "/")
+
 if __name__ == "__main__":
     SAMPLE_SIZE = 400
 
-    samplers = [JavaSampler, TypeScriptSampler, JavaScriptSampler, PythonSampler]
+    samplers = [PerlSampler, JavaSampler, TypeScriptSampler, JavaScriptSampler, PythonSampler]
     for sampler in samplers:
         obj = sampler()
 
@@ -282,6 +304,6 @@ if __name__ == "__main__":
         for url in obj.get_urls():
             code = obj.get_github_code(url)
             obj.process_code(code, url)
-        obj.output.overwrite("Done!\n")
+        obj.output.overwrite("Done!")
 
     print "\n"*3, "Done - Sampled All"
