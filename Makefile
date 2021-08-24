@@ -5,6 +5,11 @@ init:
 	@echo "\nEXPECTING node>14 and its corresponding npm installation"
 	npm install
 
+bench:
+	@make break
+	python2 benchmark/benchmark.py
+	@make clean
+
 sample:
 	@make break
 	python2 benchmark/sample.py

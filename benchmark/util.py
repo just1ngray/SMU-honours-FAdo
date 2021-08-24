@@ -128,8 +128,22 @@ class DBWrapper(object):
                 lang    TEXT,
                 FOREIGN KEY (lang) REFERENCES languages (lang),
                 FOREIGN KEY (url) REFERENCES github_urls (url),
-                PRIMARY KEY (url, line)
+                PRIMARY KEY (url, lineNum)
             );
+
+
+            CREATE TABLE IF NOT EXISTS methods (
+                method TEXT PRIMARY KEY
+            );
+            INSERT OR IGNORE INTO methods (method) VALUES ('nfaPD');
+            INSERT OR IGNORE INTO methods (method) VALUES ('nfaPDO');
+            INSERT OR IGNORE INTO methods (method) VALUES ('nfaPosition');
+            INSERT OR IGNORE INTO methods (method) VALUES ('nfaFollow');
+            INSERT OR IGNORE INTO methods (method) VALUES ('nfaThompson');
+            INSERT OR IGNORE INTO methods (method) VALUES ('nfaGlushkov');
+            INSERT OR IGNORE INTO methods (method) VALUES ('derivative');
+            INSERT OR IGNORE INTO methods (method) VALUES ('re');
+            INSERT OR IGNORE INTO methods (method) VALUES ('regex');
         """)
 
     def executescript(self, script):
