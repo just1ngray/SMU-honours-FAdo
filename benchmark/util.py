@@ -70,7 +70,8 @@ class ConsoleOverwrite():
         print "\r" + " "*self._lastlen + "\r",
 
         content = self.prefix + reduce(lambda p, c: p + " " + str(c), items, "")
-        content = content.replace("\t", "    ")
+        content = content.replace("\t", "    ")\
+            .replace("\n", "\\n")
         if len(content) > self._width:
             content = content[:self._width - 3] + "..."
         self._lastlen = len(content)
