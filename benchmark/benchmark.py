@@ -1,9 +1,10 @@
 import timeit
 import re
 import regex
+import lark.exceptions
 
 from util import DBWrapper, ConsoleOverwrite
-from convert import Converter
+from convert import Converter, AnchorError
 
 
 class BenchExpr(object):
@@ -32,7 +33,7 @@ class BenchExpr(object):
         self.rejected = set()
 
     def __str__(self):
-        return "{0}: {1} / {2}".format(self.method, self.re_prog, self.re_math)
+        return "{0}: {1} / {2}".format(self.method, self.re_prog, self.re_math).encode("string-escape")
 
     def genWords(self):
         """Populates the `accepted` and `rejected` attributes with words"""
@@ -66,7 +67,7 @@ class BenchExpr(object):
                 SET time=?
                 WHERE url=? AND lineNum=? AND method=? AND time!=0;
             """, [min(times), self.url, self.lineNum, self.method])
-        except:
+        except (lark.exceptions.UnexpectedToken, AnchorError, re.error, regex._regex_core.error):
             # disable the impact of the test for all methods if any method fails
             # better than deleting since it can be investigated later
             self.db.execute("""
@@ -74,6 +75,10 @@ class BenchExpr(object):
                 SET time=0
                 WHERE url=? AND lineNum=?;
             """, [self.url, self.lineNum])
+        except Exception as e:
+            if type(e) is not SystemExit:
+                print "\n\nERROR ON:\n", self
+            raise
 
     def preprocess(self):
         """One-time cost of parsing, compiling, etc into an object which can
@@ -155,7 +160,7 @@ class Benchmarker(object):
                         WHERE rn=1
                         ORDER BY re_math ASC
                     ) as e
-                    ORDER BY re_math ASC, method ASC
+                    ORDER BY re_math ASC, method ASC;
 
                 CREATE INDEX tests_by_method
                 ON tests (method);
@@ -228,8 +233,8 @@ class Benchmarker(object):
         for row in all:
             print row[0].ljust(16), str(row[1])
 
-        done = self.db.selectall("SELECT count(*) FROM tests WHERE time!=-1;")[0][0]
-        todo = self.db.selectall("SELECT count(*) FROM tests WHERE time==-1;")[0][0]
+        done = self.db.selectall("SELECT count(*) FROM tests WHERE time!=-1 AND time!=0;")[0][0]
+        todo = self.db.selectall("SELECT count(*) FROM tests WHERE time==-1 AND time!=0;")[0][0]
         return (done, todo)
 
 
@@ -242,21 +247,34 @@ if __name__ == "__main__":
     print "\nCompleted: " + str(completed)
     print "Todo:      " + str(todo)
 
-    if todo == 0:
-        if raw_input("\nReset and run benchmark again? y/(n): ") == "y":
-            if raw_input("Backup previous results first? (y)/n: ") != "n":
-                from datetime import datetime
-                newname = ("tests_" + str(datetime.now())).replace(" ", "_")
-                benchmarker.db.execute("ALTER TABLE tests RENAME TO ?;", [newname])
-                print "Table saved as", newname
+    print "\n==============================="
+    print "1. Continue with {0} more tests".format(todo)
+    print "2. Backup {0}/{1} results".format(completed, todo + completed)
+    print "3. Reset without backing up"
+    print "4. Exit\n"
+    option = None
+    while option not in list("1234"):
+        option = raw_input("Choose option: ")
+    print "\n"
 
-            benchmarker = Benchmarker(True)
-        else:
-            print "Bye!"
-            exit(0)
-    elif raw_input("\nContinue with {0} more tests? (y)/n: ".format(todo)) == "n":
+    if option == "1":
+        print "Running tests..."
+    elif option == "2":
+        from datetime import datetime
+        newname = ("tests_" + str(datetime.now())).replace(" ", "_")
+        benchmarker.db.execute("ALTER TABLE tests RENAME TO ?;", [newname])
+        print "Table saved as", newname
+        exit(0)
+    elif option == "3":
+        benchmarker = Benchmarker(True)
+        print "Reset test set"
+        exit(0)
+    elif option == "4":
         print "Bye!"
         exit(0)
+    else:
+        print "Unknown option"
+        exit(1)
 
     lastExpr = BenchExpr("", "", "", "", "", "")
     done = 0
@@ -268,13 +286,8 @@ if __name__ == "__main__":
             r.genWords()
             lastExpr = r
 
-        try:
-            output.overwrite("{0}/{1}:".format(done, todo), r)
-            r.benchmark()
-        except Exception as e:
-            print e
-            raw_input("Press Enter to continue ... ")
-            print "\n"
+        output.overwrite("{0}/{1}:".format(done, todo), r)
+        r.benchmark()
 
         done += 1
 

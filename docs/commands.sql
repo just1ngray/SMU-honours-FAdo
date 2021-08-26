@@ -29,3 +29,10 @@ FROM (
 
 	ORDER BY rn ASC, ntotal DESC
 );
+
+
+-- Join RE_MATH & RE_PROG to tests --
+SELECT tests.*, expressions.re_prog, expressions.re_math, expressions.line
+FROM tests, expressions
+WHERE tests.lineNum==expressions.lineNum
+	AND tests.url==expressions.url;

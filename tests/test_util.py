@@ -1,40 +1,6 @@
 import unittest
 
-from benchmark.util import RangeList, FAdoize, WeightedRandomItem, Deque
-
-class TestFAdoize(unittest.TestCase):
-    # Also tested in `test_convert.py` indirectly
-    def test_charclass(self):
-        f = FAdoize
-        self.assertEqual(f('\\d'), '[0-9]')
-        self.assertEqual(f('\\D'), '[^0-9]')
-        self.assertEqual(f('[\\d]'), '[0-9]')
-
-        self.assertEqual(f('\\s'), ' ')
-        self.assertEqual(f('\\S'), '[^ ]')
-        self.assertEqual(f('[\\s]'), '[ ]')
-
-        self.assertEqual(f('\\w'), '[0-9A-Za-z_]')
-        self.assertEqual(f('\\W'), '[^0-9A-Za-z_]')
-        self.assertEqual(f('[\\w]'), '[0-9A-Za-z_]')
-
-    def test_almost_charclass(self):
-        f = FAdoize
-        self.assertEqual(f('\\\\d'), '(\\ d)')
-        self.assertEqual(f('\\\\D'), '(\\ D)')
-        self.assertEqual(f('[\\\\d]'), '[\\d]')
-
-        self.assertEqual(f('\\\\s'), '(\\ s)')
-        self.assertEqual(f('\\\\S'), '(\\ S)')
-        self.assertEqual(f('[\\\\s]'), '[\\s]')
-
-        self.assertEqual(f('\\\\w'), '(\\ w)')
-        self.assertEqual(f('\\\\W'), '(\\ W)')
-        self.assertEqual(f('[\\\\w]'), '[\\w]')
-
-    def test_forwardslash(self):
-        self.assertEqual(FAdoize('//'), '(/ /)')
-
+from benchmark.util import RangeList, WeightedRandomItem, Deque
 
 class TestRangeList(unittest.TestCase):
     @classmethod

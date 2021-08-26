@@ -2,8 +2,7 @@
 import unittest
 from lark import LarkError
 
-from benchmark.convert import Converter
-from benchmark.util import FAdoizeError
+from benchmark.convert import Converter, FAdoizeError, FAdoize
 
 
 class TestConverter(unittest.TestCase):
@@ -174,7 +173,11 @@ class TestConverter(unittest.TestCase):
 
             ("(\\( \\))",       "( )"),
             ("(\\+ + \\*)",     "+ + *"),
-            ("(\\?)?",          "(?)?")
+            ("(\\?)?",          "(?)?"),
+
+            ("\\r",          "\r"),
+            ("\\n",          "\n"),
+            ("\\t",          "\t"),
         ]
         self.runtest(self.convert.math, exprs)
 
@@ -184,6 +187,40 @@ class TestConverter(unittest.TestCase):
             val = convert(prog, partialMatch=partialMatch)
             self.assertEqual(str(val), fado.encode("utf-8"), prog.encode("utf-8") + " => "
                 + str(val) + " != " + fado.encode("utf-8"))
+
+
+class TestFAdoize(unittest.TestCase):
+    # Also tested in `test_convert.py` indirectly
+    def test_charclass(self):
+        f = FAdoize
+        self.assertEqual(f('\\d'), '[0-9]')
+        self.assertEqual(f('\\D'), '[^0-9]')
+        self.assertEqual(f('[\\d]'), '[0-9]')
+
+        self.assertEqual(f('\\s'), ' ')
+        self.assertEqual(f('\\S'), '[^ ]')
+        self.assertEqual(f('[\\s]'), '[ ]')
+
+        self.assertEqual(f('\\w'), '[0-9A-Za-z_]')
+        self.assertEqual(f('\\W'), '[^0-9A-Za-z_]')
+        self.assertEqual(f('[\\w]'), '[0-9A-Za-z_]')
+
+    def test_almost_charclass(self):
+        f = FAdoize
+        self.assertEqual(f('\\\\d'), '(\\ d)')
+        self.assertEqual(f('\\\\D'), '(\\ D)')
+        self.assertEqual(f('[\\\\d]'), '[\\d]')
+
+        self.assertEqual(f('\\\\s'), '(\\ s)')
+        self.assertEqual(f('\\\\S'), '(\\ S)')
+        self.assertEqual(f('[\\\\s]'), '[\\s]')
+
+        self.assertEqual(f('\\\\w'), '(\\ w)')
+        self.assertEqual(f('\\\\W'), '(\\ W)')
+        self.assertEqual(f('[\\\\w]'), '[\\w]')
+
+    def test_forwardslash(self):
+        self.assertEqual(FAdoize('//'), '(/ /)')
 
 
 if __name__ == "__main__":

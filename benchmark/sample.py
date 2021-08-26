@@ -3,6 +3,7 @@ import json
 import regex
 
 import util
+import convert
 
 class InvalidExpressionError(ValueError):
     def __init__(self, line, message):
@@ -114,7 +115,7 @@ class CodeSampler(object):
                                     FROM expressions WHERE lang=?;""", [self.language])
         for _, _, line, url, lineNum, _ in rows:
             self.output.overwrite("reprocess_lines:", line)
-            self.db.execute("DELETE FROM expressions WHERE url=? AND line=?;", [url, line])
+            self.db.execute("DELETE FROM expressions WHERE url=? AND lineNum=?;", [url, lineNum])
             self.save_expression(url, line, lineNum)
 
     def save_expression(self, url, line, lineNum):
@@ -127,12 +128,12 @@ class CodeSampler(object):
                 return None
             self.output.overwrite("save_expression @ " + line)
 
-            formatted = util.FAdoize(expr)
+            formatted = convert.FAdoize(expr)
             self.db.execute("""
                 INSERT OR IGNORE INTO expressions (re_math, re_prog, url, lineNum, line, lang)
                 VALUES (?, ?, ?, ?, ?, ?);""", [formatted, expr, url, lineNum, line, self.language])
             return formatted
-        except (InvalidExpressionError, util.FAdoizeError) as err:
+        except (InvalidExpressionError, convert.FAdoizeError) as err:
             self.db.execute("""
                 INSERT OR IGNORE INTO expressions (re_math, re_prog, url, lineNum, line, lang)
                 VALUES (?, ?, ?, ?, ?, ?);""", [str(err), expr, url, lineNum, line, self.language])

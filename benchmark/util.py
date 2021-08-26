@@ -1,8 +1,5 @@
 import sqlite3
-import subprocess
-import regex
 import sys
-import json
 from random import randint
 
 class UniUtil():
@@ -143,73 +140,6 @@ class DBWrapper(object):
         """Query via SELECT cmd all that match predicate"""
         self._cursor.execute(cmd, params)
         return self._cursor.fetchall()
-
-class FAdoizeError(Exception):
-    def __init__(self, expression, node_callback):
-        super(FAdoizeError, self).__init__()
-        self.expression = expression
-        self.node_callback = node_callback
-
-    def __str__(self):
-        return "FAdoizeError on '{0}':\n{1}".format(self.expression.encode("utf-8"), self.node_callback)
-
-nodejs_proc = None
-def FAdoize(expression):
-    """Convert an "ambiguous" expression used by a programmer into an expression
-    ready to parse into FAdo via the `benchmark/convert.py#Converter` using the
-    `benchmark/re.lark` grammar.
-    :param unicode|str expression: the expression to convert into unambiguous FAdo
-    :returns unicode: the parenthesized and formatted expression
-    :raises FAdoizeError: if `benchmark/parse.js` throws
-    ..note: FAdoize will include a cold start time as the NodeJS process is created.
-            Subsequent calls will not incur this cost until this Python process finishes.
-    """
-    # regexp-tree doesn't support repetition in the form a{,n} as a{0,n}... convert manually
-    def repl(match):
-        return "{0," + match[2:-1] + "}"
-    expression = regex.sub(r"\{,[0-9]+\}", lambda x: repl(x.group()), expression)
-
-    # remove redundant (and invalid) escapes
-    valids = set("sSwWdDtnrfvuU\\^$.()[]+*{}bB0123456789")
-    i = 0
-    while True:
-        try:
-            index = expression.index("\\", i)
-            if expression[index + 1] not in valids:
-                expression = expression[:index] + expression[index+1:]
-                i = index
-            else:
-                i = index + 1
-        except (IndexError, ValueError):
-            break
-
-    if globals()["nodejs_proc"] is None:
-        globals()["nodejs_proc"] = subprocess.Popen(["node", "benchmark/parse.js"],
-            stderr=subprocess.STDOUT,
-            stdin=subprocess.PIPE,
-            stdout=subprocess.PIPE)
-
-        import atexit
-        atexit.register(lambda: globals()["nodejs_proc"].terminate())
-
-    if len(expression) == 0:
-        raise FAdoizeError(expression, "Expression must have a length > 0")
-
-    if type(expression) is unicode: # ensure expression is utf-8 encoded string
-        expression = expression.encode("utf-8")
-
-    proc = globals()["nodejs_proc"]
-    proc.stdin.write(expression)
-    proc.stdin.flush()
-    output = json.loads(proc.stdout.readline())
-
-    if output["error"] != 0:
-        logs = reduce(lambda p, c: p + "\n" + c, output["logs"])
-        logs_and_callback = (logs + "\n\n" + output["error"]).encode("utf-8")
-        raise FAdoizeError(expression, logs_and_callback)
-    else:
-        return output["formatted"] # unicode
-
 
 def FunctionNotDefined(*x):
     raise NotImplementedError("A required function was not defined")

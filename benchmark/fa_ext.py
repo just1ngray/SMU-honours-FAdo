@@ -160,28 +160,28 @@ class InvariantNFA(fa.NFA):
         return new
 
     def witness(self):
-        """Generates the minimal word w accepted by self where |w|>0
-        Inspired by Dijkstra's algorithm
+        """Witness of non emptiness
+        :returns unicode: word
+        ..note: Not necessarily the smallest non-empty word! If this is desired use
+            `self.enumNFA().minWord(None)`
         """
-        cpy = self.dup()
-        cpy.elimEpsilon()
-        cpy.trim()
-
-        toVisit = PriorityQueue()
-        for s in cpy.Initial:
-            toVisit.put_nowait((u"", s))
-
-        # propogate
-        while len(toVisit.queue) > 0:
-            w, p = toVisit.get_nowait()
-
-            if cpy.finalP(p) and len(w) > 0:
-                return w
-
-            for t in cpy.delta.get(p, dict()):
-                for q in cpy.delta[p][t]:
-                    word = w + t.next()
-                    toVisit.put_nowait((word, q))
+        done = set()
+        notDone = set()
+        pref = dict()
+        for si in self.Initial:
+            pref[si] = u""
+            notDone.add(si)
+        while notDone:
+            si = notDone.pop()
+            done.add(si)
+            if si in self.Final:
+                return pref[si]
+            for t in self.delta.get(si, []):
+                for so in self.delta[si][t]:
+                    if so in done or so in notDone:
+                        continue
+                    pref[so] = pref[si] + (u"" if t == "@epsilon" else t.next())
+                    notDone.add(so)
         return None
 
     def ewp(self):
@@ -261,17 +261,26 @@ class EnumInvariantNFA(object):
         """:returns bool: if L(aut) includes the empty word"""
         return self.aut.ewp()
 
-    def witness(self):
-        """:returns unicode|NoneType: witness word of non-emptiness"""
-        return self.aut.witness()
-
     def minWord(self, length, start=None):
         """Finds the minimal word of length in L(aut) and memoizes the value
-        :param int length: the length of the desired word
-        :param int|NoneType start: the index to get the minimal word from (defaults to Initial)
-        :returns unicode|NoneType: the minimal word of in the length cross-section of L(aut)
+        :param int|None length: the length of the desired word
+        :param int|None start: the index to get the minimal word from (defaults to Initial)
+        :returns unicode|None: the minimal word of in the length cross-section of L(aut)
         that starts at `start` and ends at any final state
         """
+        if length is None:
+            bfs = Deque((x, 0) for x in self.aut.Initial)
+            while not bfs.isEmpty():
+                state, depth = bfs.pop_left()
+                if self.aut.finalP(state):
+                    length = depth
+                    break
+                for t in self.aut.delta.get(state, dict()):
+                    for child in self.aut.delta[state][t]:
+                        bfs.insert_right((child, depth + 1))
+        if length is None:
+            return None
+
         if length == 0:
             return u"" if self.aut.ewp() else None
         nfa = self._sized(length)

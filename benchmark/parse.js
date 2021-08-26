@@ -5,7 +5,7 @@ This process is created from the main Python process, and listens to stdin expre
 parse. The expressions are parsed and formatted, then printed into stdout as a standard
 output object.
 
-See details in benchmark/util.py#FAdoize
+See details in benchmark/convert.py#FAdoize
 */
 const regexp = require("regexp-tree")
 
@@ -113,11 +113,11 @@ function nodeToString(node, output, chars=null) {
                         case "w": return "0-9A-Za-z_"
                         case "d": return "0-9"
                     }
-                return node.value
-            }
+                    return node.value
+                }
             else {
-                // allowed escape characters    v  ... the rest are understood without \ because non-ambiguous ()
-                const escaped = node.escaped && "rnt".includes(node.symbol)
+                const escaped = "()[]+*?".includes(node.symbol) || // FAdo metacharacter distinction
+                    (node.escaped && "rnt".includes(node.symbol))  // escaped sequences
                 return `${escaped ? "\\" : ""}${node.symbol}`
             }
 

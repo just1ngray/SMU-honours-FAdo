@@ -69,25 +69,19 @@ class TestInvariantNFA(unittest.TestCase):
                     + expr.encode("utf-8"))
 
     def run_witness(self, method):
-        re = self.convert.math(u"(a + b)*")
-        infa = InvariantNFA(re.toNFA(method))
-        self.assertEqual(infa.witness(), u"a")
+        def _f(expr):
+            re = self.convert.math(expr)
+            infa = InvariantNFA(re.toNFA(method))
+            wit = infa.witness()
+            self.assertTrue(infa.evalWordP(wit))
+            self.assertTrue(re.evalWordP(wit))
+            self.assertTrue(len(wit) > 0)
 
-        re = self.convert.math(u"[a-fbcdef]*")
-        infa = InvariantNFA(re.toNFA(method))
-        self.assertEqual(infa.witness(), u"a")
-
-        re = self.convert.math(u"((z + a) + γ)")
-        infa = InvariantNFA(re.toNFA(method))
-        self.assertEqual(infa.witness(), u"a")
-
-        re = self.convert.math(u"((a b) c)")
-        infa = InvariantNFA(re.toNFA(method))
-        self.assertEqual(infa.witness(), u"abc")
-
-        re = self.convert.math(u"(((a b) c))?")
-        infa = InvariantNFA(re.toNFA(method))
-        self.assertEqual(infa.witness(), u"abc")
+        _f(u"(a + b)*")
+        _f(u"[a-fbcdef]*")
+        _f(u"((z + a) + γ)")
+        _f(u"((a b) c)")
+        _f(u"(((a b) c))?")
 
     def run_acyclicP(self, method):
         re = self.convert.math(u"((0 (a + b)*) 0)")
@@ -141,11 +135,24 @@ class TestEnumInvariantNFA(unittest.TestCase):
 
 
     def runner(self, method):
+        self.run_minWord(method)
         self.run_simple(method)
         self.run_unicode(method)
         self.run_complex(method)
         self.run_randomEnumerate(method)
         self.run_longestWordLength(method)
+
+    def run_minWord(self, method):
+        # NONE
+        def _f(expr, word):
+            wit = self.infa(expr, method).enumNFA().minWord(None)
+            self.assertEqual(wit, word)
+
+        _f(u"(a + b)*", u"a")
+        _f(u"[a-fbcdef]*", u"a")
+        _f(u"((z + a) + γ)", u"a")
+        _f(u"((a b) c)", u"abc")
+        _f(u"(((a b) c))?", u"abc")
 
     def run_simple(self, method):
         enum = self.infa("(0|1)*", method).enumNFA()

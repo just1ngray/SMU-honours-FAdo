@@ -22,7 +22,9 @@ neg_chars   : "[^" (char_range | symbol)+ "]"
 char_range  : symbol "-" symbol
 
 // atoms
-symbol      : ["\\"] /./
+symbol      : ESCAPED
+            | ["\\"] /./
+ESCAPED     : /\\[rnt]/
 EPSILON     : "@epsilon"
 DOTANY      : "@any"
 ANCHOR      : "<ASTART>" | "<AEND>"
