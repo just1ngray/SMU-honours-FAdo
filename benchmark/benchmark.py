@@ -64,11 +64,16 @@ class BenchExpr(object):
             self.db.execute("""
                 UPDATE tests
                 SET time=?
-                WHERE url=? AND lineNum=? AND method=?;
+                WHERE url=? AND lineNum=? AND method=? AND time!=0;
             """, [min(times), self.url, self.lineNum, self.method])
         except:
-            print "ERROR while running benchmark on:", self
-            raise
+            # disable the impact of the test for all methods if any method fails
+            # better than deleting since it can be investigated later
+            self.db.execute("""
+                UPDATE tests
+                SET time=0
+                WHERE url=? AND lineNum=?;
+            """, [self.url, self.lineNum])
 
     def preprocess(self):
         """One-time cost of parsing, compiling, etc into an object which can
