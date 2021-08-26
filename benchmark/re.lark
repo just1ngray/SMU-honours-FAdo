@@ -1,9 +1,9 @@
 // start
-expression  : SYMBOL
+expression  : symbol
             | ANCHOR
             | EPSILON
             | DOTANY
-            | chars
+            | pos_chars
             | neg_chars
             | kleene
             | option
@@ -17,24 +17,12 @@ concat      : "(" expression  " "  expression ")"
 disjunction : "(" expression " + " expression ")"
 
 // character classes
-chars       : "["  (char_range | SYMBOL)+ "]"
-neg_chars   : "[^" (char_range | SYMBOL)+ "]"
-char_range  : SYMBOL "-" SYMBOL
+pos_chars   : "["  (char_range | symbol)+ "]"
+neg_chars   : "[^" (char_range | symbol)+ "]"
+char_range  : symbol "-" symbol
 
-// terminals (note SYMBOL has *lower* priority)
-SYMBOL.0    : BYTES | ASCII
-ASCII       : /\\?./
+// atoms
+symbol      : ["\\"] /./
 EPSILON     : "@epsilon"
 DOTANY      : "@any"
 ANCHOR      : "<ASTART>" | "<AEND>"
-
-// utf-8 encoding: https://en.wikipedia.org/wiki/UTF-8
-utf8        : (BYTES | ASCII)+
-BYTES       : B_PREFIX (B_1 | B_2 | B_3 | B_4)
-B_PREFIX    : "\\x"
-HEX         : /[0-9a-f]/
-B_1         : "0".."7"    HEX
-B_2         : ("c" | "d") HEX      B_ANOTHER
-B_3         : "e"         HEX      B_ANOTHER~2
-B_4         : "f"         "0".."7" B_ANOTHER~3
-B_ANOTHER   : B_PREFIX /[89a-f]/ HEX

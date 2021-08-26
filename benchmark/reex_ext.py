@@ -10,15 +10,6 @@ class uregexp(reex.regexp):
         super(uregexp, self).__init__(sigma=None)
         self.expression = None
 
-    def wordDerivative(self, word):
-        """Allows taking the word derivative of unicode strings with
-        surrogate pairs.
-        """
-        d = self
-        for sigma in UniUtil.charlist(word):
-            d = d.derivative(sigma)
-        return d
-
     def pairGen(self):
         """Generate the pairwise coverage test words
         :returns set<unicode>:

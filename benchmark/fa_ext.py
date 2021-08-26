@@ -4,7 +4,7 @@ from Queue import PriorityQueue
 from random import randint
 
 import reex_ext
-from util import UniUtil, WeightedRandomItem, Deque
+from util import WeightedRandomItem, Deque
 
 class InvariantNFA(fa.NFA):
     """A class that extends NFA to properly handle `chars` and `dotany`
@@ -54,17 +54,6 @@ class InvariantNFA(fa.NFA):
     def succintTransitions(self):
         transitions = super(InvariantNFA, self).succintTransitions()
         return list(map(lambda x: (x[0], "SPACE", x[2]) if x[1] == " " else x, transitions))
-
-    def evalWordP(self, word):
-        ilist = self.epsilonClosure(self.Initial)
-        for c in UniUtil.charlist(word):
-            ilist = self.evalSymbol(ilist, c)
-            if not ilist:
-                return False
-        for f in self.Final:
-            if f in ilist:
-                return True
-        return False
 
     def evalSymbol(self, stil, sym):
         res = set()
@@ -336,7 +325,7 @@ class EnumInvariantNFA(object):
         :returns unicode|NoneType: the next word after current, or None if current is the last
         word in its cross-section
         """
-        current = UniUtil.charlist(current)
+        current = list(current)
         length = len(current)
         nfa = self._sized(length)
         stack = Deque([nfa.Initial])

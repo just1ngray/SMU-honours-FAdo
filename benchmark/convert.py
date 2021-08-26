@@ -1,37 +1,13 @@
 from lark import Lark, Transformer
 from lark.exceptions import LarkError
 
-from reex_ext import dotany, chars, uatom, anchor, uconcat, uoption, ustar, udisj, uepsilon, uregexp
+from reex_ext import *
 from util import FAdoize
 
 class Converter(object):
     """A class to parse a string/unicode expression into FAdo objects.
     """
     def __init__(self):
-        class LarkToFAdo(Transformer):
-            """Used with parser="lalr" to transform the tree in real-time into FAdo objects.
-            ..see: `benchmark/re.lark`
-            """
-            expression = lambda _, e: e[0]
-            option = lambda _, e: uoption(e[0])
-            kleene = lambda _, e: ustar(e[0])
-            concat = lambda _, e: uconcat(e[0], e[1])
-            disjunction = lambda _, e: udisj(e[0], e[1])
-
-            def chars(self, items):
-                items = list(map(lambda c: c.val if isinstance(c, uatom) else c, items))
-                return chars(items, neg=False)
-
-            def neg_chars(self, items):
-                items = list(map(lambda c: c.val if isinstance(c, uatom) else c, items))
-                return chars(items, neg=True)
-
-            char_range = lambda _, e: (e[0].val, e[1].val)
-            SYMBOL = lambda _, e: uatom(e.value.decode("string-escape").decode("utf-8"))
-            EPSILON = lambda _0, _1: uepsilon()
-            DOTANY = lambda _0, _1: dotany()
-            ANCHOR = lambda _, e: anchor(e.value)
-
         self._parser = Lark.open("benchmark/re.lark", start="expression",
             parser="lalr", transformer=LarkToFAdo())
 
@@ -48,7 +24,7 @@ class Converter(object):
         :raises: if there's a parsing error, or if anchors are found in non-"edge"
                  leaf positions
         """
-        re = self._parser.parse(repr(expression.encode("utf-8"))[1:-1]) # type: uregexp
+        re = self._parser.parse(unicode(expression)) # type: uregexp
 
         class DummyClass():
             def __init__(self, arg):
@@ -122,3 +98,28 @@ class Converter(object):
         except LarkError as e:
             print expression, "was formatted as", formatted
             raise e
+
+class LarkToFAdo(Transformer):
+    """Used with parser="lalr" to transform the tree in real-time into FAdo objects.
+    ..see: `benchmark/re.lark`
+    """
+    expression = lambda _, e: e[0]
+    kleene = lambda _, e: ustar(e[0])
+    option = lambda _, e: uoption(e[0])
+    concat = lambda _, e: uconcat(e[0], e[1])
+    disjunction = lambda _, e: udisj(e[0], e[1])
+
+    char_range = lambda _, e: (e[0].val, e[1].val)
+
+    def pos_chars(self, items):
+        items = list(map(lambda c: c.val if isinstance(c, uatom) else c, items))
+        return chars(items, neg=False)
+
+    def neg_chars(self, items):
+        items = list(map(lambda c: c.val if isinstance(c, uatom) else c, items))
+        return chars(items, neg=True)
+
+    symbol = lambda _, e: uatom(e[0].value)
+    EPSILON = lambda _0, _1: uepsilon()
+    DOTANY = lambda _0, _1: dotany()
+    ANCHOR = lambda _, e: anchor(e.value)

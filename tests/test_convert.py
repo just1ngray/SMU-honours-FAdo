@@ -80,7 +80,7 @@ class TestConverter(unittest.TestCase):
             (u"∀", u"∀"),
             (u"@epsilon", u"@epsilon"),
             (u"@any", u"@any"),
-            (u"🚀*", u"🚀*"),
+            (u"썐*", u"썐*"),
             (u"(ë + Ĥ)", u"ë + Ĥ"),
             (u"(ǿ Ȍ)", u"ǿ Ȍ"),
             (u"(Ͽ)?", u"(Ͽ)?"),
@@ -123,8 +123,10 @@ class TestConverter(unittest.TestCase):
 
     def test_lark_errors(self):
         exprs = [
-            '\\"',          # will attempt to parse \\\\" and raise UnexpectedToken "
             u"(🇨🇦 + 🇵🇹)",   # no support for 8-byte paired characters 🇨🇦 = '\U0001f1e8\U0001f1e6'
+            u"(",           # '(' would need a \ in-front to indicate it's an atom not meta
+
+            # incomplete
             "(a b",         "(ab c)",       "a + b",    "[0-9",     "^a]"
         ]
         for expr in exprs:
@@ -159,6 +161,22 @@ class TestConverter(unittest.TestCase):
             ("((a* (0 + 1)) <AEND>)",   "((@any* a*) (0 + 1)) @epsilon"),
         ]
         self.runtest(self.convert.math, exprs, partialMatch=True)
+
+    def test_symbol_or_meta(self):
+        exprs = [
+            ("\\(",                "("),
+            ("\\)",                ")"),
+            ("\\[",                "["),
+            ("\\]",                "]"),
+            ("\\*",                "*"),
+            ("\\?",                "?"),
+            ("\\+",                "+"),
+
+            ("(\\( \\))",       "( )"),
+            ("(\\+ + \\*)",     "+ + *"),
+            ("(\\?)?",          "(?)?")
+        ]
+        self.runtest(self.convert.math, exprs)
 
 
     def runtest(self, convert, expressions, partialMatch=False):

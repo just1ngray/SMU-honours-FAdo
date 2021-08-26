@@ -147,36 +147,27 @@ class TestEvalWordP(unittest.TestCase):
         self.assertFalse(re.evalWordP("000111"))
 
     def test_disj(self):
-        re = self.convert.prog(u"(🏀|⚽|🎾|none)")
-        self.assertTrue(re.evalWordP("none"))
-        self.assertTrue(re.evalWordP(u"⚽"))
-        self.assertTrue(re.evalWordP(u"🏀"))
-        self.assertTrue(re.evalWordP(u"🎾"))
-        self.assertFalse(re.evalWordP(u"🏈"))
+        re = self.convert.prog(u"(❶|❷|❸|_)")
+        self.assertTrue(re.evalWordP("_"))
+        self.assertTrue(re.evalWordP(u"❶"))
+        self.assertTrue(re.evalWordP(u"❷"))
+        self.assertTrue(re.evalWordP(u"❸"))
+        self.assertFalse(re.evalWordP(u"❹"))
         self.assertFalse(re.evalWordP(u"a"))
 
     def test_star(self):
-        re = self.convert.math(u"🚗*")
+        re = self.convert.math(u"✓*")
         self.assertTrue(re.evalWordP(""))
-        self.assertTrue(re.evalWordP(u"🚗"))
-        self.assertTrue(re.evalWordP(u"🚗🚗🚗🚗🚗"))
-        self.assertFalse(re.evalWordP(u"🚗🚗🚓🚗🚗"))
-        self.assertFalse(re.evalWordP(u"traffic"))
+        self.assertTrue(re.evalWordP(u"✓"))
+        self.assertTrue(re.evalWordP(u"✓✓✓✓✓"))
+        self.assertFalse(re.evalWordP(u"✓✓✕✓✓"))
+        self.assertFalse(re.evalWordP(u"✗"))
 
     def test_option(self):
-        re = self.convert.math(u"(🄾)?")
+        re = self.convert.math(u"(舵)?")
         self.assertTrue(re.evalWordP(""))
-        self.assertTrue(re.evalWordP(u"🄾"))
-        self.assertFalse(re.evalWordP(u"🄾🄾"))
-
-    def test_full(self):
-        re = self.convert.prog(u"😝♣* (тĤ𝐢ş|๏𝐑|Ŧ卄ⓐ𝔱) ☝(🐟)?")
-        self.assertTrue(re.evalWordP(u"😝 тĤ𝐢ş ☝"))
-        self.assertTrue(re.evalWordP(u"😝 ๏𝐑 ☝"))
-        self.assertTrue(re.evalWordP(u"😝 ๏𝐑 ☝🐟"))
-        self.assertTrue(re.evalWordP(u"😝♣♣♣♣ ๏𝐑 ☝"))
-        self.assertFalse(re.evalWordP(u"😝♣♣♣♣ ๏ ☝"))
-        self.assertFalse(re.evalWordP(u"😝♣♣♣♣ ๏𝐑☝"))
+        self.assertTrue(re.evalWordP(u"舵"))
+        self.assertFalse(re.evalWordP(u"舵舵"))
 
 class TestPairGen(unittest.TestCase):
     @classmethod

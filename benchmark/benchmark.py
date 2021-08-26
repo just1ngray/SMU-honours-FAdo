@@ -36,7 +36,8 @@ class BenchExpr(object):
 
     def genWords(self):
         """Populates the `accepted` and `rejected` attributes with words"""
-        raise NotImplementedError()
+        yield self.CONVERTER.math(self.re_math, partialMatch=True).toInvariantNFA("nfaPD").witness()
+        # TODO MORE
 
     def setWords(self, accepted, rejected):
         """Sets the words used when running the benchmark"""
@@ -197,6 +198,8 @@ class Benchmarker(object):
             );
         """)
         print "\n\nSAMPLING STATISTICS:\n"
+        print "language           ntotal  ndistinct"
+        print "------------------------------------"
         for row in all:
             print row[0].ljust(16), str(row[1]).rjust(8), str(row[2]).rjust(8)
 
@@ -207,7 +210,22 @@ class Benchmarker(object):
     def printBenchmarkStats(self):
         """Prints (stdout) the result statistics from the last benchmark
         and returns (#completed, #todo)"""
-        return (0, 10)
+        all = self.db.selectall("""
+            SELECT method, sum(time)
+            FROM tests
+            WHERE time!=-1
+            GROUP BY method
+            ORDER BY sum(time) ASC;
+        """)
+        print "\n\nBENCHMARKED STATISTICS:\n"
+        print "method           sum(min_time)"
+        print "------------------------------"
+        for row in all:
+            print row[0].ljust(16), str(row[1])
+
+        done = self.db.selectall("SELECT count(*) FROM tests WHERE time!=-1;")[0][0]
+        todo = self.db.selectall("SELECT count(*) FROM tests WHERE time==-1;")[0][0]
+        return (done, todo)
 
 
 
@@ -217,10 +235,16 @@ if __name__ == "__main__":
 
     completed, todo = benchmarker.printBenchmarkStats()
     print "\nCompleted: " + str(completed)
-    print "     Todo: " + str(todo)
+    print "Todo:      " + str(todo)
 
     if todo == 0:
         if raw_input("\nReset and run benchmark again? y/(n): ") == "y":
+            if raw_input("Backup previous results first? (y)/n: ") != "n":
+                from datetime import datetime
+                newname = ("tests_" + str(datetime.now())).replace(" ", "_")
+                benchmarker.db.execute("ALTER TABLE tests RENAME TO ?;", [newname])
+                print "Table saved as", newname
+
             benchmarker = Benchmarker(True)
         else:
             print "Bye!"
@@ -230,6 +254,7 @@ if __name__ == "__main__":
         exit(0)
 
     lastExpr = BenchExpr("", "", "", "", "", "")
+    done = 0
     for r in benchmarker:
         # take advantage of Benchmarker iteration being ordered by re_math and re-generate words sparingly
         if r.re_math == lastExpr.re_math:
@@ -239,10 +264,13 @@ if __name__ == "__main__":
             lastExpr = r
 
         try:
-            output.overwrite(r)
+            output.overwrite("{0}/{1}:".format(done, todo), r)
             r.benchmark()
         except Exception as e:
             print e
-            exit(0)
+            raw_input("Press Enter to continue ... ")
+            print "\n"
+
+        done += 1
 
     benchmarker.printBenchmarkStats()

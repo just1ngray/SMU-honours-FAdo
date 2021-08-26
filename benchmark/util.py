@@ -1,35 +1,11 @@
 import sqlite3
 import subprocess
 import regex
-import lark
 import sys
 import json
 from random import randint
 
-charlist_grammar = None
 class UniUtil():
-    @staticmethod
-    def charlist(word):
-        """Splits a unicode string into its individual displayable
-        characters and returns in list form.
-        :param unicode word: the word to retrieve characters from
-        :returns list<unicode>: the individual characters of word
-        """
-        if len(word) <= 1:
-            return list(word)
-
-        if globals()["charlist_grammar"] is None:
-            class Transformer(lark.Transformer):
-                utf8 = lambda _, t: t
-                ASCII = lambda _, s: s.value
-                BYTES = lambda _, b: b.value.decode("string-escape").decode("utf-8")
-
-            globals()["charlist_grammar"] = lark.Lark.open("benchmark/re.lark", start="utf8",
-                parser="lalr", transformer=Transformer())
-
-        encoded = repr(word.encode("utf-8"))[1:-1]
-        return globals()["charlist_grammar"].parse(encoded)
-
     @staticmethod
     def ord(c):
         """Get the unicode ordinal value of any <= 4-byte character.
@@ -175,7 +151,7 @@ class FAdoizeError(Exception):
         self.node_callback = node_callback
 
     def __str__(self):
-        return "FAdoizeError on '{0}':\n{1}".format(self.expression, self.node_callback)
+        return "FAdoizeError on '{0}':\n{1}".format(self.expression.encode("utf-8"), self.node_callback)
 
 nodejs_proc = None
 def FAdoize(expression):

@@ -179,7 +179,7 @@ class TestRangeList(unittest.TestCase):
 class TestWeightedRandomItem(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.samplesize = 15000.0
+        cls.samplesize = 20000.0
         cls.iterations = range(int(cls.samplesize))
         cls.threshold = 0.01
 
