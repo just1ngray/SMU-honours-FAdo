@@ -247,9 +247,9 @@ if __name__ == "__main__":
     print "\nCompleted: " + str(completed)
     print "Todo:      " + str(todo)
 
-    print "\n==============================="
+    print "\n========================================"
     print "1. Continue with {0} more tests".format(todo)
-    print "2. Backup {0}/{1} results".format(completed, todo + completed)
+    print "2. Backup all results; {0}/{1} completed".format(completed, todo + completed)
     print "3. Reset without backing up"
     print "4. Exit\n"
     option = None
