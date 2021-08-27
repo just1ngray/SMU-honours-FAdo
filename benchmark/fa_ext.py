@@ -1,6 +1,5 @@
 from FAdo import fa, reex
 from copy import deepcopy
-from Queue import PriorityQueue
 from random import randint
 
 import reex_ext
@@ -119,13 +118,17 @@ class InvariantNFA(fa.NFA):
             return False
 
     def product(self, other):
+        # both self and other must be e-free
+        seq_self = self.dup().elimEpsilon()
+        seq_other = other.dup().elimEpsilon()
+
         # note: s_... refers to `self` variables, and o_... refers to `other` variables
         new = InvariantNFA()
         notDone = set()
 
         # initial state(s)
-        for s_initial in self.Initial:
-            for o_initial in other.Initial:
+        for s_initial in seq_self.Initial:
+            for o_initial in seq_other.Initial:
                 so_index = new.addState((s_initial, o_initial))
                 new.addInitial(so_index)
                 notDone.add((s_initial, o_initial, so_index))
@@ -134,17 +137,13 @@ class InvariantNFA(fa.NFA):
         while len(notDone) > 0:
             s_current, o_current, so_index = notDone.pop()
 
-            s_next = self.delta.get(s_current, dict()).items()
-            o_next = other.delta.get(o_current, dict()).items()
+            s_next = seq_self.delta.get(s_current, dict()).items()
+            o_next = seq_other.delta.get(o_current, dict()).items()
 
             for s_trans, s_states in s_next:
                 for o_trans, o_states in o_next:
-                    so_trans = None
-                    if s_trans == o_trans:
-                        so_trans = s_trans
-                    elif s_trans != "@epsilon" and o_trans != "@epsilon":
-                        so_trans = s_trans.intersect(o_trans)
-
+                    # note: both s_trans and o_trans will be reex_ext#uatom instances
+                    so_trans = s_trans.intersect(o_trans)
                     if so_trans is None:
                         continue
 
@@ -155,15 +154,16 @@ class InvariantNFA(fa.NFA):
                         notDone.add((dest[0], dest[1], index))
 
                         # check if final
-                        if self.finalP(dest[0]) and other.finalP(dest[1]):
+                        if seq_self.finalP(dest[0]) and seq_other.finalP(dest[1]):
                             new.addFinal(index)
         return new
 
     def witness(self):
         """Witness of non emptiness
         :returns unicode: word
-        ..note: Not necessarily the smallest non-empty word! If this is desired use
-            `self.enumNFA().minWord(None)`
+        ..note: Not necessarily len > 0
+                Not necessarily the smallest non-empty word! If this is desired use
+                `self.enumNFA().minWord(None)`
         """
         done = set()
         notDone = set()
@@ -246,6 +246,15 @@ class InvariantNFA(fa.NFA):
         else:
             return curMin, successors
 
+    def stateChildren(self, state, selfLoopCounts=False):
+        children = set()
+        for t in self.delta.get(state, dict()):
+            children.update(self.delta[state][t])
+
+        if not selfLoopCounts:
+            children.discard(state)
+
+        return children
 
 class EnumInvariantNFA(object):
     """An object to enumerate an InvariantNFA efficiently.
@@ -255,7 +264,10 @@ class EnumInvariantNFA(object):
         """:param InvariantNFA aut: must be an e-free InvariantNFA"""
         self.aut = aut
         self.lengthProductTrim = dict()
-        self.tmin = dict() # k: length, v: (k: index, minWord)
+        self.tmin = dict() # {k: v}
+                           # {word_length: {state_index: minWord}}
+        self.memo_longest = -1
+        self.memo_shortest = dict()
 
     def ewp(self):
         """:returns bool: if L(aut) includes the empty word"""
@@ -263,21 +275,13 @@ class EnumInvariantNFA(object):
 
     def minWord(self, length, start=None):
         """Finds the minimal word of length in L(aut) and memoizes the value
-        :param int|None length: the length of the desired word
+        :param int|None length: the length of the desired word, None for the smallest radix word
         :param int|None start: the index to get the minimal word from (defaults to Initial)
         :returns unicode|None: the minimal word of in the length cross-section of L(aut)
         that starts at `start` and ends at any final state
         """
         if length is None:
-            bfs = Deque((x, 0) for x in self.aut.Initial)
-            while not bfs.isEmpty():
-                state, depth = bfs.pop_left()
-                if self.aut.finalP(state):
-                    length = depth
-                    break
-                for t in self.aut.delta.get(state, dict()):
-                    for child in self.aut.delta[state][t]:
-                        bfs.insert_right((child, depth + 1))
+            length = self.shortestWordLength()
         if length is None:
             return None
 
@@ -343,19 +347,19 @@ class EnumInvariantNFA(object):
             stack.insert_right(nfa.evalSymbol(stack.peek_right(), c))
 
         while len(stack) > 0:
-            states = stack.pop_right()
+            possibleStates = stack.pop_right()
             lastSym = None if len(current) == 0 else current.pop() # to succeed
 
-            for s in states:
-                t, states = nfa.minTransition(s, lastSym)
+            for s in possibleStates:
+                t, nxt = nfa.minTransition(s, lastSym)
                 if t is None:
                     continue
 
                 # find tmin from any in states
                 minWord = None
-                for st in states:
-                    word = self.minWord(length, start=st)
-                    if word is not None and (minWord is None or word < minWord):
+                for u in nxt:
+                    word = self.minWord(length, start=u)
+                    if word < minWord or minWord is None:
                         minWord = word
 
                 if minWord is not None:
@@ -363,30 +367,35 @@ class EnumInvariantNFA(object):
 
         return None
 
-    def enumCrossSection(self, n):
-        """Yield words of length n in L(aut)
-        :param int n: the length of the cross-section
-        :yields unicode: words in n-cross-section of L(aut)
+    def enumCrossSection(self, lo, hi=None):
+        """Yield words with length in [lo, hi] in L(aut)
+        :param int lo:
+        :param int|None hi: None if only enumerating the lo_th cross-section
+        :yields unicode: words in the cross-section(s) of L(aut)
         """
-        if n == 0:
-            if self.aut.ewp():
-                yield u""
+        if hi is None:
+            hi = lo
+
+        n = lo
+        while n <= hi:
+            current = self.minWord(n)
+            while current is not None:
+                yield current
+                current = self.nextWord(current)
+            n += 1
+
+    def enum(self, n):
+        """Enumerate the first n words accepted by L(aut) in radix order
+        :yields unicode: words in L(aut)
+        """
+        minlen = self.shortestWordLength()
+        maxlen = self.longestWordLength()
+        if minlen is None:
             return
 
-        current = self.minWord(n)
-        while current is not None:
-            yield current
-            current = self.nextWord(current)
-
-    def enum(self, lo=0, hi=float("inf")):
-        """Enumerate all words such that each yielded word w has length |w| in [lo, hi]
-        :param int lo: the smallest length of a desired yielded word
-        :param int hi: the highest length of a desired yielded word
-        :yields unicode: words in L(aut) where each word w has length in [lo, hi]
-        """
-        for l in range(lo, hi + 1):
-            for word in self.enumCrossSection(l):
-                yield word
+        crosssection = self.enumCrossSection(minlen, maxlen)
+        for _ in xrange(n):
+            yield next(crosssection)
 
     def randomWord(self, length):
         """Generates a random word in length's cross-section
@@ -412,11 +421,42 @@ class EnumInvariantNFA(object):
             current = list(succ)[randint(0, len(succ) - 1)]
         return word
 
+    def shortestWordLength(self, gte=0):
+        """Finds the shortest word length greater than or equal to gte
+        :returns int|None:
+        """
+        if gte in self.memo_shortest:
+            return self.memo_shortest[gte]
+
+        current = Deque(self.aut.Initial)
+        visited = set()
+        depth = 0
+        while not current.isEmpty():
+            next = Deque()
+            for s in current:
+                if depth >= gte and self.aut.finalP(s):
+                    self.memo_shortest[gte] = depth
+                    return depth
+                visited.add(s)
+
+                for child in self.aut.stateChildren(s):
+                    if child not in visited:
+                        next.insert_right(child)
+            current = next
+            depth += 1
+
+        self.memo_shortest[gte] = None
+        return None
+
     def longestWordLength(self):
         """Finds the length of the longest word accepted by L(aut)
         ..note: commonly inf
         """
+        if self.memo_longest != -1:
+            return self.memo_longest
+
         if not self.aut.acyclicP():
+            self.memo_longest = float("inf")
             return float("inf")
 
         depth = dict([(x, 0) for x in self.aut.Initial])
@@ -433,6 +473,7 @@ class EnumInvariantNFA(object):
         for s in self.aut.Final:
             maxDepth = max(maxDepth, depth.get(s, 0))
 
+        self.memo_longest = maxDepth
         return maxDepth
 
     def _sized(self, size):
