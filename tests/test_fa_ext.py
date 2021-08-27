@@ -3,43 +3,113 @@ import unittest
 
 from benchmark.convert import Converter
 from benchmark.fa_ext import InvariantNFA
-
-def radixOrder(a, b): # this fails for some unicode when len=2
-    if len(a) == len(b):
-        return -1 if a < b else 1
-    else:
-        return len(a) - len(b)
+from benchmark.util import radixOrder
 
 class TestInvariantNFA(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.convert = Converter()
 
+    def test_lengthNFA(self):
+        nfa = InvariantNFA.lengthNFA(3)
+        self.assertTrue(nfa.evalWordP("123"))
+        self.assertTrue(nfa.evalWordP("abc"))
+        self.assertFalse(nfa.evalWordP(""))
+        self.assertFalse(nfa.evalWordP("12"))
+        self.assertFalse(nfa.evalWordP("1234"))
+        self.assertFalse(nfa.evalWordP("123456"))
+
+        nfa = InvariantNFA.lengthNFA(3, 5)
+        self.assertTrue(nfa.evalWordP("123"))
+        self.assertTrue(nfa.evalWordP("abc"))
+        self.assertTrue(nfa.evalWordP("abcd"))
+        self.assertTrue(nfa.evalWordP("abcde"))
+        self.assertFalse(nfa.evalWordP(""))
+        self.assertFalse(nfa.evalWordP("12"))
+        self.assertFalse(nfa.evalWordP("1234567"))
+
     def test_nfaPD(self):
-        self.runner("nfaPD")
+        self.infa = lambda expr: self.convert.math(expr).toInvariantNFA("nfaPD")
+        self.runner()
 
     def test_nfaThompson(self):
-        self.runner("nfaThompson")
+        self.infa = lambda expr: self.convert.math(expr).toInvariantNFA("nfaThompson")
+        self.runner()
 
     def test_nfaGlushkov(self):
-        self.runner("nfaGlushkov")
+        self.infa = lambda expr: self.convert.math(expr).toInvariantNFA("nfaGlushkov")
+        self.runner()
 
     def test_nfaPDO(self):
-        self.runner("nfaPDO")
+        self.infa = lambda expr: self.convert.math(expr).toInvariantNFA("nfaPDO")
+        self.runner()
 
     def test_nfaFollow(self):
-        self.runner("nfaFollow")
+        self.infa = lambda expr: self.convert.math(expr).toInvariantNFA("nfaFollow")
+        self.runner()
 
     def test_nfaPosition(self):
-        self.runner("nfaPosition")
+        self.infa = lambda expr: self.convert.math(expr).toInvariantNFA("nfaPosition")
+        self.runner()
 
+    def runner(self):
+        self.run_acyclicP()
+        self.run_product()
+        self.run_witness()
+        self.run_ewp()
+        self.run_membership()
 
+    def run_acyclicP(self):
+        infa = self.infa(u"((0 (a + b)*) 0)")
+        self.assertFalse(infa.acyclicP())
 
-    def runner(self, method):
-        self.run_membership(method)
-        self.run_witness(method)
+        infa = self.infa(u"0")
+        self.assertTrue(infa.acyclicP())
 
-    def run_membership(self, method):
+        infa = self.infa(u"((0 + 1) a)")
+        self.assertTrue(infa.acyclicP())
+
+    def run_product(self):
+        infa = self.infa("(((0 [^0]) + 1)* @any)")
+        len4 = InvariantNFA.lengthNFA(4)
+        prod = infa.product(len4)
+
+        subset_L_prod = set(["111a", "0n1a", "10na"])
+        for w in subset_L_prod:
+            self.assertTrue(infa.evalWordP(w), w)
+            self.assertTrue(len4.evalWordP(w), w)
+            self.assertTrue(prod.evalWordP(w), w)
+
+        self.assertTrue(infa.evalWordP("a"))
+        self.assertFalse(len4.evalWordP("a"))
+        self.assertFalse(prod.evalWordP("a"))
+
+        self.assertFalse(infa.evalWordP("001a"))
+        self.assertTrue(len4.evalWordP("001a"))
+        self.assertFalse(prod.evalWordP("001a"))
+
+    def run_witness(self):
+        def _f(expr):
+            infa = self.infa(expr)
+            wit = infa.witness()
+            self.assertTrue(infa.evalWordP(wit))
+
+        _f(u"(a + b)*")
+        _f(u"[a-fbcdef]*")
+        _f(u"((z + a) + γ)")
+        _f(u"((a b) c)")
+        _f(u"(((a b) c))?")
+        _f(u"((α + a) (β + b))")
+
+    def run_ewp(self):
+        self.assertTrue(self.infa("a*").ewp())
+        self.assertTrue(self.infa("(a + b)*").ewp())
+        self.assertTrue(self.infa("(a + @epsilon)").ewp())
+        self.assertTrue(self.infa("(a)?").ewp())
+        self.assertFalse(self.infa("(a + b)").ewp())
+        self.assertFalse(self.infa(u"((a + β) c)").ewp())
+
+    def run_membership(self):
         tests = {
             u"((@any η) @any)":
                 ([u" η_", u"'η'", u"丂η七"],
@@ -56,8 +126,7 @@ class TestInvariantNFA(unittest.TestCase):
         }
 
         for expr in tests:
-            re = self.convert.math(expr)
-            infa = InvariantNFA(re.toNFA(method))
+            infa = self.infa(expr)
             yeses, noes = tests[expr]
 
             for word in yeses:
@@ -68,169 +137,118 @@ class TestInvariantNFA(unittest.TestCase):
                 self.assertFalse(infa.evalWordP(word), word.encode("utf-8") + " should NOT be in "
                     + expr.encode("utf-8"))
 
-    def run_witness(self, method):
-        def _f(expr):
-            re = self.convert.math(expr)
-            infa = InvariantNFA(re.toNFA(method))
-            wit = infa.witness()
-            self.assertTrue(infa.evalWordP(wit))
-            self.assertTrue(re.evalWordP(wit))
-            self.assertTrue(len(wit) > 0)
-
-        _f(u"(a + b)*")
-        _f(u"[a-fbcdef]*")
-        _f(u"((z + a) + γ)")
-        _f(u"((a b) c)")
-        _f(u"(((a b) c))?")
-
-    def run_acyclicP(self, method):
-        re = self.convert.math(u"((0 (a + b)*) 0)")
-        infa = re.toInvariantNFA(method)
-        self.assertFalse(infa.acyclicP())
-
-        re = self.convert.math(u"0")
-        infa = re.toInvariantNFA(method)
-        self.assertTrue(infa.acyclicP())
-
-        re = self.convert.math(u"((0 + 1) a)")
-        infa = re.toInvariantNFA(method)
-        self.assertTrue(infa.acyclicP())
-
 class TestEnumInvariantNFA(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.convert = Converter()
 
-        def get_infa(_, expr, method):
-            re = cls.convert.prog(expr, partialMatch=False)
-            nfa = re.toNFA(method)
-            return InvariantNFA(nfa)
-        cls.infa = get_infa
-
-        def verifyRadixOrder(self, lang, size):
-            self.assertEqual(len(lang), size)
+        def verifyRadix(self, lang):
             for i in range(1, len(lang)):
-                self.assertLess(radixOrder(lang[i-1], lang[i]), 0,
-                    "'{0}' should be < '{1}'".format(lang[i-1].encode("utf-8"), lang[i].encode("utf-8")))
-        cls.verifyRadixOrder = verifyRadixOrder
+                self.assertLess(radixOrder(lang[i-1], lang[i]), 0, "'{0}' should be < '{1}'".format(
+                    lang[i-1].encode("utf-8"), lang[i].encode("utf-8")))
+        cls.verifyRadix = verifyRadix
+
+        def construct(cls, expr, method, prog):
+            infa = None
+            if prog:
+                infa = cls.convert.prog(expr, partialMatch=False).toInvariantNFA(method)
+            else:
+                infa = cls.convert.math(expr).toInvariantNFA(method)
+
+            enum = infa.enumNFA()
+            return (infa, enum)
+        cls.construct = construct
 
     def test_nfaPD(self):
-        self.runner("nfaPD")
+        self.infaEnum = lambda expr, prog=False: self.construct(expr, "nfaPD", prog=prog)
+        self.runner()
 
     def test_nfaThompson(self):
-        self.runner("nfaThompson")
+        self.infaEnum = lambda expr, prog=False: self.construct(expr, "nfaThompson", prog=prog)
+        self.runner()
 
     def test_nfaGlushkov(self):
-        self.runner("nfaGlushkov")
+        self.infaEnum = lambda expr, prog=False: self.construct(expr, "nfaGlushkov", prog=prog)
+        self.runner()
 
     def test_nfaPDO(self):
-        self.runner("nfaPDO")
+        self.infaEnum = lambda expr, prog=False: self.construct(expr, "nfaPDO", prog=prog)
+        self.runner()
 
     def test_nfaFollow(self):
-        self.runner("nfaFollow")
+        self.infaEnum = lambda expr, prog=False: self.construct(expr, "nfaFollow", prog=prog)
+        self.runner()
 
     def test_nfaPosition(self):
-        self.runner("nfaPosition")
+        self.infaEnum = lambda expr, prog=False: self.construct(expr, "nfaPosition", prog=prog)
+        self.runner()
 
+    def runner(self):
+        self.run_minWord()
+        self.run_minWord_None()
+        self.run_nextWord()
+        self.run_enumCrossSection()
+        self.run_enum()
+        self.run_randomWord()
+        self.run_wordlen()
 
+    def run_minWord(self):
+        self.assertEqual(self.infaEnum("(a + b)*")[1].minWord(4), "aaaa")
+        self.assertEqual(self.infaEnum("[a-fbcdef]*")[1].minWord(1), "a")
+        self.assertEqual(self.infaEnum(u"((z + a) + γ)")[1].minWord(0), None)
+        self.assertEqual(self.infaEnum("((a b) c)")[1].minWord(4), None)
+        self.assertEqual(self.infaEnum("(((a b) c))?")[1].minWord(0), "")
 
-    def runner(self, method):
-        self.run_minWord(method)
-        self.run_simple(method)
-        self.run_unicode(method)
-        self.run_complex(method)
-        self.run_randomEnumerate(method)
-        self.run_longestWordLength(method)
+    def run_minWord_None(self):
+        self.assertEqual(self.infaEnum("(a + b)*")[1].minWord(None), "")
+        self.assertEqual(self.infaEnum("[a-fbcdef]*")[1].minWord(None), "")
+        self.assertEqual(self.infaEnum(u"((z + a) + γ)")[1].minWord(None), "a")
+        self.assertEqual(self.infaEnum("((a b) c)")[1].minWord(None), "abc")
+        self.assertEqual(self.infaEnum("(((a b) c))?")[1].minWord(None), "")
 
-    def run_minWord(self, method):
-        # NONE
-        def _f(expr, word):
-            wit = self.infa(expr, method).enumNFA().minWord(None)
-            self.assertEqual(wit, word)
+    def run_nextWord(self):
+        self.assertEqual(self.infaEnum("(a + b)*")[1].nextWord("aaaa"), "aaab")
+        self.assertEqual(self.infaEnum("(a + b)*")[1].nextWord("abbb"), "baaa")
+        self.assertEqual(self.infaEnum("[a-fbcdef]*")[1].nextWord("bcdef"), "bcdfa")
+        self.assertEqual(self.infaEnum("[^def]*")[1].nextWord("aac"), "aag")
+        self.assertEqual(self.infaEnum("((a b) c)")[1].nextWord("abc"), None)
 
-        _f(u"(a + b)*", u"a")
-        _f(u"[a-fbcdef]*", u"a")
-        _f(u"((z + a) + γ)", u"a")
-        _f(u"((a b) c)", u"abc")
-        _f(u"(((a b) c))?", u"abc")
+    def run_enumCrossSection(self):
+        infa, enum = self.infaEnum("(0 + 1)*")
+        for nth in range(5):
+            lang = list(enum.enumCrossSection(nth))
+            self.assertEqual(len(lang), 2**nth)
+            for w in lang:
+                self.assertTrue(infa.evalWordP(w))
+            self.verifyRadix(lang)
 
-    def run_simple(self, method):
-        enum = self.infa("(0|1)*", method).enumNFA()
-        self.assertTrue(enum.ewp())
-        self.assertEqual(enum.witness(), "0")
+        lang = list(enum.enumCrossSection(0, 5))
+        self.assertEqual(len(lang), sum(2**x for x in range(0, 6)))
+        self.verifyRadix(lang)
 
-        self.assertEqual(enum.minWord(50), "0"*50)
-        for i in range(10):
-            self.assertEqual(enum.minWord(i), "0"*i)
+    def run_enum(self):
+        _, enum = self.infaEnum(u"((a + α) (b + β))*")
+        lang = list(enum.enum(50))
+        self.assertEqual(len(lang), 50)
+        self.assertEqual(lang[0], "")
+        self.verifyRadix(lang)
 
-        self.assertEqual(enum.nextWord("00010"), "00011")
-        self.assertEqual(enum.nextWord("01101"), "01110")
-        self.assertEqual(enum.nextWord("0111111111111"), "1000000000000")
+    def run_randomWord(self):
+        infa, enum = self.infaEnum(u"((\\+ + -) (√ ([0-9] [0-9]*)))")
+        for length in range(0, 3):
+            self.assertIsNone(enum.randomWord(length))
+        for length in range(3, 25):
+            word = enum.randomWord(length)
+            self.assertTrue(infa.evalWordP(word))
+            self.assertEqual(len(word), length)
 
-        self.verifyRadixOrder([x for x in enum.enumCrossSection(5)], 2**5)
-        self.verifyRadixOrder([x for x in enum.enum(0, 4)], sum(2**x for x in range(0, 5)))
-
-    def run_unicode(self, method):
-        enum = self.infa(u"\\d{1,2}% => (α|β)+( !)?", method).enumNFA()
-        self.assertFalse(enum.ewp())
-        self.assertEqual(enum.witness(), u"0% => α")
-
-        self.assertEqual(enum.minWord(7), u"0% => α")
-        words = [u"0% => α", u"0% => β", u"1% => α", u"1% => β", u"2% => α", u"2% => β"]
-        for i in range(1, len(words)):
-            self.assertEqual(enum.nextWord(words[i-1]), words[i])
-
-        self.verifyRadixOrder([x for x in enum.enum(0, 8)], 216)
-
-    def run_complex(self, method):
-        enum = self.infa(u"(x[αβψδεφ0-9]{2,4} :: (ℌ|√|ṧṧ)?)*", method).enumNFA()
-        self.assertTrue(enum.ewp())
-        self.assertEqual(enum.witness(), "x00 :: ")
-
-        self.assertEqual(enum.minWord(7), u"x00 :: ")
-        self.assertEqual(enum.nextWord(u"x00 :: "), u"x01 :: ")
-
-        self.verifyRadixOrder([x for x in enum.enumCrossSection(7)], 225)
-
-    def run_randomEnumerate(self, method):
-        enum = self.infa(u"([a-z01]㪘(α|β|ψ))*", method).enumNFA()
-
-        self.assertEqual(enum.randomWord(0), u"")
-        for l in range(1, 3):
-            self.assertIsNone(enum.randomWord(l))
-
-        start_count = 0
-        end_count = 0
-        for _ in range(1000):
-            word = enum.randomWord(3)
-            if word[0] == u"0" or word[0] == u"1":
-                start_count += 1
-            if word[-1] == u"α":
-                end_count += 1
-
-        rate = start_count / 1000.0
-        self.assertLess(abs(rate - 2.0/28.0), 0.025, "Non-uniform random word generation "\
-            +"[charclass] - run again to be sure - " + str(rate))
-
-        rate = end_count / 1000.0
-        self.assertLess(abs(rate - 1.0/3.0), 0.05, "Non-uniform random word generation "\
-            +"DISJUNCTION - run again to be sure - " + str(rate))
-
-        for l in range(4, 25):
-            word = enum.randomWord(l)
-            if l % 3 == 0:
-                self.assertIsNotNone(word)
-            else:
-                self.assertIsNone(word)
-
-    def run_longestWordLength(self, method):
-        def expectLen(re, length):
-            self.assertEqual(self.infa(re, method).enumNFA().longestWordLength(), length)
-
-        expectLen(u"a*", float("inf"))
-        expectLen(u"abc.*123", float("inf"))
-        expectLen(u"(x{3}|x{6}|x{30})", 30)
-        expectLen(u"abc(00){5}", 3 + 2*5)
+    def run_wordlen(self):
+        _, enum = self.infaEnum("x{3}|y{10,15}|z{30}", prog=True)
+        self.assertEqual(enum.shortestWordLength(), 3)
+        self.assertEqual(enum.shortestWordLength(3), 3)
+        self.assertEqual(enum.shortestWordLength(4), 10)
+        self.assertEqual(enum.shortestWordLength(11), 11)
+        self.assertEqual(enum.longestWordLength(), 30)
 
 
 if __name__ == "__main__":
