@@ -375,7 +375,7 @@ class chars(uatom):
                     return None
             rnge = self.ranges[i]
             nxt = UniUtil.chr(UniUtil.ord(current) + 1)
-            if nxt < rnge[1]: # incrmement by one in this range
+            if nxt <= rnge[1]: # incrmement by one in this range
                 return nxt
             elif i + 1 < len(self.ranges): # go to next range
                 return self.ranges[i + 1][0]
