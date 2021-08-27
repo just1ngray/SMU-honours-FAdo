@@ -455,3 +455,9 @@ class Deque(object):
             self._tail[2] = None
 
         return item
+
+def radixOrder(a, b):
+    if len(a) == len(b):
+        return -1 if a < b else 1
+    else:
+        return len(a) - len(b)
