@@ -98,14 +98,14 @@ class TestInvariantNFA(unittest.TestCase):
         _f(u"[a-fbcdef]*")
         _f(u"((z + a) + γ)")
         _f(u"((a b) c)")
-        _f(u"(((a b) c))?")
+        _f(u"((a b) c)?")
         _f(u"((α + a) (β + b))")
 
     def run_ewp(self):
         self.assertTrue(self.infa("a*").ewp())
         self.assertTrue(self.infa("(a + b)*").ewp())
         self.assertTrue(self.infa("(a + @epsilon)").ewp())
-        self.assertTrue(self.infa("(a)?").ewp())
+        self.assertTrue(self.infa("a?").ewp())
         self.assertFalse(self.infa("(a + b)").ewp())
         self.assertFalse(self.infa(u"((a + β) c)").ewp())
 
@@ -117,7 +117,7 @@ class TestInvariantNFA(unittest.TestCase):
             u"(((｟ + (｟ ｠)) + ｠) @any*)":
                 ([u"｟｠", u"｟", u"｠", u"｠anything"],
                  [u"(", u"()", u"anything ｠"]),
-            u"((꧂ ((т + ๏) + 卄)) (☝ (꧁)?))":
+            u"((꧂ ((т + ๏) + 卄)) (☝ ꧁?))":
                 ([u"꧂т☝", u"꧂๏☝꧁"],
                  [u"т☝", u"꧂卄꧁", u"꧂꧂꧂๏☝꧁"]),
             u"(0 + 1)*":
@@ -197,14 +197,14 @@ class TestEnumInvariantNFA(unittest.TestCase):
         self.assertEqual(self.infaEnum("[a-fbcdef]*")[1].minWord(1), "a")
         self.assertEqual(self.infaEnum(u"((z + a) + γ)")[1].minWord(0), None)
         self.assertEqual(self.infaEnum("((a b) c)")[1].minWord(4), None)
-        self.assertEqual(self.infaEnum("(((a b) c))?")[1].minWord(0), "")
+        self.assertEqual(self.infaEnum("((a b) c)?")[1].minWord(0), "")
 
     def run_minWord_None(self):
         self.assertEqual(self.infaEnum("(a + b)*")[1].minWord(None), "")
         self.assertEqual(self.infaEnum("[a-fbcdef]*")[1].minWord(None), "")
         self.assertEqual(self.infaEnum(u"((z + a) + γ)")[1].minWord(None), "a")
         self.assertEqual(self.infaEnum("((a b) c)")[1].minWord(None), "abc")
-        self.assertEqual(self.infaEnum("(((a b) c))?")[1].minWord(None), "")
+        self.assertEqual(self.infaEnum("((a b) c)?")[1].minWord(None), "")
 
     def run_nextWord(self):
         self.assertEqual(self.infaEnum("(a + b)*")[1].nextWord("aaaa"), "aaab")

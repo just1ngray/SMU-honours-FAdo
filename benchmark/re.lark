@@ -11,8 +11,8 @@ expression  : symbol
             | disjunction
 
 // regex rules
-kleene      :     expression  "*"
-option      : "(" expression ")?"
+kleene      : expression "*"
+option      : expression "?"
 concat      : "(" expression  " "  expression ")"
 disjunction : "(" expression " + " expression ")"
 

@@ -164,7 +164,7 @@ class TestEvalWordP(unittest.TestCase):
         self.assertFalse(re.evalWordP(u"✗"))
 
     def test_option(self):
-        re = self.convert.math(u"(舵)?")
+        re = self.convert.math(u"舵?")
         self.assertTrue(re.evalWordP(""))
         self.assertTrue(re.evalWordP(u"舵"))
         self.assertFalse(re.evalWordP(u"舵舵"))
@@ -180,7 +180,7 @@ class TestPairGen(unittest.TestCase):
         self.assertSetEqual(re.pairGen(), set("0123"))
 
     def test_option_trivial(self):
-        re = self.convert.math("(a)?")
+        re = self.convert.math("a?")
         self.assertSetEqual(re.pairGen(), set(["", "a"]))
 
 

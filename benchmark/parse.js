@@ -149,7 +149,7 @@ function nodeToString(node, output, chars=null) {
                 case "+":
                     return `(${expression} ${expression}*)`
                 case "?":
-                    return `(${expression})?`
+                    return `${expression}?`
             }
             // kind = "Range"
             let { from, to } = node.quantifier

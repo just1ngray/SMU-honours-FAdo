@@ -169,6 +169,9 @@ class uoption(reex.option, uregexp):
         memo[id(self)] = cpy
         return cpy
 
+    def __str__(self):
+        return str(self.arg) + "?"
+
     def __repr__(self):
         return "u" + super(uoption, self).__repr__()
 
