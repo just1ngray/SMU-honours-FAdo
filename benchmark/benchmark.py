@@ -67,7 +67,7 @@ class BenchExpr(object):
                 SET time=?
                 WHERE url=? AND lineNum=? AND method=? AND time!=0;
             """, [min(times), self.url, self.lineNum, self.method])
-        except (lark.exceptions.UnexpectedToken, AnchorError, re.error, regex._regex_core.error):
+        except (lark.exceptions.UnexpectedToken, AnchorError):
             # disable the impact of the test for all methods if any method fails
             # better than deleting since it can be investigated later
             self.db.execute("""
@@ -76,48 +76,53 @@ class BenchExpr(object):
                 WHERE url=? AND lineNum=?;
             """, [self.url, self.lineNum])
         except Exception as e:
-            if type(e) is not SystemExit:
+            if type(e) is KeyboardInterrupt:
+                print "Bye!"
+                exit(0)
+            else:
                 print "\n\nERROR ON:\n", self
-            raise
+                raise
 
     def preprocess(self):
         """One-time cost of parsing, compiling, etc into an object which can
         evaluate membership"""
         raise NotImplementedError("preprocess must be implemented in the child")
 
-class derivativeBench(BenchExpr):
-    def preprocess(self):
-        return BenchExpr.CONVERTER.math(self.re_math, partialMatch=True)
+class MethodImplementation:
+    """Method-specific implementations of BenchExpr"""
+    class derivative(BenchExpr):
+        def preprocess(self):
+            return BenchExpr.CONVERTER.math(self.re_math, partialMatch=True)
 
-class nfaPDBench(BenchExpr):
-    def preprocess(self):
-        re = BenchExpr.CONVERTER.math(self.re_math, partialMatch=True)
-        return re.toInvariantNFA("nfaPD")
+    class nfaPD(BenchExpr):
+        def preprocess(self):
+            re = BenchExpr.CONVERTER.math(self.re_math, partialMatch=True)
+            return re.toInvariantNFA("nfaPD")
 
-class nfaPDOBench(BenchExpr):
-    def preprocess(self):
-        re = BenchExpr.CONVERTER.math(self.re_math, partialMatch=True)
-        return re.toInvariantNFA("nfaPDO")
+    class nfaPDO(BenchExpr):
+        def preprocess(self):
+            re = BenchExpr.CONVERTER.math(self.re_math, partialMatch=True)
+            return re.toInvariantNFA("nfaPDO")
 
-class nfaPositionBench(BenchExpr):
-    def preprocess(self):
-        re = BenchExpr.CONVERTER.math(self.re_math, partialMatch=True)
-        return re.toInvariantNFA("nfaPosition")
+    class nfaPosition(BenchExpr):
+        def preprocess(self):
+            re = BenchExpr.CONVERTER.math(self.re_math, partialMatch=True)
+            return re.toInvariantNFA("nfaPosition")
 
-class nfaFollowBench(BenchExpr):
-    def preprocess(self):
-        re = BenchExpr.CONVERTER.math(self.re_math, partialMatch=True)
-        return re.toInvariantNFA("nfaFollow")
+    class nfaFollow(BenchExpr):
+        def preprocess(self):
+            re = BenchExpr.CONVERTER.math(self.re_math, partialMatch=True)
+            return re.toInvariantNFA("nfaFollow")
 
-class nfaThompsonBench(BenchExpr):
-    def preprocess(self):
-        re = BenchExpr.CONVERTER.math(self.re_math, partialMatch=True)
-        return re.toInvariantNFA("nfaThompson")
+    class nfaThompson(BenchExpr):
+        def preprocess(self):
+            re = BenchExpr.CONVERTER.math(self.re_math, partialMatch=True)
+            return re.toInvariantNFA("nfaThompson")
 
-class nfaGlushkovBench(BenchExpr):
-    def preprocess(self):
-        re = BenchExpr.CONVERTER.math(self.re_math, partialMatch=True)
-        return re.toInvariantNFA("nfaGlushkov")
+    class nfaGlushkov(BenchExpr):
+        def preprocess(self):
+            re = BenchExpr.CONVERTER.math(self.re_math, partialMatch=True)
+            return re.toInvariantNFA("nfaGlushkov")
 
 
 class Benchmarker(object):
@@ -169,7 +174,7 @@ class Benchmarker(object):
         newCursor = self.db._connection.cursor() # o/w the main cursor may move
         newCursor.execute(query)
         for url, lineNum, method, re_math, re_prog in newCursor:
-            yield eval(method + "Bench")(self.db, url, lineNum, method, re_math, re_prog)
+            yield eval("MethodImplementation." + method)(self.db, url, lineNum, method, re_math, re_prog)
 
         newCursor.close()
 
