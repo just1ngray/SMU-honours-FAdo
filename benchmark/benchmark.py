@@ -1,6 +1,4 @@
 import timeit
-import re
-import regex
 import lark.exceptions
 
 from util import DBWrapper, ConsoleOverwrite
