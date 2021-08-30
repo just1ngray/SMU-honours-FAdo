@@ -115,8 +115,6 @@ class DBWrapper(object):
             INSERT OR IGNORE INTO methods (method) VALUES ('nfaThompson');
             INSERT OR IGNORE INTO methods (method) VALUES ('nfaGlushkov');
             INSERT OR IGNORE INTO methods (method) VALUES ('derivative');
-            INSERT OR IGNORE INTO methods (method) VALUES ('re');
-            INSERT OR IGNORE INTO methods (method) VALUES ('regex');
         """)
 
     def executescript(self, script):

@@ -89,18 +89,6 @@ class derivativeBench(BenchExpr):
     def preprocess(self):
         return BenchExpr.CONVERTER.math(self.re_math, partialMatch=True)
 
-class reBench(BenchExpr):
-    def preprocess(self):
-        return re.compile(self.re_prog)
-
-    @staticmethod
-    def evalWordP(obj, word):
-        return obj.search(word) is not None
-
-class regexBench(reBench):
-    def preprocess(self):
-        return regex.compile(self.re_prog)
-
 class nfaPDBench(BenchExpr):
     def preprocess(self):
         re = BenchExpr.CONVERTER.math(self.re_math, partialMatch=True)
