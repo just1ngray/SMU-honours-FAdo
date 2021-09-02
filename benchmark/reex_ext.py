@@ -270,10 +270,14 @@ class uatom(reex.atom, uregexp):
         return cpy
 
     def __str__(self):
+        printable = self.val.encode("utf-8")
+        if printable in set("()[]+*?"):
+            printable = "\\" + printable
+
         if hasattr(self, "pos"):
-            return "marked({0}, {1})".format(self.val.encode("utf-8"), self.pos)
+            return "marked({0}, {1})".format(printable, self.pos)
         else:
-            return self.val.encode("utf-8")
+            return printable
 
     _strP = __str__
 
