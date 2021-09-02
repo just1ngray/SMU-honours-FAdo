@@ -39,6 +39,9 @@ class uregexp(reex.regexp):
             Analyzing Catastrophic Backtracking Behavior in Practical Regular Expression Matching.
             Electronic Proceedings in Theoretical Computer Science. 151. 10.4204/EPTCS.151.7.
         """
+        if len(word) == 0:
+            return self.ewp()
+
         for res in self._backtrackMatch(word):
             if len(res) == 0:
                 return True
