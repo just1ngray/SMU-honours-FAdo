@@ -169,6 +169,35 @@ class TestEvalWordP(unittest.TestCase):
         self.assertTrue(re.evalWordP(u"舵"))
         self.assertFalse(re.evalWordP(u"舵舵"))
 
+    def test_concat_backtrack(self):
+        re = self.convert.prog(u"abcδεφ")
+        self.assertTrue(re.evalWordPBacktrack(u"abcδεφ"))
+        self.assertFalse(re.evalWordPBacktrack("abcdef"))
+        self.assertFalse(re.evalWordPBacktrack("000111"))
+
+    def test_disj_backtrack(self):
+        re = self.convert.prog(u"(❶|❷|❸|_)")
+        self.assertTrue(re.evalWordPBacktrack("_"))
+        self.assertTrue(re.evalWordPBacktrack(u"❶"))
+        self.assertTrue(re.evalWordPBacktrack(u"❷"))
+        self.assertTrue(re.evalWordPBacktrack(u"❸"))
+        self.assertFalse(re.evalWordPBacktrack(u"❹"))
+        self.assertFalse(re.evalWordPBacktrack(u"a"))
+
+    def test_star_backtrack(self):
+        re = self.convert.math(u"✓*")
+        self.assertTrue(re.evalWordPBacktrack(""))
+        self.assertTrue(re.evalWordPBacktrack(u"✓"))
+        self.assertTrue(re.evalWordPBacktrack(u"✓✓✓✓✓"))
+        self.assertFalse(re.evalWordPBacktrack(u"✓✓✕✓✓"))
+        self.assertFalse(re.evalWordPBacktrack(u"✗"))
+
+    def test_option_backtrack(self):
+        re = self.convert.math(u"舵?")
+        self.assertTrue(re.evalWordPBacktrack(""))
+        self.assertTrue(re.evalWordPBacktrack(u"舵"))
+        self.assertFalse(re.evalWordPBacktrack(u"舵舵"))
+
 class TestPairGen(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
