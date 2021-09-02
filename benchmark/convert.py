@@ -143,7 +143,7 @@ class ConversionError(Exception):
 
 class AnchorError(ConversionError):
     def __init__(self, re, expression):
-        super(AnchorError, self).__init__("Unexpected anchor position")
+        super(AnchorError, self).__init__("Unexpected anchor position in " + expression)
         self.re = re
         self.expression = expression
 
