@@ -74,7 +74,7 @@ class uregexp(reex.regexp):
         foo.write("digraph {\n"
             + 'label="{0}";\n'.format(str(self))
             + 'labelloc="t";\n'
-            + self._dotFormat(None)
+            + self._dotFormat()
             + "\n}\n")
         foo.close()
         callstr = "dot -Tpdf %s -o %s" % (fnameGV, filenameOut)
@@ -88,7 +88,7 @@ class uregexp(reex.regexp):
         else:
             os.system("open %s" % filenameOut)
 
-    def _dotFormat(self, parent):
+    def _dotFormat(self):
         """Returns a string representation of self in graphviz dot format"""
         raise NotImplementedError()
 
@@ -165,12 +165,11 @@ class uconcat(reex.concat, uregexp):
                 # print "yielding", p2
                 yield p2
 
-    def _dotFormat(self, parent):
-        res = str(id(self)) + '[label=".", shape=circle];\n'
-        if parent is not None:
-            res += str(id(parent)) + " -> " + str(id(self)) + ";\n"
-        res += self.arg1._dotFormat(self) + self.arg2._dotFormat(self)
-        return res
+    def _dotFormat(self):
+        return str(id(self)) + '[label=".", shape=circle];\n' \
+            + self.arg1._dotFormat() + self.arg2._dotFormat() \
+            + str(id(self)) + " -> " + str(id(self.arg1)) + ";\n" \
+            + str(id(self)) + " -> " + str(id(self.arg2)) + ";\n"
 
 class udisj(reex.disj, uregexp):
     def __init__(self, arg1, arg2):
@@ -194,12 +193,11 @@ class udisj(reex.disj, uregexp):
         for possibility in self.arg2._backtrackMatch(word):
             yield possibility
 
-    def _dotFormat(self, parent):
-        res = str(id(self)) + '[label="+", shape=circle];\n'
-        if parent is not None:
-            res += str(id(parent)) + " -> " + str(id(self)) + ";\n"
-        res += self.arg1._dotFormat(self) + self.arg2._dotFormat(self)
-        return res
+    def _dotFormat(self):
+        return str(id(self)) + '[label="+", shape=circle];\n' \
+            + self.arg1._dotFormat() + self.arg2._dotFormat() \
+            + str(id(self)) + " -> " + str(id(self.arg1)) + ";\n" \
+            + str(id(self)) + " -> " + str(id(self.arg2)) + ";\n"
 
 class ustar(reex.star, uregexp):
     def __init__(self, arg):
@@ -272,12 +270,10 @@ class ustar(reex.star, uregexp):
 
         yield word
 
-    def _dotFormat(self, parent):
-        res = str(id(self)) + '[label="*", shape=circle];\n'
-        if parent is not None:
-            res += str(id(parent)) + " -> " + str(id(self)) + ";\n"
-        res += self.arg._dotFormat(self)
-        return res
+    def _dotFormat(self):
+        return str(id(self)) + '[label="*", shape=circle];\n' \
+            + self.arg._dotFormat() \
+            + str(id(self)) + " -> " + str(id(self.arg)) + ";\n"
 
 class uoption(reex.option, uregexp):
     def __init__(self, arg):
@@ -291,9 +287,6 @@ class uoption(reex.option, uregexp):
     def __str__(self):
         return "{0}?".format(str(self.arg))
 
-    def __str__(self):
-        return str(self.arg) + "?"
-
     def __repr__(self):
         return "u" + super(uoption, self).__repr__()
 
@@ -306,12 +299,10 @@ class uoption(reex.option, uregexp):
         for possibility in self.arg._backtrackMatch(word):
             yield possibility
 
-    def _dotFormat(self, parent):
-        res = str(id(self)) + '[label="?", shape=circle];\n'
-        if parent is not None:
-            res += str(id(parent)) + " -> " + str(id(self)) + ";\n"
-        res += self.arg._dotFormat(self)
-        return res
+    def _dotFormat(self):
+        return str(id(self)) + '[label="?", shape=circle];\n' \
+            + self.arg._dotFormat() \
+            + str(id(self)) + " -> " + str(id(self.arg)) + ";\n"
 
 class uepsilon(reex.epsilon, uregexp):
     def __init__(self):
@@ -329,11 +320,8 @@ class uepsilon(reex.epsilon, uregexp):
         if len(word) > 0:
             yield word
 
-    def _dotFormat(self, parent):
-        res = str(id(self)) + '[label="' + str(self) + '", shape=none];\n'
-        if parent is not None:
-            res += str(id(parent)) + " -> " + str(id(self)) + ";\n"
-        return res
+    def _dotFormat(self):
+        return str(id(self)) + '[label="' + str(self) + '", shape=none];\n'
 
 class uemptyset(reex.epsilon, uregexp):
     def __init__(self):
@@ -458,11 +446,8 @@ class uatom(reex.atom, uregexp):
         if len(word) > 0 and word[0] == self.val:
             yield word[1:]
 
-    def _dotFormat(self, parent):
-        res = str(id(self)) + '[label="' + str(self) + '", shape=none, margin=0];\n'
-        if parent is not None:
-            res += str(id(parent)) + " -> " + str(id(self)) + ";\n"
-        return res
+    def _dotFormat(self):
+        return str(id(self)) + '[label="' + str(self) + '", shape=none];\n'
 
 class chars(uatom):
     """A character class which can match any single character or a range of characters contained within it
@@ -662,8 +647,5 @@ class anchor(uregexp):
     def __str__(self):
         return self.label
 
-    def _dotFormat(self, parent):
-        res = str(id(self)) + '[label="' + str(self) + '", shape=none];\n'
-        if parent is not None:
-            res += str(id(parent)) + " -> " + str(id(self)) + ";\n"
-        return res
+    def _dotFormat(self):
+        return str(id(self)) + '[label="' + str(self) + '", shape=none];\n'
