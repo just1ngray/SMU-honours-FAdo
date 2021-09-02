@@ -14,11 +14,6 @@ class BenchExpr(object):
     # number of times each benchmark is repeated... minimum taken time
     NUM_BENCHMARK_REPETITIONS = 3
 
-    @staticmethod
-    def evalWordP(obj, word):
-        """returns if the word is accepted by the given object"""
-        return obj.evalWordP(word)
-
     def __init__(self, db, url, lineNum, method, re_math, re_prog):
         super(BenchExpr, self).__init__()
         self.db = db
@@ -35,7 +30,12 @@ class BenchExpr(object):
 
     def genWords(self):
         """Populates the `accepted` and `rejected` attributes with words"""
-        yield self.CONVERTER.math(self.re_math, partialMatch=True).toInvariantNFA("nfaPD").witness()
+        self.accepted = set()
+        self.rejected = set()
+        infa = self.CONVERTER.math(self.re_math, partialMatch=True).toInvariantNFA("nfaPD")
+        # enum = infa.enumNFA()
+
+        self.accepted.add(infa.witness())
         # TODO MORE
 
     def setWords(self, accepted, rejected):
@@ -45,52 +45,48 @@ class BenchExpr(object):
 
     def benchmark(self):
         """Runs the benchmark and updates the `time` in the `tests` table"""
-        try:
-            def _timed():
-                processed = self.preprocess()
-                for word in self.accepted:
-                    assert self.evalWordP(processed, word) == True, \
-                        "{0} should accept {1}".format(self.re_prog, word)
+        def _timed():
+            processed = self.preprocess()
+            for word in self.accepted:
+                assert self.testMembership(processed, word) == True, \
+                    "{0}: {1} should accept {2}".format(self.method, processed, word)
 
-                for word in self.rejected:
-                    assert self.evalWordP(processed, word) == False, \
-                        "{0} should NOT accept {1}".format(self.re_prog, word)
+            for word in self.rejected:
+                assert self.testMembership(processed, word) == False, \
+                    "{0}: {1} should NOT accept {2}".format(self.method, processed, word)
 
-            times = set()
-            for _ in range(BenchExpr.NUM_BENCHMARK_REPETITIONS):
-                times.add(timeit.timeit(stmt=_timed, setup="gc.enable()", number=BenchExpr.NUM_WORD_SET_REPETITIONS))
+        times = set()
+        for _ in range(BenchExpr.NUM_BENCHMARK_REPETITIONS):
+            times.add(timeit.timeit(stmt=_timed, setup="gc.enable()",
+                number=BenchExpr.NUM_WORD_SET_REPETITIONS))
 
-            self.db.execute("""
-                UPDATE tests
-                SET time=?
-                WHERE url=? AND lineNum=? AND method=? AND time!=0;
-            """, [min(times), self.url, self.lineNum, self.method])
-        except (lark.exceptions.UnexpectedToken, AnchorError):
-            # disable the impact of the test for all methods if any method fails
-            # better than deleting since it can be investigated later
-            self.db.execute("""
-                UPDATE tests
-                SET time=0
-                WHERE url=? AND lineNum=?;
-            """, [self.url, self.lineNum])
-        except Exception as e:
-            if type(e) is KeyboardInterrupt:
-                print "Bye!"
-                exit(0)
-            else:
-                print "\n\nERROR ON:\n", self
-                raise
+        self.db.execute("""
+            UPDATE tests
+            SET time=?
+            WHERE url=? AND lineNum=? AND method=? AND time!=0;
+        """, [min(times), self.url, self.lineNum, self.method])
 
     def preprocess(self):
         """One-time cost of parsing, compiling, etc into an object which can
         evaluate membership"""
         raise NotImplementedError("preprocess must be implemented in the child")
 
+    def testMembership(self, obj, word):
+        """returns if the word is accepted by the given object"""
+        return obj.evalWordP(word)
+
 class MethodImplementation:
     """Method-specific implementations of BenchExpr"""
     class derivative(BenchExpr):
         def preprocess(self):
             return BenchExpr.CONVERTER.math(self.re_math, partialMatch=True)
+
+    class backtrack(BenchExpr):
+        def preprocess(self):
+            return BenchExpr.CONVERTER.math(self.re_math, partialMatch=True)
+
+        def testMembership(self, obj, word):
+            return obj.evalWordPBacktrack(word)
 
     class nfaPD(BenchExpr):
         def preprocess(self):
@@ -270,15 +266,27 @@ if __name__ == "__main__":
     lastExpr = BenchExpr("", "", "", "", "", "")
     done = 0
     for r in benchmarker:
-        # take advantage of Benchmarker iteration being ordered by re_math and re-generate words sparingly
-        if r.re_math == lastExpr.re_math:
-            r.setWords(lastExpr.accepted, lastExpr.rejected)
-        else:
-            r.genWords()
-            lastExpr = r
+        try:
+            # take advantage of Benchmarker iteration being ordered by re_math and re-generate words sparingly
+            if r.re_math == lastExpr.re_math:
+                r.setWords(lastExpr.accepted, lastExpr.rejected)
+            else:
+                r.genWords()
+                lastExpr = r
 
-        output.overwrite("{0}/{1}:".format(done, todo), r)
-        r.benchmark()
+            output.overwrite("{0}/{1}:".format(done, todo), r)
+            r.benchmark()
+        except (lark.exceptions.UnexpectedToken, AnchorError):
+            # disable the impact of the test for all methods if any method fails
+            # better than deleting since it can be investigated later
+            benchmarker.db.execute("""
+                UPDATE tests
+                SET time=0
+                WHERE url=? AND lineNum=?;
+            """, [r.url, r.lineNum])
+        except KeyboardInterrupt:
+            print "\n\nBye!"
+            exit(0)
 
         done += 1
 
