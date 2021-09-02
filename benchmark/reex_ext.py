@@ -273,6 +273,8 @@ class uatom(reex.atom, uregexp):
         printable = self.val.encode("utf-8")
         if printable in set("()[]+*?"):
             printable = "\\" + printable
+        elif printable in set("\r\n\t"):
+            printable = printable.encode("string-escape")
 
         if hasattr(self, "pos"):
             return "marked({0}, {1})".format(printable, self.pos)

@@ -175,9 +175,9 @@ class TestConverter(unittest.TestCase):
             ("(\\+ + \\*)", "\\+ + \\*"),
             ("\\??",        "\\??"),
 
-            ("\\r", "\r"),
-            ("\\n", "\n"),
-            ("\\t", "\t"),
+            ("\\r", "\\r"),
+            ("\\n", "\\n"),
+            ("\\t", "\\t"),
         ]
         self.runtest(self.convert.math, exprs)
 
