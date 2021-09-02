@@ -25,6 +25,31 @@ class uregexp(reex.regexp):
         nfa = self.toNFA(method)
         return fa_ext.InvariantNFA(nfa)
 
+    def evalWordPBacktrack(self, word):
+        """Using an algorithm similar to native programming language implementations to
+        solve the membership problem. Allows for extended functionality such as backreferences,
+        but leads to exponential worst-case time complexity.
+
+        i.e., The evil expression `(a + a)*` will take a long time for words of the form "a"*i + "b"
+        for sufficiently large i (typically > 25). However, standard derivative approach using
+        evalWordP will be fast.
+
+        Inspired from:
+            Berglund, Martin & Drewes, Frank & Van Der Merwe, Brink. (2014).
+            Analyzing Catastrophic Backtracking Behavior in Practical Regular Expression Matching.
+            Electronic Proceedings in Theoretical Computer Science. 151. 10.4204/EPTCS.151.7.
+        """
+        for res in self._backtrackMatch(word):
+            if len(res) == 0:
+                return True
+        return False
+
+    def _backtrackMatch(self, word):
+        """Called by evalWordPBacktrack using Algorithm 1 as described in the cited paper.
+        Used recursively to determine a boolean value.
+        """
+        raise NotImplementedError()
+
 class uconcat(reex.concat, uregexp):
     def __init__(self, arg1, arg2):
         super(uconcat, self).__init__(arg1, arg2, sigma=None)
@@ -87,6 +112,14 @@ class uconcat(reex.concat, uregexp):
                 words.add(prefix + suffix)
         return words
 
+    def _backtrackMatch(self, word):
+        # print repr(self), word
+        for p1 in self.arg1._backtrackMatch(word):
+            # print "p1 as", p1
+            for p2 in self.arg2._backtrackMatch(p1):
+                # print "yielding", p2
+                yield p2
+
 class udisj(reex.disj, uregexp):
     def __init__(self, arg1, arg2):
         super(udisj, self).__init__(arg1, arg2, sigma=None)
@@ -98,6 +131,13 @@ class udisj(reex.disj, uregexp):
 
     def pairGen(self):
         return self.arg1.pairGen().union(self.arg2.pairGen())
+
+    def _backtrackMatch(self, word):
+        for possibility in self.arg1._backtrackMatch(word):
+            yield possibility
+
+        for possibility in self.arg2._backtrackMatch(word):
+            yield possibility
 
 class ustar(reex.star, uregexp):
     def __init__(self, arg):
@@ -160,6 +200,13 @@ class ustar(reex.star, uregexp):
 
         return set([u""]).union(covered)
 
+    def _backtrackMatch(self, word):
+        for remaining in self.arg._backtrackMatch(word):
+            for item in self._backtrackMatch(remaining):
+                yield item
+
+        yield word
+
 class uoption(reex.option, uregexp):
     def __init__(self, arg):
         super(uoption, self).__init__(arg, sigma=None)
@@ -178,6 +225,12 @@ class uoption(reex.option, uregexp):
     def pairGen(self):
         return set([u""]).union(self.arg.pairGen())
 
+    def _backtrackMatch(self, word):
+        yield word # skip optional vertex
+
+        for possibility in self.arg._backtrackMatch(word):
+            yield possibility
+
 class uepsilon(reex.epsilon, uregexp):
     def __init__(self):
         super(uepsilon, self).__init__(sigma=None)
@@ -189,6 +242,10 @@ class uepsilon(reex.epsilon, uregexp):
 
     def pairGen(self):
         return set([u""])
+
+    def _backtrackMatch(self, word):
+        if len(word) > 0:
+            yield word
 
 class uemptyset(reex.epsilon, uregexp):
     def __init__(self):
@@ -304,6 +361,10 @@ class uatom(reex.atom, uregexp):
 
     def pairGen(self):
         return set([self.next()])
+
+    def _backtrackMatch(self, word):
+        if len(word) > 0 and word[0] == self.val:
+            yield word[1:]
 
 class chars(uatom):
     """A character class which can match any single character or a range of characters contained within it
@@ -444,6 +505,10 @@ class chars(uatom):
         s, e = randrange.get()
         return UniUtil.chr(randint(s, e))
 
+    def _backtrackMatch(self, word):
+        if len(word) > 0 and (word[0] in self and not self.neg):
+            yield word[1:]
+
 class dotany(uatom):
     """Class that represents the wildcard symbol that accepts everything."""
     def __init__(self):
@@ -482,6 +547,10 @@ class dotany(uatom):
 
     def random(self):
         return UniUtil.chr(randint(32, 2**16 - 1))
+
+    def _backtrackMatch(self, word):
+        if len(word) > 0:
+            yield word[1:]
 
 class anchor(uregexp):
     """A class used temporarily in the conversion from programmer's string format
