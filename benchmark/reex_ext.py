@@ -101,6 +101,9 @@ class uconcat(reex.concat, uregexp):
         memo[id(self)] = cpy
         return cpy
 
+    def __str__(self):
+        return "({0} {1})".format(str(self.arg1), str(self.arg2))
+
     def linearForm(self):
         arg1_lf = self.arg1.linearForm()
         lf = {}
@@ -178,6 +181,9 @@ class udisj(reex.disj, uregexp):
         memo[id(self)] = cpy
         return cpy
 
+    def __str__(self):
+        return "({0} + {1})".format(str(self.arg1), str(self.arg2))
+
     def pairGen(self):
         return self.arg1.pairGen().union(self.arg2.pairGen())
 
@@ -203,6 +209,9 @@ class ustar(reex.star, uregexp):
         cpy = ustar(copy.deepcopy(self.arg))
         memo[id(self)] = cpy
         return cpy
+
+    def __str__(self):
+        return "{0}*".format(str(self.arg))
 
     def linearForm(self):
         arg_lf = self.arg.linearForm()
@@ -278,6 +287,9 @@ class uoption(reex.option, uregexp):
         cpy = uoption(copy.deepcopy(self.arg))
         memo[id(self)] = cpy
         return cpy
+
+    def __str__(self):
+        return "{0}?".format(str(self.arg))
 
     def __str__(self):
         return str(self.arg) + "?"
@@ -356,8 +368,6 @@ class uatom(reex.atom, uregexp):
             return "marked({0}, {1})".format(printable, self.pos)
         else:
             return printable
-
-    _strP = __str__
 
     def __repr__(self):
         return 'uatom(u"{0}")'.format(str(self))
@@ -651,8 +661,6 @@ class anchor(uregexp):
 
     def __str__(self):
         return self.label
-
-    _strP = __str__
 
     def _dotFormat(self, parent):
         res = str(id(self)) + '[label="' + str(self) + '", shape=none];\n'

@@ -41,8 +41,8 @@ class TestConverter(unittest.TestCase):
             ("@epsilon", "@epsilon"),
             ("@any", "@any"),
             ("a*", "a*"),
-            ("(a + b)", "a + b"),
-            ("(a b)", "a b"),
+            ("(a + b)", "(a + b)"),
+            ("(a b)", "(a b)"),
             ("a?", "a?"),
             ("<ASTART>", "@epsilon"),
             ("<AEND>", "@epsilon"),
@@ -55,18 +55,18 @@ class TestConverter(unittest.TestCase):
     def test_programmers_simple_str(self):
         self.runtest(self.convert.prog, [
             ("a", "a"),
-            ("a+", "a a*"),
-            ("a{3}", "(a a) a"),
-            ("a{3,}", "((a a) a) a*"),
-            ("a{3,9}", "((a a) a) ((((@epsilon + a) (@epsilon + (a a))) (@epsilon + a)) (@epsilon + (a a)))"),
-            ("a{,9}", "((((@epsilon + a) (@epsilon + (a a))) (@epsilon + (((a a) a) a))) (@epsilon + a)) (@epsilon + a)"),
+            ("a+", "(a a*)"),
+            ("a{3}", "((a a) a)"),
+            ("a{3,}", "(((a a) a) a*)"),
+            ("a{3,9}", "(((a a) a) ((((@epsilon + a) (@epsilon + (a a))) (@epsilon + a)) (@epsilon + (a a))))"),
+            ("a{,9}", "(((((@epsilon + a) (@epsilon + (a a))) (@epsilon + (((a a) a) a))) (@epsilon + a)) (@epsilon + a))"),
             ("a*", "a*"),
-            ("a|b", "a + b"),
-            ("ab", "a b"),
+            ("a|b", "(a + b)"),
+            ("ab", "(a b)"),
             ("a?", "a?"),
-            ("^a", "@epsilon a"),
-            ("a$", "a @epsilon"),
-            ("..", "@any @any"),
+            ("^a", "(@epsilon a)"),
+            ("a$", "(a @epsilon)"),
+            ("..", "(@any @any)"),
             ("[abc]", "[abc]"),
             ("[0-9]", "[0-9]"),
             ("[ab0-9c]", "[ab0-9c]"),
@@ -80,8 +80,8 @@ class TestConverter(unittest.TestCase):
             (u"@epsilon", u"@epsilon"),
             (u"@any", u"@any"),
             (u"썐*", u"썐*"),
-            (u"(ë + Ĥ)", u"ë + Ĥ"),
-            (u"(ǿ Ȍ)", u"ǿ Ȍ"),
+            (u"(ë + Ĥ)", u"(ë + Ĥ)"),
+            (u"(ǿ Ȍ)", u"(ǿ Ȍ)"),
             (u"Ͽ?", u"Ͽ?"),
             (u"[𐌸b♫]", u"[𐌸b♫]"),
             (u"[▢-▩]", u"[▢-▩]"),
@@ -92,11 +92,11 @@ class TestConverter(unittest.TestCase):
     def test_programmers_simple_unicode(self):
         self.runtest(self.convert.prog, [
             (u"α", u"α"),
-            (u'"α"', u'(" α) "'),
+            (u'"α"', u'((" α) ")'),
             (u"∀", u"∀"),
             (u".", u"@any"),
-            (u"ë|Ĥ", u"ë + Ĥ"),
-            (u"ǿȌ", u"ǿ Ȍ"),
+            (u"ë|Ĥ", u"(ë + Ĥ)"),
+            (u"ǿȌ", u"(ǿ Ȍ)"),
             (u"Ͽ?", u"Ͽ?"),
             (u".", u"@any"),
             (u"[𐌸b♫]", u"[𐌸b♫]"),
@@ -104,7 +104,7 @@ class TestConverter(unittest.TestCase):
             (u"[a⚡0-9c]", u"[a⚡0-9c]"),
             (u"[^α➸ƒ0✏9Ѧ➸ℱ]", u"[^α➸ƒ0✏9Ѧ➸ℱ]"),
             (u"[^α➸ƒ0✏9Ѧ-ℱ]", u"[^α➸ƒ0✏9Ѧ-ℱ]"),
-            (u"€ᾔ¢◎øℓ   тℯ|ϰт", u"((((((((((€ ᾔ) ¢) ◎) ø) ℓ)  )  )  ) т) ℯ) + (ϰ т)"),
+            (u"€ᾔ¢◎øℓ   тℯ|ϰт", u"(((((((((((€ ᾔ) ¢) ◎) ø) ℓ)  )  )  ) т) ℯ) + (ϰ т))"),
         ])
 
     def test_prog_errs(self):
@@ -141,23 +141,23 @@ class TestConverter(unittest.TestCase):
             ("<AEND>",                  "@epsilon"),
             ("a",                       "a"),
             ("@any",                    "@any"),
-            ("(<ASTART> a*)",           "@epsilon a*"),
-            ("((<ASTART> a*) <AEND>)",  "(@epsilon a*) @epsilon"),
-            ("(a* (0 + 1))",            "a* (0 + 1)"),
-            ("((a* (0 + 1)) <AEND>)",   "(a* (0 + 1)) @epsilon"),
+            ("(<ASTART> a*)",           "(@epsilon a*)"),
+            ("((<ASTART> a*) <AEND>)",  "((@epsilon a*) @epsilon)"),
+            ("(a* (0 + 1))",            "(a* (0 + 1))"),
+            ("((a* (0 + 1)) <AEND>)",   "((a* (0 + 1)) @epsilon)"),
         ]
         self.runtest(self.convert.math, exprs, partialMatch=False)
 
     def test_anchor_yesPartialMatch(self):
         exprs = [
-            ("<ASTART>",                "@epsilon @any*"),
-            ("<AEND>",                  "@any* @epsilon"),
-            ("a",                       "(@any* a) @any*"),
-            ("@any",                    "(@any* @any) @any*"),
-            ("(<ASTART> a*)",           "@epsilon (a* @any*)"),
-            ("((<ASTART> a*) <AEND>)",  "(@epsilon a*) @epsilon"),
-            ("(a* (0 + 1))",            "(@any* a*) ((0 @any*) + (1 @any*))"),
-            ("((a* (0 + 1)) <AEND>)",   "((@any* a*) (0 + 1)) @epsilon"),
+            ("<ASTART>",                "(@epsilon @any*)"),
+            ("<AEND>",                  "(@any* @epsilon)"),
+            ("a",                       "((@any* a) @any*)"),
+            ("@any",                    "((@any* @any) @any*)"),
+            ("(<ASTART> a*)",           "(@epsilon (a* @any*))"),
+            ("((<ASTART> a*) <AEND>)",  "((@epsilon a*) @epsilon)"),
+            ("(a* (0 + 1))",            "((@any* a*) ((0 @any*) + (1 @any*)))"),
+            ("((a* (0 + 1)) <AEND>)",   "(((@any* a*) (0 + 1)) @epsilon)"),
         ]
         self.runtest(self.convert.math, exprs, partialMatch=True)
 
@@ -171,8 +171,8 @@ class TestConverter(unittest.TestCase):
             ("\\?", "\\?"),
             ("\\+", "\\+"),
 
-            ("(\\( \\))",   "\\( \\)"),
-            ("(\\+ + \\*)", "\\+ + \\*"),
+            ("(\\( \\))",   "(\\( \\))"),
+            ("(\\+ + \\*)", "(\\+ + \\*)"),
             ("\\??",        "\\??"),
 
             ("\\r", "\\r"),
