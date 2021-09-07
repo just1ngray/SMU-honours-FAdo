@@ -49,7 +49,7 @@ class uregexp(reex.regexp):
 
     def _backtrackMatch(self, word):
         """Called by evalWordPBacktrack using Algorithm 1 as described in the cited paper.
-        Used recursively to determine a boolean value.
+        Yields possible sub-words with matched prefixes removed from param word
         """
         raise NotImplementedError()
 
@@ -451,7 +451,6 @@ class chars(uatom):
     i.e., [abc] will match a, b, or c - and nothing else.
           [0-9] will match any symbol between 0 to 9 (inclusive)
           [^13579] will match anything of length 1 except odd digits
-    ..note: Internally, characters are converted into their ordinal value to simplify merging intervals
     """
 
     def __init__(self, symbols, neg=False):
@@ -586,8 +585,15 @@ class chars(uatom):
         return UniUtil.chr(randint(s, e))
 
     def _backtrackMatch(self, word):
-        if len(word) > 0 and (word[0] in self and not self.neg):
-            yield word[1:]
+        if len(word) == 0:
+            return
+
+        if self.neg:
+            if word[0] not in self:
+                yield word[1:]
+        else:
+            if word[0] in self:
+                yield word[1:]
 
 class dotany(uatom):
     """Class that represents the wildcard symbol that accepts everything."""
