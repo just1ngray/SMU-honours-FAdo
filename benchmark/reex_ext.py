@@ -314,8 +314,7 @@ class uepsilon(reex.epsilon, uregexp):
         return set([u""])
 
     def _backtrackMatch(self, word):
-        if len(word) > 0:
-            yield word
+        yield word
 
     def _dotFormat(self):
         return str(id(self)) + '[label="' + str(self) + '", shape=none];\n'
