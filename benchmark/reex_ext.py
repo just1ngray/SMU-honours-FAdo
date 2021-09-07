@@ -325,7 +325,7 @@ class uepsilon(reex.epsilon, uregexp):
     def _dotFormat(self):
         return str(id(self)) + '[label="' + str(self) + '", shape=none];\n'
 
-class uemptyset(reex.epsilon, uregexp):
+class uemptyset(reex.emptyset, uregexp):
     def __init__(self):
         super(uemptyset, self).__init__(sigma=None)
 
@@ -363,10 +363,10 @@ class uatom(reex.atom, uregexp):
         return 'uatom(u"{0}")'.format(str(self))
 
     def derivative(self, sigma):
-        return reex.epsilon() if sigma in self else reex.emptyset()
+        return uepsilon() if sigma in self else uemptyset()
 
     def linearForm(self):
-        return {self: {reex.epsilon()}}
+        return {self: {uepsilon()}}
 
     def __contains__(self, other):
         """Returns if the character other is listed (or included) in self"""
@@ -391,9 +391,9 @@ class uatom(reex.atom, uregexp):
         """Find the intersection of another regexp leaf instance object.
         :param other: can be an atom, epsilon, dotany, or chars
         :returns: the intersection between self and other
-        :rtype: Union(reex.regexp, NoneType)
+        :rtype: Union(uregexp, NoneType)
         """
-        return self if other.derivative(self.val) == reex.epsilon() else None
+        return self if other.derivative(self.val) == uepsilon() else None
 
     def random(self):
         """Retrieves a random symbol accepted by self
@@ -510,9 +510,9 @@ class chars(uatom):
 
     def derivative(self, sigma):
         if self.neg:
-            return reex.emptyset() if sigma in self else reex.epsilon()
+            return uemptyset() if sigma in self else uepsilon()
         else:
-            return reex.epsilon() if sigma in self else reex.emptyset()
+            return uepsilon() if sigma in self else uemptyset()
 
     def next(self, current=None):
         if not self.neg:
@@ -549,7 +549,7 @@ class chars(uatom):
         if type(other) is dotany:
             return self
         elif type(other) is uatom:
-            if type(self.derivative(other.val)) is reex.epsilon:
+            if type(self.derivative(other.val)) is uepsilon:
                 return other
             else:
                 return None
@@ -623,7 +623,7 @@ class dotany(uatom):
         return hash(self.__str__())
 
     def derivative(self, _):
-        return reex.epsilon()
+        return uepsilon()
 
     def __contains__(self, symbol):
         return len(symbol) == 1
@@ -635,7 +635,7 @@ class dotany(uatom):
             return UniUtil.chr(UniUtil.ord(current) + 1)
 
     def intersect(self, other):
-        return None if type(other) is reex.epsilon else other
+        return None if type(other) is uepsilon else other
 
     def random(self):
         return UniUtil.chr(randint(32, 2**16 - 1))

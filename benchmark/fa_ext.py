@@ -61,7 +61,7 @@ class InvariantNFA(fa.NFA):
                 if t == "@epsilon":
                     continue
 
-                if type(t.derivative(sym)) == reex.epsilon:
+                if type(t.derivative(sym)) == reex_ext.uepsilon:
                     res.update(qs)
 
         epres = set()

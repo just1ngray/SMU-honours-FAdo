@@ -1,9 +1,8 @@
 # coding: utf-8
 import unittest
-from FAdo import reex
 
 import benchmark.util as util
-from benchmark.reex_ext import uatom, chars, dotany
+from benchmark.reex_ext import *
 from benchmark.convert import Converter
 
 
@@ -26,9 +25,9 @@ class TestUAtom(unittest.TestCase):
             str(atom)
 
             # derivative
-            self.assertEqual(atom.derivative(a), reex.epsilon())
-            self.assertEqual(atom.derivative(util.UniUtil.chr(aord + 1)), reex.emptyset())
-            self.assertEqual(atom.derivative(util.UniUtil.chr(aord - 1)), reex.emptyset())
+            self.assertEqual(atom.derivative(a), uepsilon())
+            self.assertEqual(atom.derivative(util.UniUtil.chr(aord + 1)), uemptyset())
+            self.assertEqual(atom.derivative(util.UniUtil.chr(aord - 1)), uemptyset())
 
             # __contains__
             self.assertTrue(a in atom)
@@ -41,7 +40,7 @@ class TestUAtom(unittest.TestCase):
             self.assertEqual(atom.next(util.UniUtil.chr(2**16 - 1)), None)
 
             # intersect
-            self.assertIsNone(atom.intersect(reex.epsilon()), None)
+            self.assertIsNone(atom.intersect(uepsilon()), None)
             self.assertEqual(atom.intersect(dotany()), atom)
             self.assertEqual(atom.intersect(chars(u"a", neg=True)), atom)
 
@@ -60,27 +59,27 @@ class TestChars(unittest.TestCase):
 
     def test_derivative(self):
         for sigma in self.unicode_source:
-            self.assertEqual(self.posUnicode.derivative(sigma), reex.epsilon())
-            self.assertEqual(self.negUnicode.derivative(sigma), reex.emptyset())
+            self.assertEqual(self.posUnicode.derivative(sigma), uepsilon())
+            self.assertEqual(self.negUnicode.derivative(sigma), uemptyset())
 
-        self.assertEqual(self.posUnicode.derivative("a"), reex.emptyset())
-        self.assertEqual(self.negUnicode.derivative("a"), reex.epsilon())
+        self.assertEqual(self.posUnicode.derivative("a"), uemptyset())
+        self.assertEqual(self.negUnicode.derivative("a"), uepsilon())
 
-        self.assertEqual(self.posHex.derivative("0"), reex.epsilon())
-        self.assertEqual(self.posHex.derivative("5"), reex.epsilon())
-        self.assertEqual(self.posHex.derivative("9"), reex.epsilon())
-        self.assertEqual(self.posHex.derivative("b"), reex.epsilon())
-        self.assertEqual(self.posHex.derivative("f"), reex.epsilon())
-        self.assertEqual(self.posHex.derivative("F"), reex.emptyset())
-        self.assertEqual(self.posHex.derivative("."), reex.emptyset())
+        self.assertEqual(self.posHex.derivative("0"), uepsilon())
+        self.assertEqual(self.posHex.derivative("5"), uepsilon())
+        self.assertEqual(self.posHex.derivative("9"), uepsilon())
+        self.assertEqual(self.posHex.derivative("b"), uepsilon())
+        self.assertEqual(self.posHex.derivative("f"), uepsilon())
+        self.assertEqual(self.posHex.derivative("F"), uemptyset())
+        self.assertEqual(self.posHex.derivative("."), uemptyset())
 
-        self.assertEqual(self.negHex.derivative("0"), reex.emptyset())
-        self.assertEqual(self.negHex.derivative("5"), reex.emptyset())
-        self.assertEqual(self.negHex.derivative("9"), reex.emptyset())
-        self.assertEqual(self.negHex.derivative("b"), reex.emptyset())
-        self.assertEqual(self.negHex.derivative("f"), reex.emptyset())
-        self.assertEqual(self.negHex.derivative("F"), reex.epsilon())
-        self.assertEqual(self.negHex.derivative("."), reex.epsilon())
+        self.assertEqual(self.negHex.derivative("0"), uemptyset())
+        self.assertEqual(self.negHex.derivative("5"), uemptyset())
+        self.assertEqual(self.negHex.derivative("9"), uemptyset())
+        self.assertEqual(self.negHex.derivative("b"), uemptyset())
+        self.assertEqual(self.negHex.derivative("f"), uemptyset())
+        self.assertEqual(self.negHex.derivative("F"), uepsilon())
+        self.assertEqual(self.negHex.derivative("."), uepsilon())
 
     def test_next(self):
         self.assertEqual(self.posUnicode.next(), " ")
@@ -118,9 +117,9 @@ class TestChars(unittest.TestCase):
 
 class TestDotAny(unittest.TestCase):
     def test_derivative(self):
-        self.assertEqual(dotany().derivative(u"a"), reex.epsilon())
-        self.assertEqual(dotany().derivative(u"α"), reex.epsilon())
-        self.assertEqual(dotany().derivative(u"🔥"), reex.epsilon())
+        self.assertEqual(dotany().derivative(u"a"), uepsilon())
+        self.assertEqual(dotany().derivative(u"α"), uepsilon())
+        self.assertEqual(dotany().derivative(u"🔥"), uepsilon())
 
     def test_next(self):
         arr = [3904, 14987, 24086, 3836, 2205, 3446, 13563, 2749, 1210, 1435, 65]
@@ -130,7 +129,7 @@ class TestDotAny(unittest.TestCase):
         self.assertEqual(dotany().next(), " ")
 
     def test_intersect(self):
-        self.assertEqual(dotany().intersect(reex.epsilon()), None)
+        self.assertEqual(dotany().intersect(uepsilon()), None)
         self.assertEqual(dotany().intersect(dotany()), dotany())
         self.assertEqual(dotany().intersect(uatom(u"a")), uatom(u"a"))
         self.assertEqual(dotany().intersect(chars(u"a")), chars(u"a"))
