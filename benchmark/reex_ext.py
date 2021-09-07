@@ -444,7 +444,8 @@ class uatom(reex.atom, uregexp):
             yield word[1:]
 
     def _dotFormat(self):
-        return str(id(self)) + '[label="' + str(self) + '", shape=none];\n'
+        val = str(self) if self.val != " " else "SPACE"
+        return str(id(self)) + '[label="' + val + '", shape=none];\n'
 
 class chars(uatom):
     """A character class which can match any single character or a range of characters contained within it
