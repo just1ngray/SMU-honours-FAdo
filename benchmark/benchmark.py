@@ -14,19 +14,16 @@ class BenchExpr(object):
     # number of times each benchmark is repeated... minimum taken time
     NUM_BENCHMARK_REPETITIONS = 3
 
-    def __init__(self, db, url, lineNum, method, re_math, re_prog):
+    def __init__(self, db, re_math, method):
         super(BenchExpr, self).__init__()
         self.db = db
-        self.url = url
-        self.lineNum = lineNum
         self.method = method
         self.re_math = re_math
-        self.re_prog = re_prog
         self.accepted = set()
         self.rejected = set()
 
     def __str__(self):
-        return "{0}: {1} / {2}".format(self.method, self.re_prog, self.re_math).encode("string-escape")
+        return "{0}: {1}".format(self.method, self.re_math).encode("string-escape")
 
     def genWords(self):
         """Populates the `accepted` and `rejected` attributes with words"""
@@ -63,8 +60,8 @@ class BenchExpr(object):
         self.db.execute("""
             UPDATE tests
             SET time=?
-            WHERE url=? AND lineNum=? AND method=? AND time!=0;
-        """, [min(times), self.url, self.lineNum, self.method])
+            WHERE re_math=? AND method=? AND time!=0;
+        """, [min(times), self.re_math, self.method])
 
     def preprocess(self):
         """One-time cost of parsing, compiling, etc into an object which can
@@ -136,7 +133,7 @@ class Benchmarker(object):
                 DROP TABLE IF EXISTS tests;
 
                 CREATE TABLE tests AS
-                    SELECT e.url, e.lineNum, m.method, -1 as time
+                    SELECT e.re_math, m.method, -1 as time
                     FROM methods as m, (
                         SELECT *
                         FROM (
@@ -157,18 +154,12 @@ class Benchmarker(object):
 
     def __iter__(self):
         """Yields BenchExpr objects orderde by the distinct expression"""
-        query = """
-            SELECT t.url, t.lineNum, t.method, e.re_math, e.re_prog
-            FROM tests as t, expressions as e
-            WHERE t.time=-1
-                AND t.url=e.url
-                AND t.lineNum=e.lineNum
-        """
-
         newCursor = self.db._connection.cursor() # o/w the main cursor may move
-        newCursor.execute(query)
-        for url, lineNum, method, re_math, re_prog in newCursor:
-            yield eval("MethodImplementation." + method)(self.db, url, lineNum, method, re_math, re_prog)
+        newCursor.execute("""SELECT re_math, method
+                             FROM tests
+                             WHERE time=-1;""")
+        for re_math, method in newCursor:
+            yield eval("MethodImplementation." + method)(self.db, re_math, method)
 
         newCursor.close()
 
@@ -210,7 +201,7 @@ class Benchmarker(object):
         all = self.db.selectall("""
             SELECT method, sum(time)
             FROM tests
-            WHERE time!=-1
+            WHERE time>0
             GROUP BY method
             ORDER BY sum(time) ASC;
         """)
@@ -263,7 +254,7 @@ if __name__ == "__main__":
         print "Unknown option"
         exit(1)
 
-    lastExpr = BenchExpr("", "", "", "", "", "")
+    lastExpr = BenchExpr(None, None, None)
     done = 0
     for r in benchmarker:
         try:
@@ -282,8 +273,8 @@ if __name__ == "__main__":
             benchmarker.db.execute("""
                 UPDATE tests
                 SET time=0
-                WHERE url=? AND lineNum=?;
-            """, [r.url, r.lineNum])
+                WHERE re_math=?;
+            """, [r.re_math])
         except KeyboardInterrupt:
             print "\n\nBye!"
             exit(0)
