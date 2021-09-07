@@ -1,3 +1,4 @@
+from __future__ import print_function
 from FAdo import reex, fa, common
 import copy
 from random import randint
@@ -21,9 +22,14 @@ class uregexp(reex.regexp):
         raise NotImplementedError()
 
     def toInvariantNFA(self, method):
-        """Convert self into an InvariantNFA using a construction method"""
-        nfa = self.toNFA(method)
-        return fa_ext.InvariantNFA(nfa)
+        """Convert self into an InvariantNFA using a construction method
+        methods include: nfaPD, nfaPDO, nfaPosition, nfaFollow, nfaGlushkov
+        """
+        try:
+            nfa = self.toNFA(method)
+            return fa_ext.InvariantNFA(nfa)
+        except AttributeError:
+            raise common.FAdoError("Cannot convert to InvariantNFA using unknown method " + str(method))
 
     def evalWordPBacktrack(self, word):
         """Using an algorithm similar to native programming language implementations to
@@ -80,7 +86,7 @@ class uregexp(reex.regexp):
         callstr = "dot -Tpdf %s -o %s" % (fnameGV, filenameOut)
         result = subprocess.call(callstr, shell=True)
         if result:
-            print "Need graphviz to visualize objects"
+            print("Need graphviz to visualize objects")
             return
 
         if os.name == 'nt':
