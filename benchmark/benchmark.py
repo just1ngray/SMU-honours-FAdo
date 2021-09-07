@@ -47,11 +47,11 @@ class BenchExpr(object):
             processed = self.preprocess()
             for word in self.accepted:
                 assert self.testMembership(processed, word) == True, \
-                    "{0}: {1} should accept {2}".format(self.method, processed, word)
+                    str(self) + " should accept '{0}'".format(word)
 
             for word in self.rejected:
                 assert self.testMembership(processed, word) == False, \
-                    "{0}: {1} should NOT accept {2}".format(self.method, processed, word)
+                    str(self) + " should NOT accept '{0}'".format(word)
 
         times = set()
         for _ in range(BenchExpr.NUM_BENCHMARK_REPETITIONS):
