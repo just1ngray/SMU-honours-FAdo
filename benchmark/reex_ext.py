@@ -158,11 +158,8 @@ class uconcat(reex.concat, uregexp):
         return words
 
     def _backtrackMatch(self, word):
-        # print repr(self), word
         for p1 in self.arg1._backtrackMatch(word):
-            # print "p1 as", p1
             for p2 in self.arg2._backtrackMatch(p1):
-                # print "yielding", p2
                 yield p2
 
     def _dotFormat(self):

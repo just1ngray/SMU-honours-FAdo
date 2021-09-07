@@ -298,7 +298,7 @@ if __name__ == "__main__":
     for sampler in samplers:
         obj = sampler()
 
-        print "\n\nSampling: ", sampler.__name__
+        print("\n\nSampling: ", sampler.__name__)
 
         obj.grep_search(SAMPLE_SIZE)
         obj.reprocess_lines()
@@ -307,4 +307,4 @@ if __name__ == "__main__":
             obj.process_code(code, url)
         obj.output.overwrite("Done!")
 
-    print "\n"*3, "Done - Sampled All"
+    print("\n"*3, "Done - Sampled All")

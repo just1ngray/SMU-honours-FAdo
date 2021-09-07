@@ -103,7 +103,7 @@ class Converter(object):
             re.expression = expression
             return re
         except LarkError as e:
-            print expression, "was formatted as", formatted
+            print(expression, "was formatted as", formatted)
             raise e
 
 class LarkToFAdo(Transformer):

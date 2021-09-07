@@ -185,14 +185,14 @@ class Benchmarker(object):
                 ORDER BY rn ASC, ntotal DESC
             );
         """)
-        print "\n\nSAMPLING STATISTICS:\n"
-        print "language           ntotal  ndistinct"
-        print "------------------------------------"
+        print("\n\nSAMPLING STATISTICS:\n")
+        print("language           ntotal  ndistinct")
+        print("------------------------------------")
         for row in all:
-            print row[0].ljust(16), str(row[1]).rjust(8), str(row[2]).rjust(8)
+            print(row[0].ljust(16), str(row[1]).rjust(8), str(row[2]).rjust(8))
 
         if all[-1][2] == 0: # 0 distinct
-            print "\nNo regular expressions sampled - run `make sample` first"
+            print("\nNo regular expressions sampled - run `make sample` first")
             exit(0)
 
     def printBenchmarkStats(self):
@@ -205,11 +205,11 @@ class Benchmarker(object):
             GROUP BY method
             ORDER BY sum(time) ASC;
         """)
-        print "\n\nBENCHMARKED STATISTICS:\n"
-        print "method           sum(min_time)"
-        print "------------------------------"
+        print("\n\nBENCHMARKED STATISTICS:\n")
+        print("method           sum(min_time)")
+        print("------------------------------")
         for row in all:
-            print row[0].ljust(16), str(row[1])
+            print(row[0].ljust(16), str(row[1]))
 
         done = self.db.selectall("SELECT count(*) FROM tests WHERE time!=-1 AND time!=0;")[0][0]
         todo = self.db.selectall("SELECT count(*) FROM tests WHERE time==-1 AND time!=0;")[0][0]
@@ -222,36 +222,36 @@ if __name__ == "__main__":
     benchmarker = Benchmarker()
 
     completed, todo = benchmarker.printBenchmarkStats()
-    print "\nCompleted: " + str(completed)
-    print "Todo:      " + str(todo)
+    print("\nCompleted: " + str(completed))
+    print("Todo:      " + str(todo))
 
-    print "\n========================================"
-    print "1. Continue with {0} more tests".format(todo)
-    print "2. Backup all results; {0}/{1} completed".format(completed, todo + completed)
-    print "3. Reset without backing up"
-    print "4. Exit\n"
+    print("\n========================================")
+    print("1. Continue with {0} more tests".format(todo))
+    print("2. Backup all results; {0}/{1} completed".format(completed, todo + completed))
+    print("3. Reset without backing up")
+    print("4. Exit\n")
     option = None
     while option not in list("1234"):
         option = raw_input("Choose option: ")
-    print "\n"
+    print("\n")
 
     if option == "1":
-        print "Running tests..."
+        print("Running tests...")
     elif option == "2":
         from datetime import datetime
         newname = ("tests_" + str(datetime.now())).replace(" ", "_")
         benchmarker.db.execute("ALTER TABLE tests RENAME TO ?;", [newname])
-        print "Table saved as", newname
+        print("Table saved as", newname)
         exit(0)
     elif option == "3":
         benchmarker = Benchmarker(True)
-        print "Reset test set"
+        print("Reset test set")
         exit(0)
     elif option == "4":
-        print "Bye!"
+        print("Bye!")
         exit(0)
     else:
-        print "Unknown option"
+        print("Unknown option")
         exit(1)
 
     lastExpr = BenchExpr(None, None, None)
@@ -276,7 +276,7 @@ if __name__ == "__main__":
                 WHERE re_math=?;
             """, [r.re_math])
         except KeyboardInterrupt:
-            print "\n\nBye!"
+            print("\n\nBye!")
             exit(0)
 
         done += 1
