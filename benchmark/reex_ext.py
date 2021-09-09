@@ -65,16 +65,20 @@ class uregexp(reex.regexp):
         import tempfile
         import os
         import subprocess
+        from IPython.display import SVG, display
+        from FAdo.common import run_from_ipython_notebook
+
+        ext = ".svg" if run_from_ipython_notebook() else ".pdf"
 
         if fileName is not None:
             fnameGV = fileName + ".gv"
-            filenameOut = fileName + ".pdf"
+            filenameOut = fileName + ext
         else:
             f = tempfile.NamedTemporaryFile(suffix=".gv")
             f.close()
             fnameGV = f.name
             fname, _ = os.path.splitext(fnameGV)
-            filenameOut = fname + ".pdf"
+            filenameOut = fname + ext
 
         foo = open(fnameGV, "w")
         foo.write("digraph {\n"
@@ -83,13 +87,20 @@ class uregexp(reex.regexp):
             + self._dotFormat()
             + "\n}\n")
         foo.close()
-        callstr = "dot -Tpdf %s -o %s" % (fnameGV, filenameOut)
+
+        if run_from_ipython_notebook():
+            callstr = "dot -Tsvg %s -o %s" % (fnameGV, filenameOut)
+        else:
+            callstr = "dot -Tpdf %s -o %s" % (fnameGV, filenameOut)
+
         result = subprocess.call(callstr, shell=True)
         if result:
             print("Need graphviz to visualize objects")
             return
 
-        if os.name == 'nt':
+        if run_from_ipython_notebook():
+            display(SVG(filename=filenameOut))
+        elif os.name == 'nt':
             os.system("start %s" % filenameOut)
         else:
             os.system("open %s" % filenameOut)
