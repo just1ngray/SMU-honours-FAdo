@@ -269,6 +269,10 @@ class EnumInvariantNFA(object):
         self.memo_longest = -1
         self.memo_shortest = dict()
 
+    def __iter__(self):
+        for word in self.enum(float("inf")):
+            yield word
+
     def ewp(self):
         """:returns bool: if L(aut) includes the empty word"""
         return self.aut.ewp()
@@ -394,8 +398,10 @@ class EnumInvariantNFA(object):
             return
 
         crosssection = self.enumCrossSection(minlen, maxlen)
-        for _ in xrange(n):
+        nyielded = 0
+        while nyielded < n:
             yield next(crosssection)
+            nyielded += 1
 
     def randomWord(self, length):
         """Generates a random word in length's cross-section
