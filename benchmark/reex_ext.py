@@ -23,7 +23,7 @@ class uregexp(reex.regexp):
 
     def toInvariantNFA(self, method):
         """Convert self into an InvariantNFA using a construction method
-        methods include: nfaPD, nfaPDO, nfaPosition, nfaFollow, nfaGlushkov
+        methods include: nfaPD, nfaPDO, nfaPosition, nfaFollow, nfaGlushkov, nfaThompson
         """
         try:
             nfa = self.toNFA(method)
