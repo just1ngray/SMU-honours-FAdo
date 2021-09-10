@@ -134,17 +134,9 @@ class Benchmarker(object):
                 DROP TABLE IF EXISTS tests;
 
                 CREATE TABLE tests AS
-                    SELECT e.re_math, m.method, -1 as time
-                    FROM methods as m, (
-                        SELECT *
-                        FROM (
-                            SELECT *, ROW_NUMBER() OVER(PARTITION BY re_math ORDER BY lineNum ASC, url ASC) rn
-                            FROM expressions
-                            WHERE re_math NOT LIKE '%Error%'
-                        )
-                        WHERE rn=1
-                        ORDER BY re_math ASC
-                    ) as e
+                    SELECT DISTINCT e.re_math, m.method, -1 as time
+                    FROM methods as m, expressions as e
+                    WHERE e.re_math NOT LIKE '%Error%'
                     ORDER BY re_math ASC, method ASC;
 
                 CREATE INDEX tests_by_method
@@ -271,11 +263,14 @@ if __name__ == "__main__":
         except (lark.exceptions.UnexpectedToken, AnchorError):
             # disable the impact of the test for all methods if any method fails
             # better than deleting since it can be investigated later
-            benchmarker.db.execute("""
-                UPDATE tests
-                SET time=0
-                WHERE re_math=?;
-            """, [r.re_math])
+            print("\n\n", r)
+            raise
+
+            # benchmarker.db.execute("""
+            #     UPDATE tests
+            #     SET time=0
+            #     WHERE re_math=?;
+            # """, [r.re_math])
         except KeyboardInterrupt:
             print("\n\nBye!")
             exit(0)
