@@ -174,7 +174,7 @@ def FAdoize(expression):
     expression = regex.sub(r"\{,[0-9]+\}", lambda x: repl(x.group()), expression)
 
     # remove redundant (and invalid) escapes
-    valids = set("sSwWdDtnrfvuU\\^$.()[]+*{}bB0123456789")
+    valids = set("sSwWdDtnrfvuU\\^$.()[]+*|{}bB0123456789")
     i = 0
     while True:
         try:
