@@ -44,8 +44,8 @@ class TestConverter(unittest.TestCase):
             ("(a + b)", "(a + b)"),
             ("(a b)", "(a b)"),
             ("a?", "a?"),
-            ("<ASTART>", "@epsilon"),
-            ("<AEND>", "@epsilon"),
+            ("<ASTART>", "<ASTART>"),
+            ("<AEND>", "<AEND>"),
             ("[abc]", "[abc]"),
             ("[0-9]", "[0-9]"),
             ("[ab0-9c]", "[ab0-9c]"),
@@ -64,8 +64,8 @@ class TestConverter(unittest.TestCase):
             ("a|b", "(a + b)"),
             ("ab", "(a b)"),
             ("a?", "a?"),
-            ("^a", "(@epsilon a)"),
-            ("a$", "(a @epsilon)"),
+            ("^a", "(<ASTART> a)"),
+            ("a$", "(a <AEND>)"),
             ("..", "(@any @any)"),
             ("[abc]", "[abc]"),
             ("[0-9]", "[0-9]"),
@@ -137,27 +137,27 @@ class TestConverter(unittest.TestCase):
 
     def test_anchor_noPartialMatch(self):
         exprs = [
-            ("<ASTART>",                "@epsilon"),
-            ("<AEND>",                  "@epsilon"),
+            ("<ASTART>",                "<ASTART>"),
+            ("<AEND>",                  "<AEND>"),
             ("a",                       "a"),
             ("@any",                    "@any"),
-            ("(<ASTART> a*)",           "(@epsilon a*)"),
-            ("((<ASTART> a*) <AEND>)",  "((@epsilon a*) @epsilon)"),
+            ("(<ASTART> a*)",           "(<ASTART> a*)"),
+            ("((<ASTART> a*) <AEND>)",  "((<ASTART> a*) <AEND>)"),
             ("(a* (0 + 1))",            "(a* (0 + 1))"),
-            ("((a* (0 + 1)) <AEND>)",   "((a* (0 + 1)) @epsilon)"),
+            ("((a* (0 + 1)) <AEND>)",   "((a* (0 + 1)) <AEND>)"),
         ]
         self.runtest(self.convert.math, exprs, partialMatch=False)
 
     def test_anchor_yesPartialMatch(self):
         exprs = [
-            ("<ASTART>",                "(@epsilon @any*)"),
-            ("<AEND>",                  "(@any* @epsilon)"),
+            ("<ASTART>",                "(<ASTART> @any*)"),
+            ("<AEND>",                  "(@any* <AEND>)"),
             ("a",                       "((@any* a) @any*)"),
             ("@any",                    "((@any* @any) @any*)"),
-            ("(<ASTART> a*)",           "(@epsilon (a* @any*))"),
-            ("((<ASTART> a*) <AEND>)",  "((@epsilon a*) @epsilon)"),
+            ("(<ASTART> a*)",           "(<ASTART> (a* @any*))"),
+            ("((<ASTART> a*) <AEND>)",  "((<ASTART> a*) <AEND>)"),
             ("(a* (0 + 1))",            "((@any* a*) ((0 @any*) + (1 @any*)))"),
-            ("((a* (0 + 1)) <AEND>)",   "(((@any* a*) (0 + 1)) @epsilon)"),
+            ("((a* (0 + 1)) <AEND>)",   "(((@any* a*) (0 + 1)) <AEND>)"),
         ]
         self.runtest(self.convert.math, exprs, partialMatch=True)
 

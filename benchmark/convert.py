@@ -33,55 +33,10 @@ class Converter(object):
         expression = expression.replace("\n", "\\n")
 
         re = self._parser.parse(expression) # type: uregexp
-
-        class DummyClass():
-            def __init__(self, arg):
-                self.arg = arg
-        d = DummyClass(re)
-
-        stack = [(d, "arg", True, True)]
-        while len(stack) > 0:
-            parent, attr, anchorAllowedLeft, anchorAllowedRight = stack.pop()
-            current = getattr(parent, attr)
-            expand = False
-
-            # non-terminals
-            if type(current) is uconcat:
-                stack.append((current, "arg2", False, anchorAllowedRight))
-                stack.append((current, "arg1", anchorAllowedLeft, False))
-            elif type(current) is udisj:
-                stack.append((current, "arg2", anchorAllowedLeft, anchorAllowedRight))
-                stack.append((current, "arg1", anchorAllowedLeft, anchorAllowedRight))
-            elif type(current) is ustar \
-              or type(current) is uoption:
-                stack.append((current, "arg", False, False))
-                expand = True
-
-            # terminals
-            elif type(current) is anchor:
-                if ((attr[-1] == "2" and anchorAllowedRight and current.label == "<AEND>")
-                    or (attr[-1] == "1" and anchorAllowedLeft and current.label == "<ASTART>")
-                    or (attr == "arg" and (anchorAllowedLeft or anchorAllowedRight))):
-
-                    setattr(parent, attr, uepsilon())
-                    stack.append((parent, attr, current.label == "<AEND>" and anchorAllowedLeft,
-                            current.label == "<ASTART>" and anchorAllowedRight))
-                else:
-                    raise AnchorError(re, expression)
-            elif isinstance(current, uatom) \
-              or type(current) is uepsilon:
-                expand = True
-            else:
-                raise ConversionError("Unknown item in tree: " + str(type(current)))
-
-            if partialMatch and expand:
-                if anchorAllowedLeft:
-                    setattr(parent, attr, uconcat(ustar(dotany()), getattr(parent, attr)))
-                if anchorAllowedRight:
-                    setattr(parent, attr, uconcat(getattr(parent, attr), ustar(dotany())))
-
-        d.arg.expression = expression
-        return d.arg
+        if partialMatch:
+            return re.partialMatch()
+        else:
+            return re
 
     def prog(self, expression, partialMatch=True):
         r"""Convert a regular expression used in programming into a FAdo regexp tree.
@@ -143,10 +98,13 @@ class ConversionError(Exception):
         super(ConversionError, self).__init__(msg)
 
 class AnchorError(ConversionError):
-    def __init__(self, re, expression):
-        super(AnchorError, self).__init__("Unexpected anchor position in " + expression)
-        self.re = re
-        self.expression = expression
+    def __init__(self, label, msg):
+        super(AnchorError, self).__init__(msg)
+        self.label = label
+        self.msg = msg
+
+    def __str__(self):
+        return "AnchorError '{0}': {1}".format(self.label, self.msg)
 
 class FAdoizeError(ConversionError):
     def __init__(self, expression, node_callback):

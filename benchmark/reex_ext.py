@@ -4,6 +4,7 @@ import copy
 from random import randint
 
 from util import RangeList, UniUtil, WeightedRandomItem
+import convert
 import fa_ext
 
 class uregexp(reex.regexp):
@@ -109,6 +110,46 @@ class uregexp(reex.regexp):
         """Returns a string representation of self in graphviz dot format"""
         raise NotImplementedError()
 
+    def partialMatch(self, force=False):
+        """Returns a copy of self which accepts partially matched words.
+        I.e., if L(self) = {w : w is accepted by self}
+              then L(self.partialMatch()) = {pws : forall weW ^ p,s as any text length>=0}
+        :raises convert.AnchorError: if an anchor is found to be misplaced
+        """
+        re = self._pmBoth()
+        def _noRecall(self):
+            if force:
+                return self._forcePartialMatch()
+            raise Exception("You should not call partialMatch on an object where " \
+                + "this has already been called! This was likely a mistake. Use force=True " \
+                + "parameter to override and run partialMatch algorithm again.")
+        re._forcePartialMatch = re.partialMatch
+        re.partialMatch = _noRecall
+        return re
+
+    def _pmBoth(self):
+        """The beginning can be the word start, and after can be the word end"""
+        raise NotImplementedError()
+
+    def _pmStart(self):
+        """The beginning can be the word start, and after can NOT be the word end"""
+        raise NotImplementedError()
+
+    def _pmEnd(self):
+        """The beginning can NOT be the word start, and after can be the word end"""
+        raise NotImplementedError()
+
+    def _pmNeither(self):
+        """The beginning can NOT be the word start, and after can NOT be the word end"""
+        raise NotImplementedError()
+
+    def _containsAnchor(self):
+        try:
+            str(self).index("<A") # START> or END>... no need to be specific
+            return True
+        except ValueError:
+            return False
+
 class uconcat(reex.concat, uregexp):
     def __init__(self, arg1, arg2):
         super(uconcat, self).__init__(arg1, arg2, sigma=None)
@@ -185,6 +226,18 @@ class uconcat(reex.concat, uregexp):
             + str(id(self)) + " -> " + str(id(self.arg1)) + ";\n" \
             + str(id(self)) + " -> " + str(id(self.arg2)) + ";\n"
 
+    def _pmBoth(self):
+        return uconcat(self.arg1._pmStart(), self.arg2._pmEnd())
+
+    def _pmStart(self):
+        return uconcat(self.arg1._pmStart(), self.arg2._pmNeither())
+
+    def _pmEnd(self):
+        return uconcat(self.arg1._pmNeither(), self.arg2._pmEnd())
+
+    def _pmNeither(self):
+        return uconcat(self.arg1._pmNeither(), self.arg2._pmNeither())
+
 class udisj(reex.disj, uregexp):
     def __init__(self, arg1, arg2):
         super(udisj, self).__init__(arg1, arg2, sigma=None)
@@ -212,6 +265,18 @@ class udisj(reex.disj, uregexp):
             + self.arg1._dotFormat() + self.arg2._dotFormat() \
             + str(id(self)) + " -> " + str(id(self.arg1)) + ";\n" \
             + str(id(self)) + " -> " + str(id(self.arg2)) + ";\n"
+
+    def _pmBoth(self):
+        return udisj(self.arg1._pmBoth(), self.arg2._pmBoth())
+
+    def _pmStart(self):
+        return udisj(self.arg1._pmStart(), self.arg2._pmStart())
+
+    def _pmEnd(self):
+        return udisj(self.arg1._pmEnd(), self.arg2._pmEnd())
+
+    def _pmNeither(self):
+        return udisj(self.arg1._pmNeither(), self.arg2._pmNeither())
 
 class ustar(reex.star, uregexp):
     def __init__(self, arg):
@@ -289,6 +354,27 @@ class ustar(reex.star, uregexp):
             + self.arg._dotFormat() \
             + str(id(self)) + " -> " + str(id(self.arg)) + ";\n"
 
+    def _pmBoth(self):
+        if self._containsAnchor():
+            return udisj(self.arg._pmBoth(), uepsilon())
+        else:
+            return uconcat(uconcat(ustar(dotany()), ustar(self.arg._pmNeither())), ustar(dotany()))
+
+    def _pmStart(self):
+        if self._containsAnchor():
+            return udisj(self.arg._pmStart(), uepsilon())
+        else:
+            return uconcat(ustar(dotany()), ustar(self.arg._pmNeither()))
+
+    def _pmEnd(self):
+        if self._containsAnchor():
+            return udisj(self.arg._pmEnd(), uepsilon())
+        else:
+            return uconcat(ustar(self.arg._pmNeither()), ustar(dotany()))
+
+    def _pmNeither(self):
+        return ustar(self.arg._pmNeither())
+
 class uoption(reex.option, uregexp):
     def __init__(self, arg):
         super(uoption, self).__init__(arg, sigma=None)
@@ -318,6 +404,18 @@ class uoption(reex.option, uregexp):
             + self.arg._dotFormat() \
             + str(id(self)) + " -> " + str(id(self.arg)) + ";\n"
 
+    def _pmBoth(self):
+        return udisj(self.arg._pmBoth(), uepsilon())
+
+    def _pmStart(self):
+        return udisj(self.arg._pmStart(), uepsilon())
+
+    def _pmEnd(self):
+        return udisj(self.arg._pmEnd(), uepsilon())
+
+    def _pmNeither(self):
+        return udisj(self.arg._pmNeither(), uepsilon())
+
 class uepsilon(reex.epsilon, uregexp):
     def __init__(self):
         super(uepsilon, self).__init__(sigma=None)
@@ -335,6 +433,21 @@ class uepsilon(reex.epsilon, uregexp):
 
     def _dotFormat(self):
         return str(id(self)) + '[label="' + str(self) + '", shape=none];\n'
+
+    def _pmBoth(self):
+        # @any* e @any*
+        return uconcat(uconcat(ustar(dotany()), copy.deepcopy(self)), ustar(dotany()))
+
+    def _pmStart(self):
+        # @any* e
+        return uconcat(ustar(dotany()), copy.deepcopy(self))
+
+    def _pmEnd(self):
+        # e @any*
+        return uconcat(copy.deepcopy(self), ustar(dotany()))
+
+    def _pmNeither(self):
+        return copy.deepcopy(self)
 
 class uemptyset(reex.emptyset, uregexp):
     def __init__(self):
@@ -462,6 +575,18 @@ class uatom(reex.atom, uregexp):
     def _dotFormat(self):
         val = str(self) if self.val != " " else "SPACE"
         return str(id(self)) + '[label="' + val + '", shape=none];\n'
+
+    def _pmBoth(self):
+        return uconcat(uconcat(ustar(dotany()), copy.deepcopy(self)), ustar(dotany()))
+
+    def _pmStart(self):
+        return uconcat(ustar(dotany()), copy.deepcopy(self))
+
+    def _pmEnd(self):
+        return uconcat(copy.deepcopy(self), ustar(dotany()))
+
+    def _pmNeither(self):
+        return copy.deepcopy(self)
 
 class chars(uatom):
     """A character class which can match any single character or a range of characters contained within it
@@ -655,17 +780,42 @@ class dotany(uatom):
         if len(word) > 0:
             yield word[1:]
 
-class anchor(uregexp):
-    """A class used temporarily in the conversion from programmer's string format
-    to the equivalent strict mathematical version used in FAdo.
-    """
+class anchor(uepsilon):
+    """A class used to keep anchors but treat them functionally as @epsilon."""
 
-    def __init__(self, label, sigma=None):
+    def __init__(self, label):
+        assert label in set(["<ASTART>", "<AEND>"]), "Unrecognized anchor type"
         super(anchor, self).__init__()
         self.label = label
+
+    def __deepcopy__(self, memo):
+        cpy = anchor(self.label)
+        memo[id(self)] = cpy
+        return cpy
 
     def __str__(self):
         return self.label
 
-    def _dotFormat(self):
-        return str(id(self)) + '[label="' + str(self) + '", shape=none];\n'
+    def __repr__(self):
+        return "anchor('{0}')".format(self.label)
+
+    def _pmBoth(self):
+        if self.label == "<ASTART>":
+            return uconcat(anchor("<ASTART>"), ustar(dotany()))
+        else:
+            return uconcat(ustar(dotany()), anchor("<AEND>"))
+
+    def _pmStart(self):
+        if self.label == "<AEND>":
+            raise convert.AnchorError(self.label, "Expected start of expression but found end")
+        else:
+            return copy.deepcopy(self)
+
+    def _pmEnd(self):
+        if self.label == "<ASTART>":
+            raise convert.AnchorError(self.label, "Expected end of expression but found start")
+        else:
+            return copy.deepcopy(self)
+
+    def _pmNeither(self):
+        raise convert.AnchorError(self.label, "Neither anchor type allowed here")
