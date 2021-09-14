@@ -47,7 +47,7 @@ class TestConverter(unittest.TestCase):
             ("<ASTART>", "<ASTART>"),
             ("<AEND>", "<AEND>"),
             ("[abc]", "[abc]"),
-            ("[0-9 ]", "[0-9 ]"),
+            ("(  [0-9 ])", "(  [0-9 ])"),
             ("[ab0-9c]", "[ab0-9c]"),
             ("[^ab0-9c]", "[^ab0-9c]"),
         ])
