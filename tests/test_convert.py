@@ -2,7 +2,7 @@
 import unittest
 from lark import LarkError
 
-from benchmark.convert import Converter, FAdoizeError, FAdoize
+from benchmark.convert import Converter, FAdoizeError
 
 
 class TestConverter(unittest.TestCase):
@@ -47,7 +47,7 @@ class TestConverter(unittest.TestCase):
             ("<ASTART>", "<ASTART>"),
             ("<AEND>", "<AEND>"),
             ("[abc]", "[abc]"),
-            ("[0-9]", "[0-9]"),
+            ("[0-9 ]", "[0-9 ]"),
             ("[ab0-9c]", "[ab0-9c]"),
             ("[^ab0-9c]", "[^ab0-9c]"),
         ])
@@ -184,15 +184,22 @@ class TestConverter(unittest.TestCase):
 
     def runtest(self, convert, expressions, partialMatch=False):
         for prog, fado in expressions:
-            val = convert(prog, partialMatch=partialMatch)
-            self.assertEqual(str(val), fado.encode("utf-8"), prog.encode("utf-8") + " => "
-                + str(val) + " != " + fado.encode("utf-8"))
+            try:
+                val = convert(prog, partialMatch=partialMatch)
+                self.assertEqual(str(val), fado.encode("utf-8"), prog.encode("utf-8") + " => "
+                    + str(val) + " != " + fado.encode("utf-8"))
+            except Exception as e:
+                if type(e) is not AssertionError:
+                    print "\nerror on:"
+                    print "prog:", prog
+                    print "fado:", fado
+                raise
 
 
 class TestFAdoize(unittest.TestCase):
     # Also tested in `test_convert.py` indirectly
     def test_charclass(self):
-        f = FAdoize
+        f = Converter().FAdoize
         self.assertEqual(f('\\d'), '[0-9]')
         self.assertEqual(f('\\D'), '[^0-9]')
         self.assertEqual(f('[\\d]'), '[0-9]')
@@ -206,7 +213,7 @@ class TestFAdoize(unittest.TestCase):
         self.assertEqual(f('[\\w]'), '[0-9A-Za-z_]')
 
     def test_almost_charclass(self):
-        f = FAdoize
+        f = Converter().FAdoize
         self.assertEqual(f('\\\\d'), '(\\ d)')
         self.assertEqual(f('\\\\D'), '(\\ D)')
         self.assertEqual(f('[\\\\d]'), '[\\d]')
@@ -220,7 +227,7 @@ class TestFAdoize(unittest.TestCase):
         self.assertEqual(f('[\\\\w]'), '[\\w]')
 
     def test_forwardslash(self):
-        self.assertEqual(FAdoize('//'), '(/ /)')
+        self.assertEqual(Converter().FAdoize('//'), '(/ /)')
 
 
 if __name__ == "__main__":

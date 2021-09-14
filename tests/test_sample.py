@@ -1,7 +1,7 @@
 # coding: utf-8
 import unittest
 
-from benchmark.convert import FAdoizeError
+from benchmark.convert import Converter, FAdoizeError
 from benchmark.sample import *
 
 def isNone(self, line):
@@ -19,7 +19,7 @@ def shouldRaise(self, line, err):
 class TestPythonSampler(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.sampler = PythonSampler()
+        cls.sampler = PythonSampler(Converter())
 
     def test_none(self):
         isNone(self, "abc")
@@ -46,7 +46,7 @@ class TestPythonSampler(unittest.TestCase):
 class TestJavaScriptSampler(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.sampler = JavaScriptSampler()
+        cls.sampler = JavaScriptSampler(Converter())
 
     def test_none(self):
         isNone(self, "abc")
@@ -69,7 +69,7 @@ class TestJavaScriptSampler(unittest.TestCase):
 class TestJavaSampler(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.sampler = JavaSampler()
+        cls.sampler = JavaSampler(Converter())
 
     def test_none(self):
         isNone(self, "abc")
@@ -92,7 +92,7 @@ class TestJavaSampler(unittest.TestCase):
 class TestPerlSampler(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.sampler = PerlSampler()
+        cls.sampler = PerlSampler(Converter())
 
     def test_none(self):
         isNone(self, "abc")

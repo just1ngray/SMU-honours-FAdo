@@ -8,8 +8,9 @@ import json
 from reex_ext import *
 
 class Converter(object):
-    """A class to parse a string/unicode expression into FAdo objects.
-    """
+    _nodeProc = None
+
+    """A class to parse a string/unicode expression into FAdo objects."""
     def __init__(self):
         self._parser = Lark.open("benchmark/re.lark", start="expression",
             parser="lalr", transformer=LarkToFAdo())
@@ -53,7 +54,7 @@ class Converter(object):
         ..note: self.prog is much slower than self.math since it has to spin up a
             NodeJS process in order to execute additional logic
         """
-        formatted = FAdoize(expression)
+        formatted = self.FAdoize(expression)
         try:
             re = self.math(formatted, partialMatch=partialMatch)
             re.expression = expression
@@ -61,6 +62,68 @@ class Converter(object):
         except LarkError as e:
             print(expression, "was formatted as", formatted)
             raise e
+
+    def initNodeProc(self):
+        """Initializes the NodeJS process - giving access to the npm regexp-tree library"""
+        if Converter._nodeProc is not None: # already referenced
+            return
+
+        # start the process
+        import atexit
+        Converter._nodeProc = subprocess.Popen(["node", "benchmark/parse.js"],
+            stderr=subprocess.STDOUT,
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE)
+        atexit.register(lambda: Converter._nodeProc.terminate())
+
+    def FAdoize(self, expression, validate=False):
+        """Convert an "ambiguous" expression used by a programmer into an expression
+        ready to parse into FAdo using the `benchmark/re.lark` grammar.
+        :param unicode|str expression: the expression to convert into unambiguous FAdo
+        :param bool validate: if this function should try and parse into FAdo to detect edge-case
+            errors such as poorly-placed anchors.
+        :returns unicode: the parenthesized and formatted expression
+        :raises FAdoizeError: if `benchmark/parse.js` throws
+        """
+        # regexp-tree doesn't support repetition in the form a{,n} as a{0,n}... convert manually
+        def repl(match):
+            return "{0," + match[2:-1] + "}"
+        expression = regex.sub(r"\{,[0-9]+\}", lambda x: repl(x.group()), expression)
+
+        # remove redundant (and invalid) escapes
+        valids = set("sSwWdDtnrfvuU\\^$.()[]+*|{}bB0123456789")
+        i = 0
+        while True:
+            try:
+                index = expression.index("\\", i)
+                if expression[index + 1] not in valids:
+                    expression = expression[:index] + expression[index+1:]
+                    i = index
+                else:
+                    i = index + 1
+            except (IndexError, ValueError):
+                break
+
+        if len(expression) == 0:
+            raise FAdoizeError(expression, "Expression must have a length > 0")
+
+        if type(expression) is unicode: # ensure expression is utf-8 encoded string
+            expression = expression.encode("utf-8")
+
+        self.initNodeProc()
+        Converter._nodeProc.stdin.write(expression)
+        Converter._nodeProc.stdin.flush()
+        output = json.loads(Converter._nodeProc.stdout.readline())
+
+        if output["error"] != 0:
+            logs = reduce(lambda p, c: p + "\n" + c, output["logs"])
+            logs_and_callback = (logs + "\n\n" + output["error"]).encode("utf-8")
+            raise FAdoizeError(expression, logs_and_callback)
+        else:
+            formatted = output["formatted"] # type: unicode
+            if validate:
+                self.math(formatted, partialMatch=True)
+            return formatted
 
 class LarkToFAdo(Transformer):
     """Used with parser="lalr" to transform the tree in real-time into FAdo objects.
@@ -114,60 +177,3 @@ class FAdoizeError(ConversionError):
 
     def __str__(self):
         return "FAdoizeError on '{0}':\n{1}".format(self.expression, self.node_callback)
-
-nodejs_proc = None
-def FAdoize(expression):
-    """Convert an "ambiguous" expression used by a programmer into an expression
-    ready to parse into FAdo via the `benchmark/convert.py#Converter` using the
-    `benchmark/re.lark` grammar.
-    :param unicode|str expression: the expression to convert into unambiguous FAdo
-    :returns unicode: the parenthesized and formatted expression
-    :raises FAdoizeError: if `benchmark/parse.js` throws
-    ..note: FAdoize will include a cold start time as the NodeJS process is created.
-            Subsequent calls will not incur this cost until this Python process finishes.
-    """
-    # regexp-tree doesn't support repetition in the form a{,n} as a{0,n}... convert manually
-    def repl(match):
-        return "{0," + match[2:-1] + "}"
-    expression = regex.sub(r"\{,[0-9]+\}", lambda x: repl(x.group()), expression)
-
-    # remove redundant (and invalid) escapes
-    valids = set("sSwWdDtnrfvuU\\^$.()[]+*|{}bB0123456789")
-    i = 0
-    while True:
-        try:
-            index = expression.index("\\", i)
-            if expression[index + 1] not in valids:
-                expression = expression[:index] + expression[index+1:]
-                i = index
-            else:
-                i = index + 1
-        except (IndexError, ValueError):
-            break
-
-    if globals()["nodejs_proc"] is None:
-        globals()["nodejs_proc"] = subprocess.Popen(["node", "benchmark/parse.js"],
-            stderr=subprocess.STDOUT,
-            stdin=subprocess.PIPE,
-            stdout=subprocess.PIPE)
-
-        import atexit
-        atexit.register(lambda: globals()["nodejs_proc"].terminate())
-
-    if len(expression) == 0:
-        raise FAdoizeError(expression, "Expression must have a length > 0")
-
-    if type(expression) is unicode: # ensure expression is utf-8 encoded string
-        expression = expression.encode("utf-8")
-
-    proc = globals()["nodejs_proc"]
-    proc.stdin.write(expression)
-    proc.stdin.flush()
-    output = json.loads(proc.stdout.readline())
-
-    if output["error"] != 0:
-        logs = reduce(lambda p, c: p + "\n" + c, output["logs"])
-        logs_and_callback = (logs + "\n\n" + output["error"]).encode("utf-8")
-        raise FAdoizeError(expression, logs_and_callback)
-    else:
-        return output["formatted"] # unicode

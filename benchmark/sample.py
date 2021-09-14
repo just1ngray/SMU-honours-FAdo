@@ -2,6 +2,7 @@ from __future__ import print_function
 import urllib
 import json
 import regex
+from lark.exceptions import LarkError
 
 import util
 import convert
@@ -16,7 +17,7 @@ class InvalidExpressionError(ValueError):
         return "InvalidExpressionError on line {0}\n{1}".format(self.line, self.message)
 
 class CodeSampler(object):
-    def __init__(self, language, search):
+    def __init__(self, converter, language, search):
         """Create a new sampler
         :param str language: the language being sampled
         :param str search: the search to preform on grep.app
@@ -26,6 +27,7 @@ class CodeSampler(object):
             2 => all logging
         """
         super(CodeSampler, self).__init__()
+        self.converter = converter
         self.language = language
         self.search_expr = search
         self.output = util.ConsoleOverwrite(self.language + "Sampler: ")
@@ -129,16 +131,22 @@ class CodeSampler(object):
                 return None
             self.output.overwrite("save_expression @ " + line)
 
-            formatted = convert.FAdoize(expr)
+            formatted = self.converter.FAdoize(expr, validate=True)
             self.db.execute("""
                 INSERT OR IGNORE INTO expressions (re_math, re_prog, url, lineNum, line, lang)
                 VALUES (?, ?, ?, ?, ?, ?);""", [formatted, expr, url, lineNum, line, self.language])
             return formatted
-        except (InvalidExpressionError, convert.FAdoizeError) as err:
+        except (InvalidExpressionError, convert.ConversionError) as err:
             self.db.execute("""
                 INSERT OR IGNORE INTO expressions (re_math, re_prog, url, lineNum, line, lang)
                 VALUES (?, ?, ?, ?, ?, ?);""", [str(err), expr, url, lineNum, line, self.language])
             return err
+        except (LarkError) as e:
+            self.db.execute("""
+                INSERT OR IGNORE INTO expressions (re_math, re_prog, url, lineNum, line, lang)
+                VALUES (?, ?, ?, ?, ?, ?);""", ["---", expr, url, lineNum, line, self.language])
+            print("\n\n\n==> ", expr)
+            raise e
 
     # abstractmethod
     def get_line_expression(self, line):
@@ -157,8 +165,8 @@ class CodeSampler(object):
 
 
 class PythonSampler(CodeSampler):
-    def __init__(self):
-        super(PythonSampler, self).__init__("Python",
+    def __init__(self, converter):
+        super(PythonSampler, self).__init__(converter, "Python",
             r"""re(gex)?\.(search|match|compile|split|sub|find(all|iter|match))\(""")
 
         self.re_begin = regex.compile(
@@ -206,8 +214,8 @@ class PythonSampler(CodeSampler):
 
 class JavaScriptSampler(CodeSampler):
     # Note: expressions initialized using `new RegExp(...)` contain many variables and cannot be used
-    def __init__(self, lang="JavaScript"):
-        super(JavaScriptSampler, self).__init__(lang, r"""\.(search|replace|test|split|match(All)?)\(/.+""")
+    def __init__(self, converter, lang="JavaScript"):
+        super(JavaScriptSampler, self).__init__(converter, lang, r"""\.(search|replace|test|split|match(All)?)\(/.+""")
         self.start = regex.compile(r"""\.(search|replace|test|split|match(All)?)\(/""")
 
     def get_line_expression(self, line):
@@ -245,13 +253,13 @@ class JavaScriptSampler(CodeSampler):
 
 
 class TypeScriptSampler(JavaScriptSampler):
-    def __init__(self):
-        super(TypeScriptSampler, self).__init__("TypeScript")
+    def __init__(self, converter):
+        super(TypeScriptSampler, self).__init__(converter, "TypeScript")
 
 
 class JavaSampler(CodeSampler):
-    def __init__(self):
-        super(JavaSampler, self).__init__("Java", r"""Pattern\.compile\("/.+\)""")
+    def __init__(self, converter):
+        super(JavaSampler, self).__init__(converter, "Java", r"""Pattern\.compile\("/.+\)""")
         self.start = regex.compile(r'''Pattern\.compile\("''')
         self.extract = regex.compile(r'''(\\.|[^"])+"[,)]''')
 
@@ -272,8 +280,8 @@ class JavaSampler(CodeSampler):
 
 
 class PerlSampler(CodeSampler):
-    def __init__(self, lang="Perl"):
-        super(PerlSampler, self).__init__(lang, r"""\$.+ =~ [miosg]*/.+/""")
+    def __init__(self, converter, lang="Perl"):
+        super(PerlSampler, self).__init__(converter, lang, r"""\$.+ =~ [miosg]*/.+/""")
         self.start = regex.compile(r"""\$.+ =~ [miosg]*/""")
         self.extract = regex.compile(r"""(\\.|[^/])+/""")
 
@@ -295,9 +303,10 @@ class PerlSampler(CodeSampler):
 if __name__ == "__main__":
     SAMPLE_SIZE = 400
 
+    converter = convert.Converter()
     samplers = [PerlSampler, JavaSampler, TypeScriptSampler, JavaScriptSampler, PythonSampler]
     for sampler in samplers:
-        obj = sampler()
+        obj = sampler(converter)
 
         print("\n\nSampling: ", sampler.__name__)
 
