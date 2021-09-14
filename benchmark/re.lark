@@ -17,9 +17,10 @@ concat      : "(" expression  " "  expression ")"
 disjunction : "(" expression " + " expression ")"
 
 // character classes
-pos_chars   : "["  (char_range | symbol)+ "]"
-neg_chars   : "[^" (char_range | symbol)+ "]"
-char_range  : symbol "-" symbol
+pos_chars   : "["  (char_range | chars_sym)+ "]"
+neg_chars   : "[^" (char_range | chars_sym)+ "]"
+char_range  : chars_sym "-" chars_sym
+chars_sym   : /./
 
 // atoms
 symbol      : ESCAPED

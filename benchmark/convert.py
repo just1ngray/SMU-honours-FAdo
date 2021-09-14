@@ -135,14 +135,13 @@ class LarkToFAdo(Transformer):
     concat = lambda _, e: uconcat(e[0], e[1])
     disjunction = lambda _, e: udisj(e[0], e[1])
 
-    char_range = lambda _, e: (e[0].val, e[1].val)
+    char_range = lambda _, e: (e[0], e[1])
+    chars_sym = lambda _, e: unicode(e[0].value)
 
     def pos_chars(self, items):
-        items = list(map(lambda c: c.val if isinstance(c, uatom) else c, items))
         return chars(items, neg=False)
 
     def neg_chars(self, items):
-        items = list(map(lambda c: c.val if isinstance(c, uatom) else c, items))
         return chars(items, neg=True)
 
     symbol = lambda _, e: uatom(unicode(e[0].value))
