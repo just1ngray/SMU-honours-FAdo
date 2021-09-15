@@ -115,7 +115,8 @@ class CodeSampler(object):
         """Reprocesses all previously collected lines to ensure they're up to date with the
         current FAdoize spec."""
         rows = self.db.selectall("""SELECT re_math, re_prog, line, url, lineNum, lang
-                                    FROM expressions WHERE lang=?;""", [self.language])
+                                    FROM expressions WHERE lang=?
+                                    ORDER BY re_prog ASC;""", [self.language])
         for _, _, line, url, lineNum, _ in rows:
             self.output.overwrite("reprocess_lines:", line)
             self.db.execute("DELETE FROM expressions WHERE url=? AND lineNum=?;", [url, lineNum])
@@ -124,6 +125,7 @@ class CodeSampler(object):
     def save_expression(self, url, line, lineNum):
         """Save a potential expression to the database if one exists on line"""
         expr = "none_found"
+        formatted = "not_done"
         try:
             self.output.overwrite("get_line_expression @ " + line)
             expr = self.get_line_expression(line)
@@ -131,7 +133,8 @@ class CodeSampler(object):
                 return None
             self.output.overwrite("save_expression @ " + line)
 
-            formatted = self.converter.FAdoize(expr, validate=True)
+            formatted = self.converter.FAdoize(expr)
+            self.converter.math(formatted, partialMatch=True) # make sure it parses properly!
             self.db.execute("""
                 INSERT OR IGNORE INTO expressions (re_math, re_prog, url, lineNum, line, lang)
                 VALUES (?, ?, ?, ?, ?, ?);""", [formatted, expr, url, lineNum, line, self.language])
@@ -141,11 +144,11 @@ class CodeSampler(object):
                 INSERT OR IGNORE INTO expressions (re_math, re_prog, url, lineNum, line, lang)
                 VALUES (?, ?, ?, ?, ?, ?);""", [str(err), expr, url, lineNum, line, self.language])
             return err
-        except (LarkError) as e:
+        except Exception as e:
             self.db.execute("""
                 INSERT OR IGNORE INTO expressions (re_math, re_prog, url, lineNum, line, lang)
                 VALUES (?, ?, ?, ?, ?, ?);""", ["---", expr, url, lineNum, line, self.language])
-            print("\n\n\n==> ", expr)
+            print("\n\n==> ", expr, "\n==>", formatted)
             raise e
 
     # abstractmethod

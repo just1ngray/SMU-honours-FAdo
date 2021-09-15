@@ -473,7 +473,7 @@ class uatom(reex.atom, uregexp):
 
     def __str__(self):
         printable = self.val.encode("utf-8")
-        if printable in set("()[]+*?"):
+        if printable in set("()[]+*?\\"):
             printable = "\\" + printable
         elif printable in set("\r\n\t"):
             printable = printable.encode("string-escape")

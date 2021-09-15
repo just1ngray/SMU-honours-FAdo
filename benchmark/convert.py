@@ -91,7 +91,7 @@ class Converter(object):
         expression = regex.sub(r"\{,[0-9]+\}", lambda x: repl(x.group()), expression)
 
         # remove redundant (and invalid) escapes
-        valids = set("sSwWdDtnrfvuU\\^$.()[]+*|{}bB0123456789")
+        valids = set("sSwWdDtnrfvuU\\^$.()[]+*?|{}bB0123456789")
         i = 0
         while True:
             try:
@@ -135,21 +135,13 @@ class LarkToFAdo(Transformer):
     concat = lambda _, e: uconcat(e[0], e[1])
     disjunction = lambda _, e: udisj(e[0], e[1])
 
+    pos_chars = lambda _, e: chars(e, neg=False)
+    neg_chars = lambda _, e: chars(e, neg=True)
     char_range = lambda _, e: (e[0], e[1])
     chars_sym = lambda _, e: unicode(e[0].value)
 
-    def pos_chars(self, items):
-        return chars(items, neg=False)
-
-    def neg_chars(self, items):
-        return chars(items, neg=True)
-
-    symbol = lambda _, e: uatom(unicode(e[0].value))
-
-    def ESCAPED(self, e):
-        e.value = e.value.decode("string-escape")
-        return e
-
+    symbol = lambda _, e: uatom(unicode(e[0].value)) # `\\` filtered out by lark grammar
+    symbol_esc = lambda _, e: uatom(unicode(e[0].value.decode("string-escape")))
     EPSILON = lambda _0, _1: uepsilon()
     DOTANY = lambda _0, _1: dotany()
     ANCHOR = lambda _, e: anchor(e.value)

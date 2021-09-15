@@ -116,7 +116,7 @@ function nodeToString(node, output, chars=null) {
                     return node.value
                 }
             else {
-                const escaped = "()[]+*?".includes(node.symbol) || // FAdo metacharacter distinction
+                const escaped = "()[]+*?\\".includes(node.symbol) || // FAdo metacharacter distinction
                     (node.escaped && "rnt".includes(node.symbol))  // escaped sequences
                 return `${escaped ? "\\" : ""}${node.symbol}`
             }

@@ -214,20 +214,27 @@ class TestFAdoize(unittest.TestCase):
 
     def test_almost_charclass(self):
         f = Converter().FAdoize
-        self.assertEqual(f('\\\\d'), '(\\ d)')
-        self.assertEqual(f('\\\\D'), '(\\ D)')
-        self.assertEqual(f('[\\\\d]'), '[\\d]')
+        self.assertEqual(f('\\\\d'), '(\\\\ d)') # \\ d
+        self.assertEqual(f('\\\\D'), '(\\\\ D)') # \\ D
+        self.assertEqual(f('[\\\\d]'), '[\\\\d]') # \\ d
 
-        self.assertEqual(f('\\\\s'), '(\\ s)')
-        self.assertEqual(f('\\\\S'), '(\\ S)')
-        self.assertEqual(f('[\\\\s]'), '[\\s]')
+        self.assertEqual(f('\\\\s'), '(\\\\ s)')
+        self.assertEqual(f('\\\\S'), '(\\\\ S)')
+        self.assertEqual(f('[\\\\s]'), '[\\\\s]')
 
-        self.assertEqual(f('\\\\w'), '(\\ w)')
-        self.assertEqual(f('\\\\W'), '(\\ W)')
-        self.assertEqual(f('[\\\\w]'), '[\\w]')
+        self.assertEqual(f('\\\\w'), '(\\\\ w)')
+        self.assertEqual(f('\\\\W'), '(\\\\ W)')
+        self.assertEqual(f('[\\\\w]'), '[\\\\w]')
 
     def test_forwardslash(self):
         self.assertEqual(Converter().FAdoize('//'), '(/ /)')
+
+    def test_escaping(self):
+        c = Converter()
+        f = lambda expr: c.FAdoize(expr, validate=True)
+        self.assertEqual(f("\\(\\)"), "(\\( \\))")
+        self.assertEqual(f("\\[\\]"), "(\\[ \\])")
+        self.assertEqual(f("\\*\\+\\?\\\\"), "(((\\* \\+) \\?) \\\\)")
 
 
 if __name__ == "__main__":

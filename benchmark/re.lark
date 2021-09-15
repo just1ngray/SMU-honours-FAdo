@@ -1,5 +1,6 @@
 // start
 expression  : symbol
+            | symbol_esc
             | ANCHOR
             | EPSILON
             | DOTANY
@@ -23,9 +24,8 @@ char_range  : chars_sym "-" chars_sym
 chars_sym   : /./
 
 // atoms
-symbol      : ESCAPED
-            | ["\\"] /./
-ESCAPED     : /\\[rnt]/
+symbol      : ["\\"] /./
+symbol_esc  : /\\[rnt]/
 EPSILON     : "@epsilon"
 DOTANY      : "@any"
 ANCHOR      : "<ASTART>" | "<AEND>"
