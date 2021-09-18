@@ -117,7 +117,7 @@ function nodeToString(node, output, chars=null) {
                 }
             else { // non-meta character
                 // character classes require different escapings than atoms
-                const escapeScheme = (chars == null ? "rnt()[]+*?\\" : "rnt[]^-")
+                const escapeScheme = (chars == null ? "rnt\\()[]+*?" : "rnt\\[]^-")
                 return (escapeScheme.includes(node.symbol) ? "\\" : "") + node.symbol
             }
 
