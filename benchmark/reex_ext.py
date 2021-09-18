@@ -83,7 +83,7 @@ class uregexp(reex.regexp):
 
         foo = open(fnameGV, "w")
         foo.write("digraph {\n"
-            + 'label="{0}";\n'.format(str(self))
+            + 'label="{0}";\n'.format(str(self).encode("string-escape"))
             + 'labelloc="t";\n'
             + self._dotFormat()
             + "\n}\n")
@@ -574,7 +574,7 @@ class uatom(reex.atom, uregexp):
 
     def _dotFormat(self):
         val = str(self) if self.val != " " else "SPACE"
-        return str(id(self)) + '[label="' + val + '", shape=none];\n'
+        return str(id(self)) + '[label="' + val.encode("string-escape") + '", shape=none];\n'
 
     def _pmBoth(self):
         return uconcat(uconcat(ustar(dotany()), copy.deepcopy(self)), ustar(dotany()))
@@ -606,24 +606,26 @@ class chars(uatom):
 
         self.neg = neg
         self.val = u""
+        esc = set("[]^-")
+        val = lambda c: "\\" + c if c in esc else c
         if type(symbols) is RangeList:
             self.ranges = symbols
             for a, b in self.ranges:
                 if a == b:
-                    self.val += a
+                    self.val += val(a)
                 else:
-                    self.val += a + u"-" + b
+                    self.val += val(a) + u"-" + val(b)
         else:
             self.ranges = RangeList(inc=lambda x: UniUtil.chr(UniUtil.ord(x)+1), dec=lambda x: UniUtil.chr(UniUtil.ord(x)-1))
             for s in symbols:
                 if type(s) is tuple:
                     if s[0] == s[1]:
-                        self.val += s[0]
+                        self.val += val(s[0])
                     else:
-                        self.val += s[0] + "-" + s[1]
+                        self.val += val(s[0]) + "-" + val(s[1])
                     self.ranges.add(s[0], s[1])
                 elif type(s) is unicode:
-                    self.val += s
+                    self.val += val(s)
                     self.ranges.add(s)
                 else:
                     raise TypeError("Unknown type 's', must be unicode/2-tuple of unicode's, not " + str(type(s)))

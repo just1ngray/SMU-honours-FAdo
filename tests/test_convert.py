@@ -197,44 +197,52 @@ class TestConverter(unittest.TestCase):
 
 
 class TestFAdoize(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        c = Converter()
+        cls.f = lambda _, expr: c.FAdoize(expr, validate=True)
+
     # Also tested in `test_convert.py` indirectly
     def test_charclass(self):
-        f = Converter().FAdoize
-        self.assertEqual(f('\\d'), '[0-9]')
-        self.assertEqual(f('\\D'), '[^0-9]')
-        self.assertEqual(f('[\\d]'), '[0-9]')
+        self.assertEqual(self.f('\\d'), '[0-9]')
+        self.assertEqual(self.f('\\D'), '[^0-9]')
+        self.assertEqual(self.f('[\\d]'), '[0-9]')
 
-        self.assertEqual(f('\\s'), ' ')
-        self.assertEqual(f('\\S'), '[^ ]')
-        self.assertEqual(f('[\\s]'), '[ ]')
+        self.assertEqual(self.f('\\s'), ' ')
+        self.assertEqual(self.f('\\S'), '[^ ]')
+        self.assertEqual(self.f('[\\s]'), '[ ]')
 
-        self.assertEqual(f('\\w'), '[0-9A-Za-z_]')
-        self.assertEqual(f('\\W'), '[^0-9A-Za-z_]')
-        self.assertEqual(f('[\\w]'), '[0-9A-Za-z_]')
+        self.assertEqual(self.f('\\w'), '[0-9A-Za-z_]')
+        self.assertEqual(self.f('\\W'), '[^0-9A-Za-z_]')
+        self.assertEqual(self.f('[\\w]'), '[0-9A-Za-z_]')
 
     def test_almost_charclass(self):
-        f = Converter().FAdoize
-        self.assertEqual(f('\\\\d'), '(\\\\ d)') # \\ d
-        self.assertEqual(f('\\\\D'), '(\\\\ D)') # \\ D
-        self.assertEqual(f('[\\\\d]'), '[\\\\d]') # \\ d
+        self.assertEqual(self.f('\\\\d'), '(\\\\ d)')
+        self.assertEqual(self.f('\\\\D'), '(\\\\ D)')
+        self.assertEqual(self.f('[\\\\d]'), '[\\d]')
 
-        self.assertEqual(f('\\\\s'), '(\\\\ s)')
-        self.assertEqual(f('\\\\S'), '(\\\\ S)')
-        self.assertEqual(f('[\\\\s]'), '[\\\\s]')
+        self.assertEqual(self.f('\\\\s'), '(\\\\ s)')
+        self.assertEqual(self.f('\\\\S'), '(\\\\ S)')
+        self.assertEqual(self.f('[\\\\s]'), '[\\s]')
 
-        self.assertEqual(f('\\\\w'), '(\\\\ w)')
-        self.assertEqual(f('\\\\W'), '(\\\\ W)')
-        self.assertEqual(f('[\\\\w]'), '[\\\\w]')
+        self.assertEqual(self.f('\\\\w'), '(\\\\ w)')
+        self.assertEqual(self.f('\\\\W'), '(\\\\ W)')
+        self.assertEqual(self.f('[\\\\w]'), '[\\w]')
 
     def test_forwardslash(self):
         self.assertEqual(Converter().FAdoize('//'), '(/ /)')
 
     def test_escaping(self):
-        c = Converter()
-        f = lambda expr: c.FAdoize(expr, validate=True)
-        self.assertEqual(f("\\(\\)"), "(\\( \\))")
-        self.assertEqual(f("\\[\\]"), "(\\[ \\])")
-        self.assertEqual(f("\\*\\+\\?\\\\"), "(((\\* \\+) \\?) \\\\)")
+        self.assertEqual(self.f("\\(\\)"), "(\\( \\))")
+        self.assertEqual(self.f("\\[\\]"), "(\\[ \\])")
+        self.assertEqual(self.f("\\*\\+\\?\\\\"), "(((\\* \\+) \\?) \\\\)")
+
+        self.assertEqual(self.f("[\\]]"), "[\\]]")
+        self.assertEqual(self.f("[\\[]"), "[\\[]")
+        self.assertEqual(self.f("[\\^]"), "[\\^]")
+        self.assertEqual(self.f("[\\-]"), "[\\-]")
+        self.assertEqual(self.f("a[\\]]"), "(a [\\]])")
+        self.assertEqual(self.f("a[\\]abc]"), "(a [\\]abc])")
 
 
 if __name__ == "__main__":

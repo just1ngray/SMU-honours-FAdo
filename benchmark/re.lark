@@ -21,7 +21,8 @@ disjunction : "(" expression " + " expression ")"
 pos_chars   : "["  (char_range | chars_sym)+ "]"
 neg_chars   : "[^" (char_range | chars_sym)+ "]"
 char_range  : chars_sym "-" chars_sym
-chars_sym   : /./
+chars_sym   : (["\\"] /\^|\[|\]|-/) // ^,-,[,] inside chars have \\
+            | (["\\"] /./)
 
 // atoms
 symbol      : ["\\"] /./
