@@ -1,6 +1,5 @@
 from __future__ import print_function
-from lark import Lark, Transformer
-from lark.exceptions import LarkError
+import lark
 import regex
 import subprocess
 import json
@@ -12,7 +11,7 @@ class Converter(object):
 
     """A class to parse a string/unicode expression into FAdo objects."""
     def __init__(self):
-        self._parser = Lark.open("benchmark/re.lark", start="expression",
+        self._parser = lark.Lark.open("benchmark/re.lark", start="expression",
             parser="lalr", transformer=LarkToFAdo())
 
     def math(self, expression, partialMatch=False):
@@ -59,7 +58,7 @@ class Converter(object):
             re = self.math(formatted, partialMatch=partialMatch)
             re.expression = expression
             return re
-        except LarkError as e:
+        except lark.exceptions.LarkError as e:
             print(expression, "was formatted as", formatted)
             raise e
 
@@ -125,23 +124,24 @@ class Converter(object):
                 self.math(formatted, partialMatch=True)
             return formatted
 
-class LarkToFAdo(Transformer):
+class LarkToFAdo(lark.visitors.Transformer_InPlace):
     """Used with parser="lalr" to transform the tree in real-time into FAdo objects.
     ..see: `benchmark/re.lark`
     """
-    expression = lambda _, e: e[0]
-    kleene = lambda _, e: ustar(e[0])
-    option = lambda _, e: uoption(e[0])
-    concat = lambda _, e: uconcat(e[0], e[1])
-    disjunction = lambda _, e: udisj(e[0], e[1])
+    expression = lambda _, e: e.children[0]
+    kleene = lambda _, e: ustar(e.children[0])
+    option = lambda _, e: uoption(e.children[0])
+    concat = lambda _, e: uconcat(e.children[0], e.children[1])
+    disjunction = lambda _, e: udisj(e.children[0], e.children[1])
 
-    pos_chars = lambda _, e: chars(e, neg=False)
-    neg_chars = lambda _, e: chars(e, neg=True)
-    char_range = lambda _, e: (e[0], e[1])
-    chars_sym = lambda _, e: unicode(e[0].value)
+    pos_chars = lambda _, e: chars(e.children, neg=False)
+    neg_chars = lambda _, e: chars(e.children, neg=True)
+    char_range = lambda _, e: (e.children[0], e.children[1])
+    chars_sym = lambda _, e: unicode(e.children[0].value)
 
-    symbol = lambda _, e: uatom(unicode(e[0].value)) # `\\` filtered out by lark grammar
-    symbol_esc = lambda _, e: uatom(unicode(e[0].value.decode("string-escape")))
+    symbol = lambda _, e: uatom(unicode(e.children[0].value)) # `\\` filtered out by lark grammar
+
+    symbol_esc = lambda _, e: uatom(unicode(e.children[0].value.decode("string-escape")))
     EPSILON = lambda _0, _1: uepsilon()
     DOTANY = lambda _0, _1: dotany()
     ANCHOR = lambda _, e: anchor(e.value)
