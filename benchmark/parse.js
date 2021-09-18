@@ -163,11 +163,16 @@ function nodeToString(node, output, chars=null) {
                 }, output)
             }
 
-            if (from == to)
+            if (from == to) // exactly from x's
                 return xReps(from)
-            else if (to == undefined)
-                return `(${xReps(from)} ${expression}*)`
-            else {
+            else if (to == undefined) { // xx...x x* case
+                const fromReps = xReps(from)
+                if (fromReps.length == 0)
+                    return `${expression}*`
+                else
+                    return `(${fromReps} ${expression}*)`
+            }
+            else { // exactly from x's followed by "some" more
                 function xMore(x) {
                     let maxChosen = 0
                     let concat = []

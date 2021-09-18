@@ -35,6 +35,14 @@ class TestConverter(unittest.TestCase):
             self.assertTrue(re.evalWordP("a"*i))
         self.assertFalse(re.evalWordP("a"*30))
 
+        re = self.convert.prog("[^abc]{0,}", partialMatch=False)
+        self.assertTrue(re.evalWordP(""))
+        self.assertTrue(re.evalWordP("d"))
+        self.assertTrue(re.evalWordP("ddddddd"))
+        self.assertFalse(re.evalWordP("a"))
+        self.assertFalse(re.evalWordP("abc"))
+        self.assertFalse(re.evalWordP("abcba"))
+
     def test_math_simple_str(self):
         self.runtest(self.convert.math, [
             ("a", "a"),
@@ -219,15 +227,15 @@ class TestFAdoize(unittest.TestCase):
     def test_almost_charclass(self):
         self.assertEqual(self.f('\\\\d'), '(\\\\ d)')
         self.assertEqual(self.f('\\\\D'), '(\\\\ D)')
-        self.assertEqual(self.f('[\\\\d]'), '[\\d]')
+        self.assertEqual(self.f('[\\\\d]'), '[\\\\d]')
 
         self.assertEqual(self.f('\\\\s'), '(\\\\ s)')
         self.assertEqual(self.f('\\\\S'), '(\\\\ S)')
-        self.assertEqual(self.f('[\\\\s]'), '[\\s]')
+        self.assertEqual(self.f('[\\\\s]'), '[\\\\s]')
 
         self.assertEqual(self.f('\\\\w'), '(\\\\ w)')
         self.assertEqual(self.f('\\\\W'), '(\\\\ W)')
-        self.assertEqual(self.f('[\\\\w]'), '[\\w]')
+        self.assertEqual(self.f('[\\\\w]'), '[\\\\w]')
 
     def test_forwardslash(self):
         self.assertEqual(Converter().FAdoize('//'), '(/ /)')
