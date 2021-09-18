@@ -116,15 +116,12 @@ class uregexp(reex.regexp):
               then L(self.partialMatch()) = {pws : forall weW ^ p,s as any text length>=0}
         :raises convert.AnchorError: if an anchor is found to be misplaced
         """
+        if hasattr(self, "_partialMatch") and not force:
+            raise Exception("This regexp already has partialMatching enabled. Pass force=True " \
+                + "to run this operation again anyway.")
+
         re = self._pmBoth()
-        def _noRecall(self):
-            if force:
-                return self._forcePartialMatch()
-            raise Exception("You should not call partialMatch on an object where " \
-                + "this has already been called! This was likely a mistake. Use force=True " \
-                + "parameter to override and run partialMatch algorithm again.")
-        re._forcePartialMatch = re.partialMatch
-        re.partialMatch = _noRecall
+        re._partialMatch = 0
         return re
 
     def _pmBoth(self):
@@ -144,11 +141,8 @@ class uregexp(reex.regexp):
         raise NotImplementedError()
 
     def _containsAnchor(self):
-        try:
-            str(self).index("<A") # START> or END>... no need to be specific
-            return True
-        except ValueError:
-            return False
+        """Traverses the subtree searching for anchor(s). Returns bool"""
+        raise NotImplementedError()
 
 class uconcat(reex.concat, uregexp):
     def __init__(self, arg1, arg2):
@@ -238,6 +232,9 @@ class uconcat(reex.concat, uregexp):
     def _pmNeither(self):
         return uconcat(self.arg1._pmNeither(), self.arg2._pmNeither())
 
+    def _containsAnchor(self):
+        return self.arg1._containsAnchor() or self.arg2._containsAnchor()
+
 class udisj(reex.disj, uregexp):
     def __init__(self, arg1, arg2):
         super(udisj, self).__init__(arg1, arg2, sigma=None)
@@ -277,6 +274,9 @@ class udisj(reex.disj, uregexp):
 
     def _pmNeither(self):
         return udisj(self.arg1._pmNeither(), self.arg2._pmNeither())
+
+    def _containsAnchor(self):
+        return self.arg1._containsAnchor() or self.arg2._containsAnchor()
 
 class ustar(reex.star, uregexp):
     def __init__(self, arg):
@@ -375,6 +375,9 @@ class ustar(reex.star, uregexp):
     def _pmNeither(self):
         return ustar(self.arg._pmNeither())
 
+    def _containsAnchor(self):
+        return self.arg._containsAnchor()
+
 class uoption(reex.option, uregexp):
     def __init__(self, arg):
         super(uoption, self).__init__(arg, sigma=None)
@@ -416,6 +419,9 @@ class uoption(reex.option, uregexp):
     def _pmNeither(self):
         return udisj(self.arg._pmNeither(), uepsilon())
 
+    def _containsAnchor(self):
+        return self.arg._containsAnchor()
+
 class uepsilon(reex.epsilon, uregexp):
     def __init__(self):
         super(uepsilon, self).__init__(sigma=None)
@@ -448,6 +454,9 @@ class uepsilon(reex.epsilon, uregexp):
 
     def _pmNeither(self):
         return copy.deepcopy(self)
+
+    def _containsAnchor(self):
+        return False
 
 class uemptyset(reex.emptyset, uregexp):
     def __init__(self):
@@ -587,6 +596,9 @@ class uatom(reex.atom, uregexp):
 
     def _pmNeither(self):
         return copy.deepcopy(self)
+
+    def _containsAnchor(self):
+        return False
 
 class chars(uatom):
     """A character class which can match any single character or a range of characters contained within it
@@ -804,20 +816,23 @@ class anchor(uepsilon):
     def _pmBoth(self):
         if self.label == "<ASTART>":
             return uconcat(anchor("<ASTART>"), ustar(dotany()))
-        else:
+        else: # <AEND>
             return uconcat(ustar(dotany()), anchor("<AEND>"))
 
     def _pmStart(self):
-        if self.label == "<AEND>":
+        if self.label == "<ASTART>":
+            return anchor("<ASTART>")
+        else: # <AEND>
             raise convert.AnchorError(self.label, "Expected start of expression but found end")
-        else:
-            return copy.deepcopy(self)
 
     def _pmEnd(self):
-        if self.label == "<ASTART>":
-            raise convert.AnchorError(self.label, "Expected end of expression but found start")
+        if self.label == "<AEND>":
+            return anchor("<AEND>")
         else:
-            return copy.deepcopy(self)
+            raise convert.AnchorError(self.label, "Expected end of expression but found start")
 
     def _pmNeither(self):
         raise convert.AnchorError(self.label, "Neither anchor type allowed here")
+
+    def _containsAnchor(self):
+        return True
