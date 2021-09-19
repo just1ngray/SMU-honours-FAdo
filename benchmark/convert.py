@@ -90,7 +90,7 @@ class Converter(object):
         expression = regex.sub(r"\{,[0-9]+\}", lambda x: repl(x.group()), expression)
 
         # remove redundant (and invalid) escapes
-        valids = set("sSwWdDtnrfvuU\\^$.()[]+*?|{}bB0123456789")
+        valids = set("sSwWdDtnrfvuU\\^$.()[-]+*?|{}bB0123456789")
         i = 0
         while True:
             try:
@@ -121,7 +121,12 @@ class Converter(object):
         else:
             formatted = output["formatted"] # type: unicode
             if validate:
-                self.math(formatted, partialMatch=True)
+                try:
+                    self.math(formatted, partialMatch=True)
+                except lark.LarkError:
+                    print("\nExpression formatted as", formatted, "but not parsed properly")
+                    print(reduce(lambda p, c: p + "\n\t" + c, output["logs"]))
+                    raise
             return formatted
 
 class LarkToFAdo(lark.visitors.Transformer_InPlace):

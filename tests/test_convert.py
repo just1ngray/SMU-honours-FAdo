@@ -254,6 +254,8 @@ class TestFAdoize(unittest.TestCase):
     # some of the "edge cases" found while processing the sample
     def test_sampleIssues(self):
         self.assertEqual(self.f(r"\^\\circ"), r"(((((^ \\) c) i) r) c)")
+        self.assertEqual(self.f(r"[.+\-\w]+"), "([.+\\-0-9A-Za-z_] [.+\\-0-9A-Za-z_]*)")
+        self.assertEqual(self.f(r"^([.+\-\w]+)$"), "((<ASTART> ([.+\\-0-9A-Za-z_] [.+\\-0-9A-Za-z_]*)) <AEND>)")
 
 
 if __name__ == "__main__":

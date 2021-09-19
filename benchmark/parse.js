@@ -71,7 +71,7 @@ function buildConcatRecursively(tokens) {
  * @returns the formatted string
  */
 function nodeToString(node, output, chars=null) {
-    output.logs.push(`nodeToString: ${chars}\n${JSON.stringify(node)}`)
+    output.logs.push(`nodeToString(${JSON.stringify(node)}, output, ${chars})`)
 
     switch (node.type) {
         case "Alternative":
@@ -133,7 +133,7 @@ function nodeToString(node, output, chars=null) {
             return `[${node.negative ? "^" : ""}${children}]`
 
         case "ClassRange":
-            return `${nodeToString(node.from, output)}-${nodeToString(node.to, output)}`
+            return `${nodeToString(node.from, output, chars)}-${nodeToString(node.to, output, chars)}`
 
         case "Disjunction":
             return `(${nodeToString(node.left, output)} + ${nodeToString(node.right, output)})`
