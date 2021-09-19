@@ -148,8 +148,11 @@ class CodeSampler(object):
             self.db.execute("""
                 INSERT OR IGNORE INTO expressions (re_math, re_prog, url, lineNum, line, lang)
                 VALUES (?, ?, ?, ?, ?, ?);""", ["---", expr, url, lineNum, line, self.language])
-            print("\n\n==> ", expr, "\n==>", formatted)
-            raise e
+            print("\n\n==> ", expr, "\n==>", formatted, "\n", url, lineNum)
+            print(e)
+            # raise e
+            raw_input("Press Enter to continue ...")
+            return e
 
     # abstractmethod
     def get_line_expression(self, line):
@@ -304,7 +307,7 @@ class PerlSampler(CodeSampler):
         return expression.replace("\\/", "/")
 
 if __name__ == "__main__":
-    SAMPLE_SIZE = 400
+    SAMPLE_SIZE = 500
 
     converter = convert.Converter()
     samplers = [PerlSampler, JavaSampler, TypeScriptSampler, JavaScriptSampler, PythonSampler]
