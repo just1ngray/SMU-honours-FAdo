@@ -29,8 +29,8 @@ process.stdin.on("data", (data) => {
         else if (c.length > 1) str += `\\u\{${c.codePointAt(0).toString(16)}}`
         else                   str += c
 
-        // output.logs.push("Parsing expression /" + data + "/ ... ")
-        // output.logs.push("Expression converted to: " + str)
+        output.logs.push("Parsing expression /" + data + "/ ... ")
+        output.logs.push("Expression converted to: " + str)
 
         const ast = regexp.parse("/" + str + "/u")
         const formatted = nodeToString(ast.body, output)
@@ -71,7 +71,7 @@ function buildConcatRecursively(tokens) {
  * @returns the formatted string
  */
 function nodeToString(node, output, chars=null) {
-    // output.logs.push(`nodeToString: ${chars}\n${JSON.stringify(node)}`)
+    output.logs.push(`nodeToString: ${chars}\n${JSON.stringify(node)}`)
 
     switch (node.type) {
         case "Alternative":
@@ -140,7 +140,7 @@ function nodeToString(node, output, chars=null) {
 
         case "Group":
             if ("expression" in node) // empty group "()"
-                return nodeToString(node.expression)
+                return nodeToString(node.expression, output)
             else
                 return ""
 
