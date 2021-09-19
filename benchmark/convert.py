@@ -99,7 +99,7 @@ class Converter(object):
                     expression = expression[:index] + expression[index+1:]
                     i = index
                 else:
-                    i = index + 1
+                    i = index + 2
             except (IndexError, ValueError):
                 break
 

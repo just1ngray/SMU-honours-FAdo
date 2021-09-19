@@ -210,7 +210,6 @@ class TestFAdoize(unittest.TestCase):
         c = Converter()
         cls.f = lambda _, expr: c.FAdoize(expr, validate=True)
 
-    # Also tested in `test_convert.py` indirectly
     def test_charclass(self):
         self.assertEqual(self.f('\\d'), '[0-9]')
         self.assertEqual(self.f('\\D'), '[^0-9]')
@@ -251,6 +250,10 @@ class TestFAdoize(unittest.TestCase):
         self.assertEqual(self.f("[\\-]"), "[\\-]")
         self.assertEqual(self.f("a[\\]]"), "(a [\\]])")
         self.assertEqual(self.f("a[\\]abc]"), "(a [\\]abc])")
+
+    # some of the "edge cases" found while processing the sample
+    def test_sampleIssues(self):
+        self.assertEqual(self.f(r"\^\\circ"), r"(((((^ \\) c) i) r) c)")
 
 
 if __name__ == "__main__":

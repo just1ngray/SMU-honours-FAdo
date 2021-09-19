@@ -18,18 +18,19 @@ process.stdin.on("data", (data) => {
     else if (data.endsWith("\n")) data = data.substring(0, data.length - 1)
 
     const output = {
-        logs: [],
+        logs: ["--[start]--"],
         error: 0,
         formatted: 0
     }
     try {
-        output.logs.push("Parsing expression /" + data + "/ ... ")
-
         let str = ""
         for (const c of data)
-            if (c == "/")          str += "\\/"
-            else if (c.length > 1) str += `\\u\{${c.codePointAt(0).toString(16)}}`
-            else                   str += c
+        if (c == "/")          str += "\\/"
+        else if (c.length > 1) str += `\\u\{${c.codePointAt(0).toString(16)}}`
+        else                   str += c
+
+        // output.logs.push("Parsing expression /" + data + "/ ... ")
+        // output.logs.push("Expression converted to: " + str)
 
         const ast = regexp.parse("/" + str + "/u")
         const formatted = nodeToString(ast.body, output)
@@ -116,8 +117,11 @@ function nodeToString(node, output, chars=null) {
                     return node.value
                 }
             else { // non-meta character
+                if (node.escaped && "rnt".includes(node.symbol))
+                    return `\\${node.symbol}`
+
                 // character classes require different escapings than atoms
-                const escapeScheme = (chars == null ? "rnt\\()[]+*?" : "rnt\\[]^-")
+                const escapeScheme = (chars == null ? "\\()[]+*?" : "\\[]^-")
                 return (escapeScheme.includes(node.symbol) ? "\\" : "") + node.symbol
             }
 
