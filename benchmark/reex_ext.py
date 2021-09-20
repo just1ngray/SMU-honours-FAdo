@@ -4,7 +4,7 @@ import copy
 from random import randint
 
 from util import RangeList, UniUtil, WeightedRandomItem
-import convert
+import errors
 import fa_ext
 
 class uregexp(reex.regexp):
@@ -25,12 +25,13 @@ class uregexp(reex.regexp):
     def toInvariantNFA(self, method):
         """Convert self into an InvariantNFA using a construction method
         methods include: nfaPD, nfaPDO, nfaPosition, nfaFollow, nfaGlushkov, nfaThompson
+        :raises exceptions.UnknownREtoNFAMethod: if the provided method is not recognized
         """
-        try:
-            nfa = self.toNFA(method)
-            return fa_ext.InvariantNFA(nfa)
-        except AttributeError:
-            raise common.FAdoError("Cannot convert to InvariantNFA using unknown method " + str(method))
+        if method not in set(["nfaPD", "nfaPDO", "nfaPosition", "nfaFollow", "nfaGlushkov", "nfaThompson"]):
+            raise errors.UnknownREtoNFAMethod(method)
+
+        nfa = self.toNFA(method)
+        return fa_ext.InvariantNFA(nfa)
 
     def evalWordPBacktrack(self, word):
         """Using an algorithm similar to native programming language implementations to
@@ -114,11 +115,11 @@ class uregexp(reex.regexp):
         """Returns a copy of self which accepts partially matched words.
         I.e., if L(self) = {w : w is accepted by self}
               then L(self.partialMatch()) = {pws : forall weW ^ p,s as any text length>=0}
-        :raises convert.AnchorError: if an anchor is found to be misplaced
+        :raises errors.AnchorError: if an anchor is found to be misplaced or partialMatching has
+            already been executed on this
         """
         if hasattr(self, "_partialMatch") and not force:
-            raise Exception("This regexp already has partialMatching enabled. Pass force=True " \
-                + "to run this operation again anyway.")
+            raise errors.AnchorError(self, "partialMatching already enabled, pass force=True to override")
 
         re = self._pmBoth()
         re._partialMatch = 0
@@ -823,16 +824,16 @@ class anchor(uepsilon):
         if self.label == "<ASTART>":
             return anchor("<ASTART>")
         else: # <AEND>
-            raise convert.AnchorError(self.label, "Expected start of expression but found end")
+            raise errors.AnchorError(self, "Expected start of expression but found end")
 
     def _pmEnd(self):
         if self.label == "<AEND>":
             return anchor("<AEND>")
         else:
-            raise convert.AnchorError(self.label, "Expected end of expression but found start")
+            raise errors.AnchorError(self, "Expected end of expression but found start")
 
     def _pmNeither(self):
-        raise convert.AnchorError(self.label, "Neither anchor type allowed here")
+        raise errors.AnchorError(self, "Neither anchor type allowed here")
 
     def _containsAnchor(self):
         return True

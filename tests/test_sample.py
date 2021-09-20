@@ -1,7 +1,8 @@
 # coding: utf-8
 import unittest
 
-from benchmark.convert import Converter, FAdoizeError
+from benchmark.convert import Converter
+from benchmark.errors import FAdoizeError, InvalidExpressionError
 from benchmark.sample import *
 
 def isNone(self, line):

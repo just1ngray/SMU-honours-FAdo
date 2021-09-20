@@ -3,8 +3,8 @@ import timeit
 import lark.exceptions
 
 from util import DBWrapper, ConsoleOverwrite
-from convert import Converter, AnchorError
-
+from convert import Converter
+import errors
 
 class BenchExpr(object):
     CONVERTER = Converter()
@@ -260,7 +260,7 @@ if __name__ == "__main__":
 
             output.overwrite("{0}/{1}:".format(done, todo), r)
             r.benchmark()
-        except (lark.exceptions.UnexpectedToken, AnchorError):
+        except (lark.exceptions.UnexpectedToken, errors.AnchorError):
             # disable the impact of the test for all methods if any method fails
             # better than deleting since it can be investigated later
             print("\n\n", r)

@@ -4,6 +4,7 @@ import regex
 import subprocess
 import json
 
+import errors
 from reex_ext import *
 
 class Converter(object):
@@ -82,7 +83,7 @@ class Converter(object):
         :param bool validate: if this function should try and parse into FAdo to detect edge-case
             errors such as poorly-placed anchors.
         :returns unicode: the parenthesized and formatted expression
-        :raises FAdoizeError: if `benchmark/parse.js` throws
+        :raises errors.FAdoizeError: if `benchmark/parse.js` throws
         """
         # regexp-tree doesn't support repetition in the form a{,n} as a{0,n}... convert manually
         def repl(match):
@@ -104,7 +105,7 @@ class Converter(object):
                 break
 
         if len(expression) == 0:
-            raise FAdoizeError(expression, "Expression must have a length > 0")
+            raise errors.FAdoizeError(expression, "Expression must have a length > 0")
 
         if type(expression) is unicode: # ensure expression is utf-8 encoded string
             expression = expression.encode("utf-8")
@@ -117,16 +118,16 @@ class Converter(object):
         if output["error"] != 0:
             logs = reduce(lambda p, c: p + "\n" + c, output["logs"])
             logs_and_callback = (logs + "\n\n" + output["error"]).encode("utf-8")
-            raise FAdoizeError(expression, logs_and_callback)
+            raise errors.FAdoizeError(expression, logs_and_callback)
         else:
             formatted = output["formatted"] # type: unicode
             if validate:
                 try:
                     self.math(formatted, partialMatch=True)
-                except lark.LarkError:
-                    print("\nExpression formatted as", formatted, "but not parsed properly")
-                    print(reduce(lambda p, c: p + "\n\t" + c, output["logs"]))
-                    raise
+                except lark.LarkError as e:
+                    logs = reduce(lambda p, c: p + "\n" + c, output["logs"])
+                    raise errors.FAdoizeError(expression, "Formatted as {0}\nLOGS: {1}\nLARK:{2}" \
+                        .format(formatted, logs, str(e)))
             return formatted
 
 class LarkToFAdo(lark.visitors.Transformer_InPlace):
@@ -150,26 +151,3 @@ class LarkToFAdo(lark.visitors.Transformer_InPlace):
     EPSILON = lambda _0, _1: uepsilon()
     DOTANY = lambda _0, _1: dotany()
     ANCHOR = lambda _, e: anchor(e.value)
-
-
-class ConversionError(Exception):
-    def __init__(self, msg):
-        super(ConversionError, self).__init__(msg)
-
-class AnchorError(ConversionError):
-    def __init__(self, label, msg):
-        super(AnchorError, self).__init__(msg)
-        self.label = label
-        self.msg = msg
-
-    def __str__(self):
-        return "AnchorError '{0}': {1}".format(self.label, self.msg)
-
-class FAdoizeError(ConversionError):
-    def __init__(self, expression, node_callback):
-        super(FAdoizeError, self).__init__("Error during FAdoization")
-        self.expression = expression
-        self.node_callback = node_callback
-
-    def __str__(self):
-        return "FAdoizeError on '{0}':\n{1}".format(self.expression, self.node_callback)

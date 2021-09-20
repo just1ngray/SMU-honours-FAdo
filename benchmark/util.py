@@ -2,6 +2,8 @@ import sqlite3
 import sys
 from random import randint
 
+import errors
+
 class UniUtil():
     @staticmethod
     def ord(c):
@@ -227,7 +229,8 @@ class RangeList(object):
         """
         if hi is None:
             hi = lo
-        assert lo <= hi, "Illegally formed range has a lower bound greater than its upper!"
+        if lo > hi:
+            raise errors.CharRangeError(self, lo, hi)
 
         lo_i = self.search(lo)
         hi_i = lo_i if lo == hi else self.search(hi)
@@ -262,7 +265,8 @@ class RangeList(object):
         """
         if hi is None:
             hi = lo
-        assert lo <= hi, "Illegally formed range has a lower bound greater than its upper!"
+        if lo > hi:
+            raise errors.CharRangeError(self, lo, hi)
 
         lo_i = self.search(lo)
         hi_i = lo_i if lo == hi else self.search(hi)

@@ -2,7 +2,8 @@
 import unittest
 from lark import LarkError
 
-from benchmark.convert import Converter, FAdoizeError
+from benchmark.convert import Converter
+from benchmark.errors import FAdoizeError
 
 
 class TestConverter(unittest.TestCase):

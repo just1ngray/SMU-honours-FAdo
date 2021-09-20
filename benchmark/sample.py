@@ -4,17 +4,9 @@ import json
 import regex
 from lark.exceptions import LarkError
 
+import errors
 import util
 import convert
-
-class InvalidExpressionError(ValueError):
-    def __init__(self, line, message):
-        super(InvalidExpressionError, self).__init__()
-        self.line = line
-        self.message = message
-
-    def __str__(self):
-        return "InvalidExpressionError on line {0}\n{1}".format(self.line, self.message)
 
 class CodeSampler(object):
     def __init__(self, converter, language, search):
@@ -133,13 +125,12 @@ class CodeSampler(object):
                 return None
             self.output.overwrite("save_expression @ " + line)
 
-            formatted = self.converter.FAdoize(expr)
-            self.converter.math(formatted, partialMatch=True) # make sure it parses properly!
+            formatted = self.converter.FAdoize(expr, validate=True)
             self.db.execute("""
                 INSERT OR IGNORE INTO expressions (re_math, re_prog, url, lineNum, line, lang)
                 VALUES (?, ?, ?, ?, ?, ?);""", [formatted, expr, url, lineNum, line, self.language])
             return formatted
-        except (InvalidExpressionError, convert.ConversionError) as err:
+        except (errors.URegexpError) as err:
             self.db.execute("""
                 INSERT OR IGNORE INTO expressions (re_math, re_prog, url, lineNum, line, lang)
                 VALUES (?, ?, ?, ?, ?, ?);""", [str(err), expr, url, lineNum, line, self.language])
@@ -160,7 +151,7 @@ class CodeSampler(object):
         :param unicode line: the line of code on which to search for an expression
         :returns unicode|None: the extracted expression if it exists, None if there is no sign of
         an expression on the line
-        :raises InvalidExpressionError: if there is an issue with extracting the expression, but
+        :raises errors.InvalidExpressionError: if there is an issue with extracting the expression, but
         there's a good chance one exists on line
 
         >>> sampler = SamplerChild()
@@ -196,7 +187,7 @@ class PythonSampler(CodeSampler):
         def getExpr(re, word, endindex):
             match = re.search(word)
             if match is None:
-                raise InvalidExpressionError(line, "Incomplete - no end of expression found")
+                raise errors.InvalidExpressionError(line, "Incomplete - no end of expression found")
             else:
                 return match.group(0)[:endindex]
 
@@ -209,7 +200,7 @@ class PythonSampler(CodeSampler):
         elif delim.endswith("'"):
             extract = lambda x: getExpr(self.re_expr_single, x, -2)
         else:
-            raise InvalidExpressionError(line, "Unknown delimiter: %s" % delim)
+            raise errors.InvalidExpressionError(line, "Unknown delimiter: %s" % delim)
 
         expression = extract(end)
         if not isRaw:
@@ -230,7 +221,7 @@ class JavaScriptSampler(CodeSampler):
             return None
         end = line[match.end():] # start of the expression to the end of the line
         if len(end) == 0:
-            raise InvalidExpressionError(line, "EOL found, expected the expression")
+            raise errors.InvalidExpressionError(line, "EOL found, expected the expression")
 
         end = end.decode("utf-8")
         expression = u""
@@ -253,7 +244,7 @@ class JavaScriptSampler(CodeSampler):
             i += 1
 
         if not success:
-            raise InvalidExpressionError(line, "Could not find terminator of the expression")
+            raise errors.InvalidExpressionError(line, "Could not find terminator of the expression")
 
         return expression
 
@@ -275,11 +266,11 @@ class JavaSampler(CodeSampler):
             return None
         end = line[match.end():] # start of the expression to the end of the line
         if len(end) == 0:
-            raise InvalidExpressionError(line, "EOL found, expected the expression")
+            raise errors.InvalidExpressionError(line, "EOL found, expected the expression")
 
         expression = self.extract.search(end)
         if expression is None:
-            raise InvalidExpressionError(line, "Could not extract the expression")
+            raise errors.InvalidExpressionError(line, "Could not extract the expression")
         expression = expression.group(0).decode("utf-8")[:-2] # remove the `"[,)]` from end
 
         return expression.replace("\\\\", "\\")
@@ -297,11 +288,11 @@ class PerlSampler(CodeSampler):
             return None
         end = line[match.end():] # start of the expression to the end of the line
         if len(end) == 0:
-            raise InvalidExpressionError(line, "EOL found, expected the expression")
+            raise errors.InvalidExpressionError(line, "EOL found, expected the expression")
 
         expression = self.extract.search(end)
         if expression is None:
-            raise InvalidExpressionError(line, "Could not extract the expression")
+            raise errors.InvalidExpressionError(line, "Could not extract the expression")
         expression = expression.group(0).decode("utf-8")[:-1] # remove the `/` from end
 
         return expression.replace("\\/", "/")
