@@ -30,11 +30,20 @@ class BenchExpr(object):
         """Populates the `accepted` and `rejected` attributes with words"""
         self.accepted = set()
         self.rejected = set()
-        infa = self.CONVERTER.math(self.re_math, partialMatch=True).toInvariantNFA("nfaPD")
-        # enum = infa.enumNFA()
 
-        self.accepted.add(infa.witness())
-        # TODO MORE
+        re = BenchExpr.CONVERTER.math(self.re_math, partialMatch=True)
+        enum = re.toInvariantNFA("nfaPDO").enumNFA()
+
+        self.accepted.update(re.pairGen())
+
+        for length in range(enum.shortestWordLength(), min(enum.shortestWordLength()+100, enum.longestWordLength())):
+            crossSection = set()
+            for word in enum.enumCrossSection(length):
+                crossSection.add(word)
+                if len(crossSection) > 100:
+                    break
+            self.accepted.update(crossSection)
+
 
     def setWords(self, accepted, rejected):
         """Sets the words used when running the benchmark"""
