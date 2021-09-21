@@ -124,10 +124,11 @@ class Converter(object):
             if validate:
                 try:
                     self.math(formatted, partialMatch=True)
-                except lark.LarkError as e:
+                except lark.LarkError:
                     logs = reduce(lambda p, c: p + "\n" + c, output["logs"])
-                    raise errors.FAdoizeError(expression, "Formatted as {0}\nLOGS: {1}\nLARK:{2}" \
-                        .format(formatted, logs, str(e)))
+                    print("\nExpression '{0}' formatted as '{1}'\nFAdoize Logs: {2}\n\n" \
+                        .format(expression, formatted, logs))
+                    raise
             return formatted
 
 class LarkToFAdo(lark.visitors.Transformer_InPlace):
