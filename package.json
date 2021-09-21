@@ -14,6 +14,6 @@
   },
   "homepage": "https://github.com/just1ngray/SMU-honours-FAdo#readme",
   "dependencies": {
-    "regexp-tree": "github:just1ngray/regexp-tree"
+    "regexp-tree": "^0.1.24"
   }
 }
