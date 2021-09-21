@@ -1,5 +1,6 @@
 from __future__ import print_function
 import timeit
+import math
 import lark.exceptions
 
 from util import DBWrapper, ConsoleOverwrite
@@ -8,12 +9,13 @@ import errors
 
 class BenchExpr(object):
     CONVERTER = Converter()
+    OUTPUT = ConsoleOverwrite("Bench: ")
 
     # number of times each word set is evaluated for membership (higher to avoid float issues)
-    NUM_WORD_SET_REPETITIONS = 100
+    NUM_WORD_SET_REPETITIONS = 1
 
     # number of times each benchmark is repeated... minimum taken time
-    NUM_BENCHMARK_REPETITIONS = 3
+    NUM_BENCHMARK_REPETITIONS = 1
 
     def __init__(self, db, re_math, method):
         super(BenchExpr, self).__init__()
@@ -31,12 +33,15 @@ class BenchExpr(object):
         self.accepted = set()
         self.rejected = set()
 
-        re = BenchExpr.CONVERTER.math(self.re_math, partialMatch=True)
-        enum = re.toInvariantNFA("nfaPDO").enumNFA()
+        re = BenchExpr.CONVERTER.math(self.re_math, partialMatch=False)
+        enum = re.toInvariantNFA("nfaPosition").enumNFA()
 
-        self.accepted.update(re.pairGen())
+        minlen = enum.shortestWordLength()
+        maxlen = enum.longestWordLength()
+        if math.isinf(maxlen): maxlen = minlen + 100
+        BenchExpr.OUTPUT.overwrite(str(self), "generating words of length {0} to {1}".format(minlen, maxlen))
 
-        for length in range(enum.shortestWordLength(), min(enum.shortestWordLength()+100, enum.longestWordLength())):
+        for length in range(minlen, maxlen):
             crossSection = set()
             for word in enum.enumCrossSection(length):
                 crossSection.add(word)
@@ -52,13 +57,18 @@ class BenchExpr(object):
 
     def benchmark(self):
         """Runs the benchmark and updates the `time` in the `tests` table"""
+        BenchExpr.OUTPUT.overwrite(str(self), "running benchmark method on {0} accepting and {1} rejecting words" \
+            .format(len(self.accepted), len(self.rejected)))
+
         def _timed():
             processed = self.preprocess()
             for word in self.accepted:
+                # print("\tA: '{0}'".format(word.encode("utf-8")))
                 assert self.testMembership(processed, word) == True, \
                     str(self) + " should accept '{0}'".format(word)
 
             for word in self.rejected:
+                # print("\tR: '{0}'".format(word.encode("utf-8")))
                 assert self.testMembership(processed, word) == False, \
                     str(self) + " should NOT accept '{0}'".format(word)
 
@@ -220,7 +230,6 @@ class Benchmarker(object):
 
 
 if __name__ == "__main__":
-    output = ConsoleOverwrite("Benchmarking: ")
     benchmarker = Benchmarker()
 
     completed, todo = benchmarker.printBenchmarkStats()
@@ -267,7 +276,6 @@ if __name__ == "__main__":
                 r.genWords()
                 lastExpr = r
 
-            output.overwrite("{0}/{1}:".format(done, todo), r)
             r.benchmark()
         except (lark.exceptions.UnexpectedToken, errors.AnchorError):
             # disable the impact of the test for all methods if any method fails
