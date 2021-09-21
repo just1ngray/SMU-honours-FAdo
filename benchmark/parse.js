@@ -9,6 +9,8 @@ See details in benchmark/convert.py#FAdoize
 */
 const regexp = require("regexp-tree")
 
+const REP_LIMIT = 1000 // maximum # of repetitions allowed before using kleene star instead
+
 /*
 LISTEN AND RESPOND TO DATA INPUTS
 */
@@ -158,6 +160,9 @@ function nodeToString(node, output, chars=null) {
             // kind = "Range"
             let { from, to } = node.quantifier
             if (from == undefined) from = 0
+
+            if (to > REP_LIMIT || from > REP_LIMIT) return `${expression}*`
+
             function xReps(x) {
                 if (x == 0) return ""
                 else if (x == 1) return expression

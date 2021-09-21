@@ -258,6 +258,12 @@ class TestFAdoize(unittest.TestCase):
         self.assertEqual(self.f(r"[.+\-\w]+"), "([.+\\-0-9A-Za-z_] [.+\\-0-9A-Za-z_]*)")
         self.assertEqual(self.f(r"^([.+\-\w]+)$"), "((<ASTART> ([.+\\-0-9A-Za-z_] [.+\\-0-9A-Za-z_]*)) <AEND>)")
 
+    def test_repetition_limiter(self):
+        self.assertEqual(self.f("a{1001}"), "a*")
+        self.assertEqual(self.f("a{,1001}"), "a*")
+        self.assertEqual(self.f("a{1001,}"), "a*")
+        self.assertEqual(self.f("a{1,1001}"), "a*")
+        self.assertEqual(self.f("a{1001,1002}"), "a*")
 
 if __name__ == "__main__":
     unittest.main()
