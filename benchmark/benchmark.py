@@ -1,87 +1,95 @@
 from __future__ import print_function
 import timeit
 import math
+import copy
 import lark.exceptions
 
-from util import DBWrapper, ConsoleOverwrite
+from util import DBWrapper, ConsoleOverwrite, Deque
 from convert import Converter
 import errors
 
 class BenchExpr(object):
     CONVERTER = Converter()
-    OUTPUT = ConsoleOverwrite("Bench: ")
-
-    # number of times each word set is evaluated for membership (higher to avoid float issues)
-    NUM_WORD_SET_REPETITIONS = 1
-
-    # number of times each benchmark is repeated... minimum taken time
-    NUM_BENCHMARK_REPETITIONS = 1
+    OUTPUT = ConsoleOverwrite("Bench:")
+    CODE_LINES = Deque(filter(lambda l: len(l) > 0, open("./benchmark/reex_ext.py", "r").read().splitlines()))
 
     def __init__(self, db, re_math, method):
         super(BenchExpr, self).__init__()
         self.db = db
         self.method = method
         self.re_math = re_math
-        self.accepted = set()
-        self.rejected = set()
+        self.accepted = list()
+        self.rejected = list()
 
     def __str__(self):
         return "{0}: {1}".format(self.method, self.re_math).encode("string-escape")
 
     def genWords(self):
         """Populates the `accepted` and `rejected` attributes with words"""
-        self.accepted = set()
-        self.rejected = set()
+        self.accepted = list()
+        self.rejected = list()
 
-        re = BenchExpr.CONVERTER.math(self.re_math, partialMatch=False)
-        enum = re.toInvariantNFA("nfaPosition").enumNFA()
+        try:
+            re = BenchExpr.CONVERTER.math(self.re_math, partialMatch=False)
 
-        minlen = enum.shortestWordLength()
-        maxlen = enum.longestWordLength()
-        if math.isinf(maxlen): maxlen = minlen + 100
-        BenchExpr.OUTPUT.overwrite(str(self), "generating words of length {0} to {1}".format(minlen, maxlen))
+            testwords = Deque(re.pairGen())
+            if len(testwords) == 0:
+                return
+            word = testwords.iter_cycle()               # cyclically iterate through pairGen words... next(word)
+            line = BenchExpr.CODE_LINES.iter_cycle()    # cyclically iterate through code lines...... next(line)
 
-        for length in range(minlen, maxlen):
-            crossSection = set()
-            for word in enum.enumCrossSection(length):
-                crossSection.add(word)
-                if len(crossSection) > 100:
-                    break
-            self.accepted.update(crossSection)
+            hasASTART = "<ASTART>" in self.re_math
+            hasAEND = "<AEND>" in self.re_math
+            addAccepting = lambda line: 0
+            if hasASTART and hasAEND: # no leading/trailing from the line
+                addAccepting = lambda line: self.accepted.append(next(word))
+            elif hasASTART: # insert word at end of line
+                addAccepting = lambda line: self.accepted.append(line + next(word))
+            elif hasAEND: # insert word at beginning of line
+                addAccepting = lambda line: self.accepted.append(next(word) + line)
+            else: # insert word in middle of line
+                addAccepting = lambda line: self.accepted.append(
+                    line[:len(line)//2] + next(word) + line[len(line)//2:])
 
-
-    def setWords(self, accepted, rejected):
-        """Sets the words used when running the benchmark"""
-        self.accepted = accepted
-        self.rejected = rejected
+            for _ in range(max(len(testwords), len(BenchExpr.CODE_LINES))):
+                addAccepting(next(line))
+        except Exception as e:
+            # self.db.execute("""
+            #     UPDATE tests
+            #     SET pre_time=0, eval_time=0, error=?
+            #     WHERE re_math=?;
+            # """, [str(e) + "\nwhile generating words", self.re_math])
+            raise e
 
     def benchmark(self):
-        """Runs the benchmark and updates the `time` in the `tests` table"""
-        BenchExpr.OUTPUT.overwrite(str(self), "running benchmark method on {0} accepting and {1} rejecting words" \
-            .format(len(self.accepted), len(self.rejected)))
-
-        def _timed():
+        """Runs the benchmark and updates the `pre_time` & `eval_time` in the `tests` table"""
+        try:
+            BenchExpr.OUTPUT.overwrite(str(self), "pre-processing")
             processed = self.preprocess()
+            pre_time = timeit.timeit(self.preprocess, number=1000)
+
+            eval_time = 0.0
             for word in self.accepted:
-                # print("\tA: '{0}'".format(word.encode("utf-8")))
-                assert self.testMembership(processed, word) == True, \
-                    str(self) + " should accept '{0}'".format(word)
+                BenchExpr.OUTPUT.overwrite(str(self), "should match '{0}'".format(word.encode("utf-8")))
+                assert self.testMembership(processed, word) == True, str(self) + " didn't accept '{0}'".format(word)
+                eval_time += timeit.timeit(lambda: self.testMembership(processed, word), number=1)
 
             for word in self.rejected:
-                # print("\tR: '{0}'".format(word.encode("utf-8")))
-                assert self.testMembership(processed, word) == False, \
-                    str(self) + " should NOT accept '{0}'".format(word)
+                BenchExpr.OUTPUT.overwrite(str(self), "should reject '{0}'".format(word))
+                assert self.testMembership(processed, word) == False, str(self) + " didn't reject '{0}'".format(word)
+                eval_time += timeit.timeit(lambda: self.testMembership(processed, word), number=1)
 
-        times = set()
-        for _ in range(BenchExpr.NUM_BENCHMARK_REPETITIONS):
-            times.add(timeit.timeit(stmt=_timed, setup="gc.enable()",
-                number=BenchExpr.NUM_WORD_SET_REPETITIONS))
-
-        self.db.execute("""
-            UPDATE tests
-            SET time=?
-            WHERE re_math=? AND method=? AND time!=0;
-        """, [min(times), self.re_math, self.method])
+            self.db.execute("""
+                UPDATE tests
+                SET pre_time=?, eval_time=?
+                WHERE re_math=? AND method=? AND error='';
+            """, [pre_time, eval_time, self.re_math, self.method])
+        except (errors.FAdoExtError, AssertionError) as err:
+            self.db.execute("""
+                UPDATE tests
+                SET pre_time=0, eval_time=0, error=?
+                WHERE re_math=?;
+            """, [str(err) + "\nin method " + self.method, self.re_math])
 
     def preprocess(self):
         """One-time cost of parsing, compiling, etc into an object which can
@@ -153,7 +161,7 @@ class Benchmarker(object):
                 DROP TABLE IF EXISTS tests;
 
                 CREATE TABLE tests AS
-                    SELECT DISTINCT e.re_math, m.method, -1 as time
+                    SELECT DISTINCT e.re_math, m.method, -1 as pre_time, -1 as eval_time, "" as error
                     FROM methods as m, expressions as e
                     WHERE e.re_math NOT LIKE '%Error%'
                     ORDER BY re_math ASC, method ASC;
@@ -165,13 +173,14 @@ class Benchmarker(object):
         self.printSampleStats()
 
     def __iter__(self):
-        """Yields BenchExpr objects orderde by the distinct expression"""
+        """Yields BenchExpr objects ordered by the distinct expression"""
         newCursor = self.db._connection.cursor() # o/w the main cursor may move
-        newCursor.execute("""SELECT re_math, method
+        newCursor.execute("""SELECT re_math, method, error
                              FROM tests
-                             WHERE time=-1;""")
-        for re_math, method in newCursor:
-            yield eval("MethodImplementation." + method)(self.db, re_math, method)
+                             WHERE pre_time=-1;""")
+        for re_math, method, error in newCursor:
+            if len(error) == 0:
+                yield eval("MethodImplementation." + method)(self.db, re_math, method)
 
         newCursor.close()
 
@@ -211,20 +220,20 @@ class Benchmarker(object):
         """Prints (stdout) the result statistics from the last benchmark
         and returns (#completed, #todo)"""
         all = self.db.selectall("""
-            SELECT method, sum(time)
+            SELECT method, sum(pre_time), sum(eval_time), sum(pre_time) + sum(eval_time) as time
             FROM tests
-            WHERE time>0
+            WHERE pre_time>-1 AND error==''
             GROUP BY method
-            ORDER BY sum(time) ASC;
+            ORDER BY time ASC;
         """)
         print("\n\nBENCHMARKED STATISTICS:\n")
-        print("method           sum(min_time)")
-        print("------------------------------")
+        print("method           pre_time         eval_time        time")
+        print("-"*(16*4 + 2))
         for row in all:
-            print(row[0].ljust(16), str(row[1]))
+            print(row[0].ljust(16), str(row[1]).ljust(16), str(row[2]).ljust(16), str(row[3]).ljust(16))
 
-        done = self.db.selectall("SELECT count(*) FROM tests WHERE time!=-1 AND time!=0;")[0][0]
-        todo = self.db.selectall("SELECT count(*) FROM tests WHERE time==-1 AND time!=0;")[0][0]
+        done = self.db.selectall("SELECT count(*) FROM tests WHERE pre_time>-1;")[0][0]
+        todo = self.db.selectall("SELECT count(*) FROM tests WHERE pre_time==-1;")[0][0]
         return (done, todo)
 
 
@@ -271,7 +280,8 @@ if __name__ == "__main__":
         try:
             # take advantage of Benchmarker iteration being ordered by re_math and re-generate words sparingly
             if r.re_math == lastExpr.re_math:
-                r.setWords(lastExpr.accepted, lastExpr.rejected)
+                r.accepted = copy.copy(lastExpr.accepted)
+                r.rejected = copy.copy(lastExpr.rejected)
             else:
                 r.genWords()
                 lastExpr = r
