@@ -141,8 +141,8 @@ class uregexp(reex.regexp):
         """The beginning can NOT be the word start, and after can NOT be the word end"""
         raise NotImplementedError()
 
-    def _containsAnchor(self):
-        """Traverses the subtree searching for anchor(s). Returns bool"""
+    def _containsT(self, T):
+        """Traverses the subtree searching for T(s). Returns bool"""
         raise NotImplementedError()
 
 class uconcat(reex.concat, uregexp):
@@ -233,8 +233,10 @@ class uconcat(reex.concat, uregexp):
     def _pmNeither(self):
         return uconcat(self.arg1._pmNeither(), self.arg2._pmNeither())
 
-    def _containsAnchor(self):
-        return self.arg1._containsAnchor() or self.arg2._containsAnchor()
+    def _containsT(self, T):
+        if type(self) is T:
+            return True
+        return self.arg1._containsT(T) or self.arg2._containsT(T)
 
 class udisj(reex.disj, uregexp):
     def __init__(self, arg1, arg2):
@@ -276,8 +278,10 @@ class udisj(reex.disj, uregexp):
     def _pmNeither(self):
         return udisj(self.arg1._pmNeither(), self.arg2._pmNeither())
 
-    def _containsAnchor(self):
-        return self.arg1._containsAnchor() or self.arg2._containsAnchor()
+    def _containsT(self, T):
+        if type(self) is T:
+            return True
+        return self.arg1._containsT(T) or self.arg2._containsT(T)
 
 class ustar(reex.star, uregexp):
     def __init__(self, arg):
@@ -356,19 +360,19 @@ class ustar(reex.star, uregexp):
             + str(id(self)) + " -> " + str(id(self.arg)) + ";\n"
 
     def _pmBoth(self):
-        if self._containsAnchor():
+        if self._containsT(anchor):
             return udisj(self.arg._pmBoth(), uepsilon())
         else:
             return uconcat(uconcat(ustar(dotany()), ustar(self.arg._pmNeither())), ustar(dotany()))
 
     def _pmStart(self):
-        if self._containsAnchor():
+        if self._containsT(anchor):
             return udisj(self.arg._pmStart(), uepsilon())
         else:
             return uconcat(ustar(dotany()), ustar(self.arg._pmNeither()))
 
     def _pmEnd(self):
-        if self._containsAnchor():
+        if self._containsT(anchor):
             return udisj(self.arg._pmEnd(), uepsilon())
         else:
             return uconcat(ustar(self.arg._pmNeither()), ustar(dotany()))
@@ -376,8 +380,10 @@ class ustar(reex.star, uregexp):
     def _pmNeither(self):
         return ustar(self.arg._pmNeither())
 
-    def _containsAnchor(self):
-        return self.arg._containsAnchor()
+    def _containsT(self, T):
+        if type(self) is T:
+            return True
+        return self.arg._containsT(T)
 
 class uoption(reex.option, uregexp):
     def __init__(self, arg):
@@ -420,8 +426,10 @@ class uoption(reex.option, uregexp):
     def _pmNeither(self):
         return udisj(self.arg._pmNeither(), uepsilon())
 
-    def _containsAnchor(self):
-        return self.arg._containsAnchor()
+    def _containsT(self, T):
+        if type(self) is T:
+            return True
+        return self.arg._containsT(T)
 
 class uepsilon(reex.epsilon, uregexp):
     def __init__(self):
@@ -456,8 +464,8 @@ class uepsilon(reex.epsilon, uregexp):
     def _pmNeither(self):
         return copy.deepcopy(self)
 
-    def _containsAnchor(self):
-        return False
+    def _containsT(self, T):
+        return type(self) is T
 
 class uemptyset(reex.emptyset, uregexp):
     def __init__(self):
@@ -598,8 +606,8 @@ class uatom(reex.atom, uregexp):
     def _pmNeither(self):
         return copy.deepcopy(self)
 
-    def _containsAnchor(self):
-        return False
+    def _containsT(self, T):
+        return type(self) is T
 
 class chars(uatom):
     """A character class which can match any single character or a range of characters contained within it
@@ -834,6 +842,3 @@ class anchor(uepsilon):
 
     def _pmNeither(self):
         raise errors.AnchorError(self, "Neither anchor type allowed here")
-
-    def _containsAnchor(self):
-        return True
