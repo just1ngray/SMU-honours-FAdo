@@ -39,14 +39,20 @@ class ConsoleOverwrite():
     def __init__(self, prefix=""):
         self.prefix = prefix
         self._lastlen = 0
-        self._width = self._terminal_size()[0] - 4
+        self._width = self._terminal_size()[0] - 5
 
     def overwrite(self, *items):
         print "\r" + " "*self._lastlen + "\r",
 
-        content = self.prefix + reduce(lambda p, c: p + " " + str(c), items, "")
-        content = content.replace("\t", "    ")\
-            .replace("\n", "\\n")
+        def _concat(prev, curr):
+            if curr in set("\r\t\n"):
+                return prev + " " + curr.encode("string-escape")
+            try:
+                return prev + " " + str(curr)
+            except UnicodeError:
+                return prev + " " + curr.encode("utf-8")
+
+        content = (self.prefix + reduce(_concat, items, ""))
         if len(content) > self._width:
             content = content[:self._width - 3] + "..."
         self._lastlen = len(content)
@@ -384,6 +390,14 @@ class Deque(object):
         while current is not None:
             yield current[1]
             current = current[2]
+
+    def iter_cycle(self):
+        """Cyclically iterate (forever)"""
+        while True:
+            current = self._head
+            while current is not None:
+                yield current[1]
+                current = current[2]
 
     def __str__(self):
         """O(n)"""
