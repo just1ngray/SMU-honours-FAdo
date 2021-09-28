@@ -1,0 +1,118 @@
+ncalls  tottime  percall  cumtime  percall filename:lineno(function)
+        1    0.000    0.000    0.000    0.000 <string>:1(<module>)
+     1001    0.001    0.000    0.165    0.000 benchmark.py:104(preprocess)
+      233    0.000    0.000    0.002    0.000 benchmark.py:22(__str__)
+      231    0.000    0.000   30.788    0.133 benchmark.py:68(<lambda>)
+      463    0.089    0.000   71.055    0.153 benchmark.py:97(testMembership)
+     4004    0.001    0.000    0.001    0.000 convert.py:138(<lambda>)
+     1001    0.001    0.000    0.003    0.000 convert.py:139(<lambda>)
+     1001    0.001    0.000    0.003    0.000 convert.py:141(<lambda>)
+     1001    0.001    0.000    0.003    0.000 convert.py:149(<lambda>)
+     1001    0.001    0.000    0.003    0.000 convert.py:153(<lambda>)
+     1001    0.002    0.000    0.163    0.000 convert.py:18(math)
+6632/2465    0.016    0.000    0.055    0.000 copy.py:145(deepcopy)
+     6632    0.009    0.000    0.009    0.000 copy.py:267(_keep_alive)
+     7007    0.001    0.000    0.001    0.000 grammar.py:96(__hash__)
+     7007    0.026    0.000    0.054    0.000 lalr_parser.py:116(feed_token)
+     1001    0.002    0.000    0.113    0.000 lalr_parser.py:166(parse)
+     1001    0.006    0.000    0.110    0.000 lalr_parser.py:174(parse_from_state)
+     1001    0.001    0.000    0.114    0.000 lalr_parser.py:39(parse)
+     1001    0.001    0.000    0.001    0.000 lalr_parser.py:75(__init__)
+     1001    0.001    0.000    0.001    0.000 lalr_parser.py:89(__init__)
+     7007    0.001    0.000    0.001    0.000 lalr_parser.py:95(position)
+     1001    0.001    0.000    0.121    0.000 lark.py:547(parse)
+     7007    0.006    0.000    0.008    0.000 lexer.py:133(__new__)
+     1001    0.001    0.000    0.002    0.000 lexer.py:157(new_borrow_pos)
+     1001    0.000    0.000    0.000    0.000 lexer.py:182(__init__)
+     6006    0.003    0.000    0.003    0.000 lexer.py:195(feed)
+     2002    0.001    0.000    0.002    0.000 lexer.py:214(__call__)
+     1001    0.001    0.000    0.002    0.000 lexer.py:300(make_lexer_state)
+     6006    0.001    0.000    0.001    0.000 lexer.py:353(mres)
+     6006    0.006    0.000    0.012    0.000 lexer.py:359(match)
+     7007    0.016    0.000    0.041    0.000 lexer.py:370(next_token)
+     1001    0.000    0.000    0.000    0.000 lexer.py:409(__init__)
+     1001    0.000    0.000    0.003    0.000 lexer.py:451(make_lexer_state)
+     7007    0.006    0.000    0.048    0.000 lexer.py:454(lex)
+     1001    0.001    0.000    0.003    0.000 lexer.py:474(__init__)
+     1001    0.000    0.000    0.000    0.000 lexer.py:478(lex)
+     2002    0.002    0.000    0.011    0.000 parse_tree_builder.py:120(__call__)
+     7007    0.006    0.000    0.018    0.000 parse_tree_builder.py:295(f)
+     1001    0.002    0.000    0.120    0.000 parser_frontends.py:103(parse)
+     1001    0.001    0.000    0.001    0.000 parser_frontends.py:93(_verify_start)
+
+
+
+    14173770   10.356    0.000   14.736    0.000 reex.py:1383(__init__)
+    13610709    4.658    0.000   18.625    0.000 reex.py:1523(derivative)
+    578304    0.071    0.000    0.071    0.000 reex.py:1670(ewp)
+    14609644    1.310    0.000    1.310    0.000 reex.py:1793(ewp)
+    27853574   19.101    0.000   26.011    0.000 reex.py:1857(__init__)
+    2060795/46399    0.854    0.000    1.432    0.000 reex.py:2006(ewp)
+    13595030/15706   10.307    0.000   70.266    0.004 reex.py:2079(derivative)
+        5393    0.004    0.000    0.008    0.000 reex.py:2520(__init__)
+    546892    0.397    0.000    2.320    0.000 reex.py:2634(derivative)
+        49430    0.006    0.000    0.006    0.000 reex.py:2691(ewp)
+    1578703/1031473    0.398    0.000    0.772    0.000 reex.py:2802(ewp)
+    13143709/12112697   10.935    0.000   49.456    0.000 reex.py:2875(derivative)
+        16631    0.002    0.000    0.002    0.000 reex.py:328(ewp)
+    42040595   10.987    0.000   10.987    0.000 reex.py:54(__init__)
+        463    0.012    0.000   70.966    0.153 reex.py:641(evalWordP)
+        463    0.596    0.001   70.917    0.153 reex.py:755(wordDerivative)
+     7858    0.005    0.000    0.012    0.000 reex.py:896(__init__)
+
+
+   581705    0.315    0.000    0.487    0.000 reex_ext.py:11(__init__)
+     1001    0.001    0.000    0.040    0.000 reex_ext.py:114(partialMatch)
+     5393    0.004    0.000    0.012    0.000 reex_ext.py:149(__init__)
+ 1389/463    0.003    0.000    0.037    0.000 reex_ext.py:152(__deepcopy__)
+     1001    0.001    0.000    0.039    0.000 reex_ext.py:224(_pmBoth)
+     5393    0.003    0.000    0.011    0.000 reex_ext.py:283(__init__)
+     1389    0.002    0.000    0.018    0.000 reex_ext.py:286(__deepcopy__)
+     1001    0.002    0.000    0.019    0.000 reex_ext.py:370(_pmEnd)
+     1001    0.000    0.000    0.001    0.000 reex_ext.py:379(_containsAnchor)
+   547355    0.400    0.000    1.144    0.000 reex_ext.py:427(__init__)
+    15706    0.010    0.000    0.034    0.000 reex_ext.py:463(__init__)
+     7858    0.006    0.000    0.017    0.000 reex_ext.py:475(__init__)
+     1464    0.001    0.000    0.004    0.000 reex_ext.py:479(__deepcopy__)
+    16169    0.015    0.000    0.055    0.000 reex_ext.py:499(derivative)
+    16169    0.004    0.000    0.004    0.000 reex_ext.py:505(__contains__)
+     1001    0.002    0.000    0.017    0.000 reex_ext.py:592(_pmStart)
+     1001    0.001    0.000    0.008    0.000 reex_ext.py:598(_pmNeither)
+     1001    0.000    0.000    0.000    0.000 reex_ext.py:601(_containsAnchor)
+     5393    0.003    0.000    0.015    0.000 reex_ext.py:757(__init__)
+     2390    0.002    0.000    0.009    0.000 reex_ext.py:760(__deepcopy__)
+   546892    0.214    0.000    1.357    0.000 reex_ext.py:776(derivative)
+
+
+      232    0.001    0.000    0.001    0.000 timeit.py:121(__init__)
+      232    0.004    0.000    0.004    0.000 timeit.py:150(setup)
+      232    0.001    0.000   30.960    0.133 timeit.py:185(timeit)
+      232    0.001    0.000   30.962    0.133 timeit.py:234(timeit)
+      232    0.000    0.000    0.000    0.000 timeit.py:94(_template_func)
+      232    0.002    0.000   30.959    0.133 timeit.py:96(inner)
+     7007    0.002    0.000    0.002    0.000 tree.py:30(__init__)
+      233    0.001    0.000    0.004    0.000 util.py:44(overwrite)
+      466    0.001    0.000    0.001    0.000 util.py:47(_concat)
+     7007    0.003    0.000    0.003    0.000 {built-in method __new__ of type object at 0x7fff91a57908}
+      232    0.000    0.000    0.000    0.000 {gc.disable}
+      232    0.000    0.000    0.000    0.000 {gc.enable}
+      232    0.000    0.000    0.000    0.000 {gc.isenabled}
+     6632    0.001    0.000    0.001    0.000 {getattr}
+      232    0.000    0.000    0.000    0.000 {globals}
+     1233    0.001    0.000    0.001    0.000 {hasattr}
+    26528    0.002    0.000    0.002    0.000 {id}
+     3467    0.001    0.000    0.001    0.000 {isinstance}
+     6632    0.001    0.000    0.001    0.000 {issubclass}
+    21487    0.002    0.000    0.002    0.000 {len}
+    29029    0.003    0.000    0.003    0.000 {method 'append' of 'list' objects}
+        1    0.000    0.000    0.000    0.000 {method 'disable' of '_lsprof.Profiler' objects}
+      233    0.001    0.000    0.001    0.000 {method 'encode' of 'str' objects}
+      232    0.000    0.000    0.000    0.000 {method 'encode' of 'unicode' objects}
+      233    0.002    0.000    0.002    0.000 {method 'flush' of 'file' objects}
+      465    0.000    0.000    0.000    0.000 {method 'format' of 'str' objects}
+    13264    0.001    0.000    0.001    0.000 {method 'get' of 'dict' objects}
+     6006    0.001    0.000    0.001    0.000 {method 'group' of '_sre.SRE_Match' objects}
+     8008    0.005    0.000    0.005    0.000 {method 'match' of '_sre.SRE_Pattern' objects}
+     3003    0.001    0.000    0.001    0.000 {method 'replace' of 'str' objects}
+      233    0.000    0.000    0.001    0.000 {reduce}
+      464    0.000    0.000    0.000    0.000 {time.time}

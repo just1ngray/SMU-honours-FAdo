@@ -83,7 +83,7 @@ class uregexp(reex.regexp):
             filenameOut = fname + ext
 
         foo = open(fnameGV, "w")
-        foo.write("digraph {\n"
+        foo.write("strict digraph {\n"
             + 'label="{0}";\n'.format(str(self).encode("string-escape"))
             + 'labelloc="t";\n'
             + self._dotFormat()
@@ -144,6 +144,18 @@ class uregexp(reex.regexp):
     def _containsT(self, T):
         """Traverses the subtree searching for T(s). Returns bool"""
         raise NotImplementedError()
+
+    def compress(self, uniqueSubtrees=dict()):
+        """Mutates self to a compressed version where duplicate subtrees
+            reference the same objects in memory.
+        :param dict uniqueSubtrees: <repr, reference> to unique subtrees
+        :post: compress method is overwritten to be trivial, and self is of
+            compressed form.
+
+        ..see: S. Konstantinidis, et al. "Partial Derivative Automaton by
+            Compressing Regular Expressions"
+        """
+        self.compress = lambda u=dict(): None # prevent needless re-compression
 
 class uconcat(reex.concat, uregexp):
     def __init__(self, arg1, arg2):
@@ -216,7 +228,7 @@ class uconcat(reex.concat, uregexp):
                 yield p2
 
     def _dotFormat(self):
-        return str(id(self)) + '[label=".", shape=circle];\n' \
+        return str(id(self)) + '[label=".", shape="circle", ordering="out"];\n' \
             + self.arg1._dotFormat() + self.arg2._dotFormat() \
             + str(id(self)) + " -> " + str(id(self.arg1)) + ";\n" \
             + str(id(self)) + " -> " + str(id(self.arg2)) + ";\n"
@@ -237,6 +249,19 @@ class uconcat(reex.concat, uregexp):
         if type(self) is T:
             return True
         return self.arg1._containsT(T) or self.arg2._containsT(T)
+
+    def compress(self, uniqueSubtrees=dict()):
+        for arg in ["arg1", "arg2"]:
+            attr = getattr(self, arg)
+            rep = repr(attr)
+
+            if uniqueSubtrees.has_key(rep):
+                setattr(self, arg, uniqueSubtrees[rep])
+            else:
+                attr.compress(uniqueSubtrees)
+                uniqueSubtrees[repr(self)] = self
+
+        super(uconcat, self).compress(uniqueSubtrees)
 
 class udisj(reex.disj, uregexp):
     def __init__(self, arg1, arg2):
@@ -261,7 +286,7 @@ class udisj(reex.disj, uregexp):
             yield possibility
 
     def _dotFormat(self):
-        return str(id(self)) + '[label="+", shape=circle];\n' \
+        return str(id(self)) + '[label="+", shape="circle", ordering="out"];\n' \
             + self.arg1._dotFormat() + self.arg2._dotFormat() \
             + str(id(self)) + " -> " + str(id(self.arg1)) + ";\n" \
             + str(id(self)) + " -> " + str(id(self.arg2)) + ";\n"
@@ -282,6 +307,19 @@ class udisj(reex.disj, uregexp):
         if type(self) is T:
             return True
         return self.arg1._containsT(T) or self.arg2._containsT(T)
+
+    def compress(self, uniqueSubtrees=dict()):
+        for arg in ["arg1", "arg2"]:
+            attr = getattr(self, arg)
+            rep = repr(attr)
+
+            if uniqueSubtrees.has_key(rep):
+                setattr(self, arg, uniqueSubtrees[rep])
+            else:
+                attr.compress(uniqueSubtrees)
+                uniqueSubtrees[repr(self)] = self
+
+        super(udisj, self).compress(uniqueSubtrees)
 
 class ustar(reex.star, uregexp):
     def __init__(self, arg):
@@ -355,7 +393,7 @@ class ustar(reex.star, uregexp):
         yield word
 
     def _dotFormat(self):
-        return str(id(self)) + '[label="*", shape=circle];\n' \
+        return str(id(self)) + '[label="*", shape="circle"];\n' \
             + self.arg._dotFormat() \
             + str(id(self)) + " -> " + str(id(self.arg)) + ";\n"
 
@@ -385,6 +423,16 @@ class ustar(reex.star, uregexp):
             return True
         return self.arg._containsT(T)
 
+    def compress(self, uniqueSubtrees=dict()):
+        reprArg = repr(self.arg)
+        if uniqueSubtrees.has_key(reprArg):
+            self.arg = uniqueSubtrees[reprArg]
+        else:
+            self.arg.compress(uniqueSubtrees)
+            uniqueSubtrees[repr(self)] = self
+
+        super(ustar, self).compress(uniqueSubtrees)
+
 class uoption(reex.option, uregexp):
     def __init__(self, arg):
         super(uoption, self).__init__(arg, sigma=None)
@@ -410,7 +458,7 @@ class uoption(reex.option, uregexp):
             yield possibility
 
     def _dotFormat(self):
-        return str(id(self)) + '[label="?", shape=circle];\n' \
+        return str(id(self)) + '[label="?", shape="circle"];\n' \
             + self.arg._dotFormat() \
             + str(id(self)) + " -> " + str(id(self.arg)) + ";\n"
 
@@ -431,6 +479,16 @@ class uoption(reex.option, uregexp):
             return True
         return self.arg._containsT(T)
 
+    def compress(self, uniqueSubtrees=dict()):
+        reprArg = repr(self.arg)
+        if uniqueSubtrees.has_key(reprArg):
+            self.arg = uniqueSubtrees[reprArg]
+        else:
+            self.arg.compress(uniqueSubtrees)
+            uniqueSubtrees[repr(self)] = self
+
+        super(uoption, self).compress(uniqueSubtrees)
+
 class uepsilon(reex.epsilon, uregexp):
     def __init__(self):
         super(uepsilon, self).__init__(sigma=None)
@@ -447,7 +505,7 @@ class uepsilon(reex.epsilon, uregexp):
         yield word
 
     def _dotFormat(self):
-        return str(id(self)) + '[label="' + str(self) + '", shape=none];\n'
+        return str(id(self)) + '[label="' + str(self) + '", shape="none"];\n'
 
     def _pmBoth(self):
         # @any* e @any*
@@ -466,6 +524,11 @@ class uepsilon(reex.epsilon, uregexp):
 
     def _containsT(self, T):
         return type(self) is T
+
+    def compress(self, uniqueSubtrees=dict()):
+        if not uniqueSubtrees.has_key(repr(self)):
+            uniqueSubtrees[repr(self)] = self
+        super(uepsilon, self).compress(uniqueSubtrees)
 
 class uemptyset(reex.emptyset, uregexp):
     def __init__(self):
@@ -592,7 +655,7 @@ class uatom(reex.atom, uregexp):
 
     def _dotFormat(self):
         val = str(self) if self.val != " " else "SPACE"
-        return str(id(self)) + '[label="' + val.encode("string-escape") + '", shape=none];\n'
+        return str(id(self)) + '[label="' + val.encode("string-escape") + '", shape="none"];\n'
 
     def _pmBoth(self):
         return uconcat(uconcat(ustar(dotany()), copy.deepcopy(self)), ustar(dotany()))
@@ -608,6 +671,11 @@ class uatom(reex.atom, uregexp):
 
     def _containsT(self, T):
         return type(self) is T
+
+    def compress(self, uniqueSubtrees=dict()):
+        if not uniqueSubtrees.has_key(repr(self)):
+            uniqueSubtrees[repr(self)] = self
+        super(uatom, self).compress(uniqueSubtrees)
 
 class chars(uatom):
     """A character class which can match any single character or a range of characters contained within it
