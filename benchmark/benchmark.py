@@ -206,9 +206,6 @@ class Benchmarker(object):
                 DROP TABLE methods;
             """)
 
-        self.printSampleStats()
-        self.printBenchmarkStats()
-
     def __iter__(self):
         """Yields BenchExpr objects ordered by the distinct expression"""
         newCursor = self.db._connection.cursor() # o/w the main cursor may move
@@ -278,6 +275,7 @@ class Benchmarker(object):
 if __name__ == "__main__":
     benchmarker = Benchmarker()
 
+    benchmarker.printSampleStats()
     completed, todo = benchmarker.printBenchmarkStats()
     print("\nCompleted: " + str(completed))
     print("Todo:      " + str(todo))
