@@ -33,7 +33,7 @@ class uregexp(reex.regexp):
         nfa = self.toNFA(method)
         return fa_ext.InvariantNFA(nfa)
 
-    def evalWordPBacktrack(self, word):
+    def evalWordP_Backtrack(self, word):
         """Using an algorithm similar to native programming language implementations to
         solve the membership problem. Allows for extended functionality such as backreferences,
         but leads to exponential worst-case time complexity.
@@ -59,6 +59,53 @@ class uregexp(reex.regexp):
         """Called by evalWordPBacktrack using Algorithm 1 as described in the cited paper.
         Yields possible sub-words with matched prefixes removed from param word
         """
+        raise NotImplementedError()
+
+    def evalWordP_Derivative(self, word):
+        return self.evalWordP(word)
+
+    def evalWordP_PD(self, word):
+        current = set([self])
+        for sigma in word:
+            nxt = set()
+            for c in current:
+                nxt.update(c.partialDerivatives(sigma))
+            current = nxt
+
+        for c in current:
+            if c.ewp():
+                return True
+        return False
+
+    def evalWordP_PDO(self, word):
+        memo = dict()
+        # NOTE MEMO IS CURRENTLY NOT EFFECTIVE BECAUSE WE RETURN NEW INSTANCES IN PARTIALDERIVATIVES METHODS
+        # WE NEED TO BE MORE CLEVER AND BUILD THE TREE OUT A AS REQUIRED
+
+        current = set([self])
+        for sigma in word:
+            nxt = set()
+            for c in current:
+                pds = memo.get((c, sigma), None)
+                if pds is None:
+                    pds = c.partialDerivatives(sigma)
+                    memo[(c, sigma)] = pds
+                nxt.update(pds)
+
+            current = nxt
+
+        for c in current:
+            if c.ewp():
+                return True
+        return False
+
+    def partialDerivatives(self, sigma):
+        """Set of partial derivatives of the regular expression in relation to given symbol.
+
+        :param sigma: symbol in relation to which the derivative will be calculated.
+        :return: set of regular expressions
+
+        .. seealso:: Antimirov, 95"""
         raise NotImplementedError()
 
     def display(self, fileName=None):
@@ -189,6 +236,19 @@ class uconcat(reex.concat, uregexp):
                 else:
                     lf[head] = set(arg2_lf[head])
         return lf
+
+    def partialDerivatives(self, sigma):
+        pds = set()
+        for pd in self.arg1.partialDerivatives(sigma):
+            if pd.emptysetP():
+                pass # pds.add(emptyset(self.Sigma))
+            elif pd.epsilonP():
+                pds.add(self.arg2)
+            else:
+                pds.add(uconcat(pd, self.arg2))
+        if self.arg1.ewp():
+            pds.update(self.arg2.partialDerivatives(sigma))
+        return pds
 
     def _memoLF(self):
         if hasattr(self, "_lf"):
@@ -346,6 +406,18 @@ class ustar(reex.star, uregexp):
                 else:
                     lf[head].add(uconcat(tail, self))
         return lf
+
+    def partialDerivatives(self, sigma):
+        arg_pdset = self.arg.partialDerivatives(sigma)
+        pds = set()
+        for pd in arg_pdset:
+            if pd.emptysetP():
+                pass # pds.add(uemptyset())
+            elif pd.epsilonP():
+                pds.add(self)
+            else:
+                pds.add(uconcat(pd, self))
+        return pds
 
     def _memoLF(self):
         if hasattr(self, "_lf"):
@@ -569,6 +641,9 @@ class uatom(reex.atom, uregexp):
 
     def derivative(self, sigma):
         return uepsilon() if sigma in self else uemptyset()
+
+    def partialDerivatives(self, sigma):
+        return set([uepsilon()] if sigma in self else [])
 
     def linearForm(self):
         return {self: {uepsilon()}}

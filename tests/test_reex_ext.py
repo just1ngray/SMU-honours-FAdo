@@ -140,63 +140,56 @@ class TestEvalWordP(unittest.TestCase):
     def setUpClass(cls):
         cls.convert = Converter()
 
-    def test_concat(self):
-        re = self.convert.prog(u"abcδεφ")
-        self.assertTrue(re.evalWordP(u"abcδεφ"))
-        self.assertFalse(re.evalWordP("abcdef"))
-        self.assertFalse(re.evalWordP("000111"))
+    def test_evalWordP_Derivative(self):
+        self.run_tests("evalWordP_Derivative")
 
-    def test_disj(self):
-        re = self.convert.prog(u"(❶|❷|❸|_)")
-        self.assertTrue(re.evalWordP("_"))
-        self.assertTrue(re.evalWordP(u"❶"))
-        self.assertTrue(re.evalWordP(u"❷"))
-        self.assertTrue(re.evalWordP(u"❸"))
-        self.assertFalse(re.evalWordP(u"❹"))
-        self.assertFalse(re.evalWordP(u"a"))
+    def test_evalWordP_PD(self):
+        self.run_tests("evalWordP_PD")
 
-    def test_star(self):
-        re = self.convert.math(u"✓*")
-        self.assertTrue(re.evalWordP(""))
-        self.assertTrue(re.evalWordP(u"✓"))
-        self.assertTrue(re.evalWordP(u"✓✓✓✓✓"))
-        self.assertFalse(re.evalWordP(u"✓✓✕✓✓"))
-        self.assertFalse(re.evalWordP(u"✗"))
+    def test_evalWordP_PDO(self):
+        self.run_tests("evalWordP_PDO")
 
-    def test_option(self):
-        re = self.convert.math(u"舵?")
-        self.assertTrue(re.evalWordP(""))
-        self.assertTrue(re.evalWordP(u"舵"))
-        self.assertFalse(re.evalWordP(u"舵舵"))
+    def test_evalWordP_Backtrack(self):
+        self.run_tests("evalWordP_Backtrack")
 
-    def test_concat_backtrack(self):
-        re = self.convert.prog(u"abcδεφ")
-        self.assertTrue(re.evalWordPBacktrack(u"abcδεφ"))
-        self.assertFalse(re.evalWordPBacktrack("abcdef"))
-        self.assertFalse(re.evalWordPBacktrack("000111"))
+    def run_tests(self, method):
+        def test_concat(self):
+            re = self.convert.prog(u"abcδεφ")
+            evalWord = getattr(re, method)
+            self.assertTrue(evalWord(u"abcδεφ"))
+            self.assertFalse(evalWord("abcdef"))
+            self.assertFalse(evalWord("000111"))
 
-    def test_disj_backtrack(self):
-        re = self.convert.prog(u"(❶|❷|❸|_)")
-        self.assertTrue(re.evalWordPBacktrack("_"))
-        self.assertTrue(re.evalWordPBacktrack(u"❶"))
-        self.assertTrue(re.evalWordPBacktrack(u"❷"))
-        self.assertTrue(re.evalWordPBacktrack(u"❸"))
-        self.assertFalse(re.evalWordPBacktrack(u"❹"))
-        self.assertFalse(re.evalWordPBacktrack(u"a"))
+        def test_disj(self):
+            re = self.convert.prog(u"(❶|❷|❸|_)")
+            evalWord = getattr(re, method)
+            self.assertTrue(evalWord("_"))
+            self.assertTrue(evalWord(u"❶"))
+            self.assertTrue(evalWord(u"❷"))
+            self.assertTrue(evalWord(u"❸"))
+            self.assertFalse(evalWord(u"❹"))
+            self.assertFalse(evalWord(u"a"))
 
-    def test_star_backtrack(self):
-        re = self.convert.math(u"✓*")
-        self.assertTrue(re.evalWordPBacktrack(""))
-        self.assertTrue(re.evalWordPBacktrack(u"✓"))
-        self.assertTrue(re.evalWordPBacktrack(u"✓✓✓✓✓"))
-        self.assertFalse(re.evalWordPBacktrack(u"✓✓✕✓✓"))
-        self.assertFalse(re.evalWordPBacktrack(u"✗"))
+        def test_star(self):
+            re = self.convert.math(u"✓*")
+            evalWord = getattr(re, method)
+            self.assertTrue(evalWord(""))
+            self.assertTrue(evalWord(u"✓"))
+            self.assertTrue(evalWord(u"✓✓✓✓✓"))
+            self.assertFalse(evalWord(u"✓✓✕✓✓"))
+            self.assertFalse(evalWord(u"✗"))
 
-    def test_option_backtrack(self):
-        re = self.convert.math(u"舵?")
-        self.assertTrue(re.evalWordPBacktrack(""))
-        self.assertTrue(re.evalWordPBacktrack(u"舵"))
-        self.assertFalse(re.evalWordPBacktrack(u"舵舵"))
+        def test_option(self):
+            re = self.convert.math(u"舵?")
+            evalWord = getattr(re, method)
+            self.assertTrue(evalWord(""))
+            self.assertTrue(evalWord(u"舵"))
+            self.assertFalse(evalWord(u"舵舵"))
+
+        test_concat(self)
+        test_disj(self)
+        test_star(self)
+        test_option(self)
 
 class TestPairGen(unittest.TestCase):
     @classmethod

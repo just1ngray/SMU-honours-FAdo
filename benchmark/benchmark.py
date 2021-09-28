@@ -106,12 +106,31 @@ class MethodImplementation:
         def preprocess(self):
             return BenchExpr.CONVERTER.math(self.re_math, partialMatch=True)
 
+        def testMembership(self, obj, word):
+            return obj.evalWordP_Derivative(word)
+
+    class pd(BenchExpr):
+        def preprocess(self):
+            return BenchExpr.CONVERTER.math(self.re_math, partialMatch=True)
+
+        def testMembership(self, obj, word):
+            return obj.evalWordP_PD(word)
+
+    class pdo(BenchExpr):
+        def preprocess(self):
+            re = BenchExpr.CONVERTER.math(self.re_math, partialMatch=True)
+            re.compress()
+            return re
+
+        def testMembership(self, obj, word):
+            return obj.evalWordP_PDO(word)
+
     class backtrack(BenchExpr):
         def preprocess(self):
             return BenchExpr.CONVERTER.math(self.re_math, partialMatch=True)
 
         def testMembership(self, obj, word):
-            return obj.evalWordPBacktrack(word)
+            return obj.evalWordP_Backtrack(word)
 
     class nfaPD(BenchExpr):
         def preprocess(self):
@@ -158,6 +177,21 @@ class Benchmarker(object):
         """)) > 0
         if not exists or reset:
             self.db.executescript("""
+                DROP TABLE IF EXISTS methods;
+                CREATE TABLE methods (
+                    method TEXT PRIMARY KEY
+                );
+                INSERT OR IGNORE INTO methods (method) VALUES ('nfaPD');
+                INSERT OR IGNORE INTO methods (method) VALUES ('nfaPDO');
+                INSERT OR IGNORE INTO methods (method) VALUES ('nfaPosition');
+                INSERT OR IGNORE INTO methods (method) VALUES ('nfaFollow');
+                INSERT OR IGNORE INTO methods (method) VALUES ('nfaThompson');
+                INSERT OR IGNORE INTO methods (method) VALUES ('nfaGlushkov');
+                INSERT OR IGNORE INTO methods (method) VALUES ('derivative');
+                INSERT OR IGNORE INTO methods (method) VALUES ('pd');
+                INSERT OR IGNORE INTO methods (method) VALUES ('pdo');
+                INSERT OR IGNORE INTO methods (method) VALUES ('backtrack');
+
                 DROP TABLE IF EXISTS tests;
 
                 CREATE TABLE tests AS
@@ -168,9 +202,12 @@ class Benchmarker(object):
 
                 CREATE INDEX tests_by_method
                 ON tests (method);
+
+                DROP TABLE methods;
             """)
 
         self.printSampleStats()
+        self.printBenchmarkStats()
 
     def __iter__(self):
         """Yields BenchExpr objects ordered by the distinct expression"""
@@ -299,6 +336,8 @@ if __name__ == "__main__":
             #     WHERE re_math=?;
             # """, [r.re_math])
         except KeyboardInterrupt:
+            print("\n")
+            benchmarker.printBenchmarkStats()
             print("\n\nBye!")
             exit(0)
 
