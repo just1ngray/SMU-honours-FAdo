@@ -1,7 +1,7 @@
 from __future__ import print_function
 from FAdo import reex, fa, common
 import copy
-from random import randint
+import random
 
 from util import RangeList, UniUtil, WeightedRandomItem
 import errors
@@ -722,7 +722,7 @@ class uatom(reex.atom, uregexp):
         return self
 
     def pairGen(self):
-        return set([self.next()])
+        return set([self.val])
 
     def _backtrackMatch(self, word):
         if len(word) > 0 and word[0] == self.val:
@@ -890,7 +890,7 @@ class chars(uatom):
             randrange.add(e - s + 1, (s, e))
 
         s, e = randrange.get()
-        return UniUtil.chr(randint(s, e))
+        return UniUtil.chr(random.randint(s, e))
 
     def _backtrackMatch(self, word):
         if len(word) == 0:
@@ -902,6 +902,17 @@ class chars(uatom):
         else:
             if word[0] in self:
                 yield word[1:]
+
+    def pairGen(self):
+        symbols = set()
+        for s, e in self.ranges:
+            symbols.add(s)
+            symbols.add(UniUtil.chr((UniUtil.ord(s) + UniUtil.ord(e)) // 2))
+            symbols.add(e)
+
+        r = random.Random(1)
+        # max sample size arbitrarily chosen as 5
+        return set(r.sample(symbols, min(5, len(symbols))))
 
 class dotany(uatom):
     """Class that represents the wildcard symbol that accepts everything."""
@@ -940,11 +951,14 @@ class dotany(uatom):
         return None if type(other) is uepsilon else other
 
     def random(self):
-        return UniUtil.chr(randint(32, 2**16 - 1))
+        return UniUtil.chr(random.randint(32, 2**16 - 1))
 
     def _backtrackMatch(self, word):
         if len(word) > 0:
             yield word[1:]
+
+    def pairGen(self):
+        return set(u"a. S") # arbitrarily chosen characters... there is likely a better scheme
 
 class anchor(uepsilon):
     """A class used to keep anchors but treat them functionally as @epsilon."""
