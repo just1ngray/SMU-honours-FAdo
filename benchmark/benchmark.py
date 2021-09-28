@@ -22,7 +22,7 @@ class BenchExpr(object):
         self.rejected = list()
 
     def __str__(self):
-        return "{0}: {1}".format(self.method, self.re_math).encode("string-escape")
+        return "{0}: {1}".format(self.method, self.re_math.encode("utf-8")).encode("string-escape")
 
     def genWords(self):
         """Populates the `accepted` and `rejected` attributes with words"""
@@ -53,13 +53,13 @@ class BenchExpr(object):
 
             for _ in range(max(len(testwords), len(BenchExpr.CODE_LINES))):
                 addAccepting(next(line))
-        except Exception as e:
+        except Exception:
             # self.db.execute("""
             #     UPDATE tests
             #     SET pre_time=0, eval_time=0, error=?
             #     WHERE re_math=?;
             # """, [str(e) + "\nwhile generating words", self.re_math])
-            raise e
+            raise
 
     def benchmark(self):
         """Runs the benchmark and updates the `pre_time` & `eval_time` in the `tests` table"""
@@ -75,7 +75,7 @@ class BenchExpr(object):
                 eval_time += timeit.timeit(lambda: self.testMembership(processed, word), number=1)
 
             for word in self.rejected:
-                BenchExpr.OUTPUT.overwrite(str(self), "should reject '{0}'".format(word))
+                BenchExpr.OUTPUT.overwrite(str(self), "should reject '{0}'".format(word.encode("utf-8")))
                 assert self.testMembership(processed, word) == False, str(self) + " didn't reject '{0}'".format(word)
                 eval_time += timeit.timeit(lambda: self.testMembership(processed, word), number=1)
 
@@ -217,7 +217,7 @@ class Benchmarker(object):
                              WHERE pre_time=-1;""")
         for re_math, method, error in newCursor:
             if len(error) == 0:
-                yield eval("MethodImplementation." + method)(self.db, re_math, method)
+                yield eval("MethodImplementation." + method)(self.db, re_math.decode("utf-8"), method)
 
         newCursor.close()
 
