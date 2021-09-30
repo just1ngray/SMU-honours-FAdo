@@ -187,7 +187,7 @@ class Benchmarker(object):
                 INSERT OR IGNORE INTO methods (method) VALUES ('nfaFollow');
                 INSERT OR IGNORE INTO methods (method) VALUES ('nfaThompson');
                 INSERT OR IGNORE INTO methods (method) VALUES ('nfaGlushkov');
-                INSERT OR IGNORE INTO methods (method) VALUES ('derivative');
+                -- INSERT OR IGNORE INTO methods (method) VALUES ('derivative');
                 INSERT OR IGNORE INTO methods (method) VALUES ('pd');
                 INSERT OR IGNORE INTO methods (method) VALUES ('pdo');
                 INSERT OR IGNORE INTO methods (method) VALUES ('backtrack');
