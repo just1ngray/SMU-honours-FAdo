@@ -78,20 +78,22 @@ class uregexp(reex.regexp):
         return False
 
     def evalWordP_PDO(self, word):
-        memo = dict()
-        # NOTE MEMO IS CURRENTLY NOT EFFECTIVE BECAUSE WE RETURN NEW INSTANCES IN PARTIALDERIVATIVES METHODS
-        # WE NEED TO BE MORE CLEVER AND BUILD THE TREE OUT A AS REQUIRED
+        # computed = set() # TODO remove
 
         current = set([self])
         for sigma in word:
             nxt = set()
             for c in current:
-                pds = memo.get((c, sigma), None)
+                pds = getattr(c, "_pds_" + sigma, None)
                 if pds is None:
                     pds = c.partialDerivatives(sigma)
-                    memo[(c, sigma)] = pds
-                nxt.update(pds)
+                    setattr(c, "_pds_" + sigma, pds)
+                    # if (c, sigma) in computed: # TODO remove
+                    #     raw_input("\nOptimizable: pd({0}, {1})".format(str(c), sigma)) # TODO remove
+                    # else: # TODO remove
+                    #     computed.add((c, sigma)) # TODO remove
 
+                nxt.update(pds)
             current = nxt
 
         for c in current:
