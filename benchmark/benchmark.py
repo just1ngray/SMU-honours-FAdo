@@ -73,28 +73,30 @@ class BenchExpr(object):
 
     def benchmark(self):
         """Runs the benchmark and updates the `tests` table"""
+        GROUP_SIZE = 100
+        ntotal = len(self.accepted) + len(self.rejected)
+        ndone = 0
+
         try:
             BenchExpr.OUTPUT.overwrite(str(self), "pre-processing")
             processed = self.preprocess()
             pre_time = timeit.timeit(self.preprocess, number=1000)
 
             eval_A_time = 0.0
-            ndone = 0.0
-            ntotal = len(self.accepted) + len(self.rejected)
-            for word in self.accepted:
-                ndone += 1
-                BenchExpr.OUTPUT.overwrite(format(ndone*100.0/ntotal, ".2f") + "%", \
-                    "{0} should match '{1}'".format(str(self), word.encode("utf-8")))
-                assert self.testMembership(processed, word) == True, str(self) + " didn't accept '{0}'".format(word)
-                eval_A_time += timeit.timeit(lambda: self.testMembership(processed, word), number=1)
+            def _assertion(b, word):
+                assert b == True, str(self) + " didn't accept '{0}'".format(word)
+            for i in xrange(0, len(self.accepted), GROUP_SIZE):
+                BenchExpr.OUTPUT.overwrite("{0}% - {1}".format(format(ndone*100.0/ntotal, "00.2f"), str(self)))
+                eval_A_time += timeit.timeit(lambda: self._benchGroup(processed, self.accepted[i:i+GROUP_SIZE], _assertion), number=1)
+                ndone += GROUP_SIZE
 
             eval_R_time = 0.0
-            for word in self.rejected:
-                ndone += 1
-                BenchExpr.OUTPUT.overwrite(format(ndone*100.0/ntotal, ".2f") + "%", \
-                    "{0} should reject '{1}'".format(str(self), word.encode("utf-8")))
-                assert self.testMembership(processed, word) == False, str(self) + " didn't reject '{0}'".format(word)
-                eval_R_time += timeit.timeit(lambda: self.testMembership(processed, word), number=1)
+            def _assertion(b, word):
+                assert b == True, str(self) + " didn't reject '{0}'".format(word)
+            for i in xrange(0, len(self.rejected), GROUP_SIZE):
+                BenchExpr.OUTPUT.overwrite("{0}% - {1}".format(format(ndone*100.0/ntotal, "00.2f"), str(self)))
+                eval_R_time += timeit.timeit(lambda: self._benchGroup(processed, self.accepted[i:i+GROUP_SIZE], _assertion), number=1)
+                ndone += GROUP_SIZE
 
             self.db.execute("""
                 UPDATE tests
@@ -107,6 +109,10 @@ class BenchExpr(object):
                 SET pre_time=0, eval_A_time=0, eval_R_time=0, n_accept=0, n_reject=0, error=?
                 WHERE re_math=?;
             """, [str(err) + "\nin method " + self.method, self.re_math])
+
+    def _benchGroup(self, processed, words, assertion):
+        for word in words:
+            assertion(self.testMembership(processed, word), word)
 
     def preprocess(self):
         """One-time cost of parsing, compiling, etc into an object which can
