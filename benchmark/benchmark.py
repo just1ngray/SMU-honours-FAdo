@@ -22,7 +22,7 @@ class BenchExpr(object):
         self.rejected = list()
 
     def __str__(self):
-        return "{0}: {1}".format(self.method, self.re_math.encode("utf-8")).encode("string-escape")
+        return "{0}: {1}".format(self.method, self.re_math.encode("utf-8"))
 
     def genWords(self):
         """Populates the `accepted` and `rejected` attributes with words"""
@@ -363,4 +363,4 @@ if __name__ == "__main__":
             else:
                 print("Cancelled!")
 
-    print("\n\nBye!")
+    print("\n\nExiting...")
