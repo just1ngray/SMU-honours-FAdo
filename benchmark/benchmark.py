@@ -227,7 +227,7 @@ class Benchmarker(object):
                         "" as error
                     FROM methods as m, expressions as e
                     WHERE e.re_math NOT LIKE '%Error%'
-                    ORDER BY re_math ASC, method ASC;
+                    ORDER BY length(re_math) ASC, re_math ASC, method ASC;
 
                 CREATE INDEX tests_by_method
                 ON tests (method);
@@ -353,12 +353,14 @@ if __name__ == "__main__":
                 except KeyboardInterrupt:
                     print("\nStopping...")
                     break
-            choice = "5"
         elif choice == "3":
             print("Currently disabled!")
             exit(0)
         elif choice == "4":
             if raw_input("Are you sure? y/(n): ") == "y":
                 benchmarker = Benchmarker(True)
+                print("Reset!")
+            else:
+                print("Cancelled!")
 
     print("\n\nBye!")
