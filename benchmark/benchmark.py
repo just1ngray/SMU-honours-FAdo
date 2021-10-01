@@ -288,8 +288,8 @@ class Benchmarker(object):
             y = []
             for complexity, ta, tr in self.db.selectall("""
                 SELECT length(re_math) as complexity,
-                    sum(eval_A_time)/n_accept,
-                    sum(eval_R_time)/n_reject
+                    sum(eval_A_time)/sum(n_accept),
+                    sum(eval_R_time)/sum(n_reject)
                 FROM tests
                 WHERE method==?
                     AND pre_time>-1
