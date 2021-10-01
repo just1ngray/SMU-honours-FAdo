@@ -31,7 +31,7 @@ class TestPythonSampler(unittest.TestCase):
         shouldRaise(self, '''abc = re.compile("abc')''', InvalidExpressionError)
         shouldRaise(self, """abc = re.compile("abc''')""", InvalidExpressionError)
         shouldRaise(self, '''abc = re.compile("abc%s" % var)''', InvalidExpressionError)
-        shouldRaise(self, '''        r = re.compile('|'.joishouldRaise(self,('%d'%x for x in range(10000))))''', InvalidExpressionError)
+        shouldRaise(self, '''        r = re.compile('|'.shouldRaise(self,('%d'%x for x in range(10000))))''', InvalidExpressionError)
         shouldRaise(self, r'''res = regex.findall(re.escape('\u2620'.encode('utf-8')), b)''', InvalidExpressionError)
         shouldRaise(self, u'''        re.compile('(?P<𝔘𝔫𝔦𝔠𝔬𝔡𝔢>x)(?P=𝔘𝔫𝔦𝔠𝔬𝔡𝔢)(?(𝔘𝔫𝔦𝔠𝔬𝔡𝔢)y)')''', FAdoizeError)
 

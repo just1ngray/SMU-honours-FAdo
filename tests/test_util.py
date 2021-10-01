@@ -146,7 +146,7 @@ class TestWeightedRandomItem(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.samplesize = 20000.0
-        cls.iterations = range(int(cls.samplesize))
+        cls.iterations = xrange(int(cls.samplesize))
         cls.threshold = 0.01
 
     def assertProbabilityClose(self, actual, expected):

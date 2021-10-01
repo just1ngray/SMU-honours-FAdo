@@ -25,7 +25,7 @@ class InvariantNFA(fa.NFA):
         if n == 0:
             lengthNFA.addFinal(0)
 
-        for i in range(1, m + 1):
+        for i in xrange(1, m + 1):
             lengthNFA.addState()
             lengthNFA.addTransition(i - 1, reex_ext.dotany(), i)
             if i >= n: lengthNFA.addFinal(i)

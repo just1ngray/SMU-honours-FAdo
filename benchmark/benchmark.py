@@ -53,7 +53,7 @@ class BenchExpr(object):
                 addAccepting = lambda line: self.accepted.append(
                     line[:len(line)//2] + next(word) + line[len(line)//2:])
 
-            for _ in range(max(len(testwords), len(BenchExpr.CODE_LINES))):
+            for _ in xrange(max(len(testwords), len(BenchExpr.CODE_LINES))):
                 addAccepting(next(line))
 
 

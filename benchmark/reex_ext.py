@@ -84,10 +84,11 @@ class uregexp(reex.regexp):
         for sigma in word:
             nxt = set()
             for c in current:
-                pds = getattr(c, "_pds_" + sigma, None)
+                encsigma = sigma.encode("utf-8")
+                pds = getattr(c, "_pds_" + encsigma, None)
                 if pds is None:
                     pds = c.partialDerivatives(sigma)
-                    setattr(c, "_pds_" + sigma, pds)
+                    setattr(c, "_pds_" + encsigma, pds)
                     # if (c, sigma) in computed: # TODO remove
                     #     raw_input("\nOptimizable: pd({0}, {1})".format(str(c), sigma)) # TODO remove
                     # else: # TODO remove

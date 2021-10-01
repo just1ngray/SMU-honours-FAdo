@@ -32,7 +32,7 @@ class TestConverter(unittest.TestCase):
 
         re = self.convert.prog("^a{5,29}$")
         self.assertFalse(re.evalWordP("a"*4))
-        for i in range(5, 30):
+        for i in xrange(5, 30):
             self.assertTrue(re.evalWordP("a"*i))
         self.assertFalse(re.evalWordP("a"*30))
 

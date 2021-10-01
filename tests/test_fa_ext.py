@@ -143,7 +143,7 @@ class TestEnumInvariantNFA(unittest.TestCase):
         cls.convert = Converter()
 
         def verifyRadix(self, lang):
-            for i in range(1, len(lang)):
+            for i in xrange(1, len(lang)):
                 self.assertLess(radixOrder(lang[i-1], lang[i]), 0, "'{0}' should be < '{1}'".format(
                     lang[i-1].encode("utf-8"), lang[i].encode("utf-8")))
         cls.verifyRadix = verifyRadix
@@ -215,7 +215,7 @@ class TestEnumInvariantNFA(unittest.TestCase):
 
     def run_enumCrossSection(self):
         infa, enum = self.infaEnum("(0 + 1)*")
-        for nth in range(5):
+        for nth in xrange(5):
             lang = list(enum.enumCrossSection(nth))
             self.assertEqual(len(lang), 2**nth)
             for w in lang:
@@ -223,7 +223,7 @@ class TestEnumInvariantNFA(unittest.TestCase):
             self.verifyRadix(lang)
 
         lang = list(enum.enumCrossSection(0, 5))
-        self.assertEqual(len(lang), sum(2**x for x in range(0, 6)))
+        self.assertEqual(len(lang), sum(2**x for x in xrange(0, 6)))
         self.verifyRadix(lang)
 
     def run_enum(self):
@@ -235,9 +235,9 @@ class TestEnumInvariantNFA(unittest.TestCase):
 
     def run_randomWord(self):
         infa, enum = self.infaEnum(u"((\\+ + -) (√ ([0-9] [0-9]*)))")
-        for length in range(0, 3):
+        for length in xrange(0, 3):
             self.assertIsNone(enum.randomWord(length))
-        for length in range(3, 25):
+        for length in xrange(3, 25):
             word = enum.randomWord(length)
             self.assertTrue(infa.evalWordP(word))
             self.assertEqual(len(word), length)
