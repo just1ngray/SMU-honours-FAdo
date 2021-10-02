@@ -235,15 +235,25 @@ class Benchmarker(object):
 
     def __iter__(self):
         """Yields BenchExpr objects ordered by the distinct expression"""
-        newCursor = self.db._connection.cursor() # o/w the main cursor may move
-        newCursor.execute("""SELECT re_math, method, error
-                             FROM tests
-                             WHERE pre_time=-1;""")
-        for re_math, method, error in newCursor:
-            if len(error) == 0:
-                yield eval("MethodImplementation." + method)(self.db, re_math.decode("utf-8"), method)
-
-        newCursor.close()
+        minlen, maxlen = self.db.selectall("SELECT min(length(re_math)), max(length(re_math)) FROM tests WHERE pre_time==-1;")[0]
+        while self.db.selectall("SELECT count(*) FROM tests WHERE pre_time==-1;")[0][0] > 0:
+            newCursor = self.db._connection.cursor()
+            for length in xrange(minlen, maxlen):
+                newCursor.execute("""
+                    SELECT re_math, method, error
+                    FROM tests
+                    WHERE re_math==(
+                        SELECT min(re_math)
+                        FROM tests
+                        WHERE pre_time==-1
+                            AND length(re_math)==?
+                            AND error==''
+                    );
+                """, [length])
+                for re_math, method, error in newCursor:
+                    if len(error) == 0:
+                        yield eval("MethodImplementation." + method)(self.db, re_math.decode("utf-8"), method)
+            newCursor.close()
 
     def printSampleStats(self):
         """Prints (stdout) the statistics of the sample collected using `make sample`"""
@@ -305,10 +315,10 @@ class Benchmarker(object):
                 y.append(ta/na + tr/nr) # weighted average time for accept & reject
             plt.plot(x, y, label=method)
 
-        plt.title("RE Length vs. Avg time for Membership")
+        plt.title("Membership Time by Expression Complexity")
         plt.legend()
         plt.xlabel("re_math length")
-        plt.ylabel("avg time (s) for membership")
+        plt.ylabel("avg membership time (s)")
         plt.show()
 
 
