@@ -93,6 +93,7 @@ class BenchExpr(object):
             eval_R_time = 0.0
             def _assertion(b, word):
                 assert b == True, str(self) + " didn't reject '{0}'".format(word.encode("utf-8"))
+            ndone = len(self.accepted)
             for i in xrange(0, len(self.rejected), GROUP_SIZE):
                 BenchExpr.OUTPUT.overwrite("{0}% - {1}".format(format(ndone*100.0/ntotal, "00.2f"), str(self)))
                 eval_R_time += timeit.timeit(lambda: self._benchGroup(processed, self.accepted[i:i+GROUP_SIZE], _assertion), number=1)
