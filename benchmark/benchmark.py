@@ -300,6 +300,8 @@ class Benchmarker(object):
                 ORDER BY complexity ASC;
             """, [method]):
                 x.append(complexity)
+                if na == 0: na = float("inf")
+                if nr == 0: nr = float("inf")
                 y.append(ta/na + tr/nr) # weighted average time for accept & reject
             plt.plot(x, y, label=method)
 
