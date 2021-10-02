@@ -293,7 +293,7 @@ class Benchmarker(object):
         todo = self.db.selectall("SELECT count(*) FROM tests WHERE pre_time==-1;")[0][0]
         return (done, todo)
 
-    def displayBenchmarkStats(self):
+    def displayMembershipStats(self):
         fig, ax = plt.subplots()
         line2d = dict()
 
@@ -339,6 +339,46 @@ class Benchmarker(object):
         plt.ylabel("avg membership time (s)")
         plt.show()
 
+    def displayConstructionStats(self):
+        fig, ax = plt.subplots()
+        line2d = dict()
+
+        for method, colour in self.db.selectall("SELECT method, colour from methods;"):
+            x = []
+            y = []
+            for complexity, t in self.db.selectall("""
+                SELECT length(re_math) as complexity,
+                    sum(pre_time)
+                FROM tests
+                WHERE method==?
+                    AND pre_time>-1
+                    AND error==''
+                GROUP BY complexity
+                ORDER BY complexity ASC;
+            """, [method]):
+                x.append(complexity)
+                y.append(t/1000.0)
+            line2d[method] = ax.plot(x, y, label=method, linewidth=1.5, color=colour)[0]
+
+        legend_to_line = dict()
+        legend = plt.legend()
+        legendLines = legend.get_lines()
+        for l in legendLines:
+            l.set_picker(True)
+            l.set_pickradius(10)
+            legend_to_line[l] = line2d[l.get_label()]
+
+        def _on_pick(event):
+            line = event.artist
+            legend_to_line[line].set_visible(not line.get_visible())
+            line.set_visible(not line.get_visible())
+            fig.canvas.draw()
+        plt.connect("pick_event", _on_pick)
+
+        plt.title("Construction Time by Expression Complexity")
+        plt.xlabel("re_math length")
+        plt.ylabel("avg construction time (s)")
+        plt.show()
 
 
 if __name__ == "__main__":
@@ -346,24 +386,27 @@ if __name__ == "__main__":
     benchmarker.printSampleStats()
 
     choice = "-1"
-    while choice != "5":
+    while choice != "6":
         completed, todo = benchmarker.getProgress()
         print("\nCompleted: " + str(completed))
         print("TODO:      " + str(todo))
 
         print("\n========================================")
-        print("1. Display results")
-        print("2. Continue with {0} more tests".format(todo))
-        print("3. Backup all results; {0}/{1} completed".format(completed, todo + completed))
-        print("4. Reset without backing up")
-        print("5. Exit\n")
+        print("1. Display membership results")
+        print("2. Display construction results")
+        print("3. Continue with {0} more tests".format(todo))
+        print("4. Backup all results; {0}/{1} completed".format(completed, todo + completed))
+        print("5. Reset without backing up")
+        print("6. Exit\n")
 
         choice = raw_input("Choose menu option: ")
         print("\n")
 
         if choice == "1":
-            benchmarker.displayBenchmarkStats()
+            benchmarker.displayMembershipStats()
         elif choice == "2":
+            benchmarker.displayConstructionStats()
+        elif choice == "3":
             print("Running benchmark... (Ctrl+C to stop)")
             lastExpr = BenchExpr(None, None, None)
             for r in benchmarker:
@@ -383,10 +426,10 @@ if __name__ == "__main__":
                 except KeyboardInterrupt:
                     print("\nStopping...")
                     break
-        elif choice == "3":
+        elif choice == "4":
             print("Currently disabled!")
             exit(0)
-        elif choice == "4":
+        elif choice == "5":
             if raw_input("Are you sure? y/(n): ") == "y":
                 benchmarker = Benchmarker(True)
                 print("Reset!")
