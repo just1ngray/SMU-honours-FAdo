@@ -294,6 +294,9 @@ class Benchmarker(object):
         return (done, todo)
 
     def displayBenchmarkStats(self):
+        fig, ax = plt.subplots()
+        line2d = dict()
+
         for method, colour in self.db.selectall("SELECT method, colour from methods;"):
             x = []
             y = []
@@ -314,10 +317,24 @@ class Benchmarker(object):
                 if na == 0: na = float("inf")
                 if nr == 0: nr = float("inf")
                 y.append(ta/na + tr/nr) # weighted average time for accept & reject
-            plt.plot(x, y, label=method, linewidth=1.5, color=colour)
+            line2d[method] = ax.plot(x, y, label=method, linewidth=1.5, color=colour)[0]
+
+        legend_to_line = dict()
+        legend = plt.legend()
+        legendLines = legend.get_lines()
+        for l in legendLines:
+            l.set_picker(True)
+            l.set_pickradius(10)
+            legend_to_line[l] = line2d[l.get_label()]
+
+        def _on_pick(event):
+            line = event.artist
+            legend_to_line[line].set_visible(not line.get_visible())
+            line.set_visible(not line.get_visible())
+            fig.canvas.draw()
+        plt.connect("pick_event", _on_pick)
 
         plt.title("Membership Time by Expression Complexity")
-        plt.legend()
         plt.xlabel("re_math length")
         plt.ylabel("avg membership time (s)")
         plt.show()
