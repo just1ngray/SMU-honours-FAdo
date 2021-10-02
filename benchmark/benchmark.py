@@ -286,10 +286,12 @@ class Benchmarker(object):
         for method, in self.db.selectall("SELECT method from methods;"):
             x = []
             y = []
-            for complexity, ta, tr in self.db.selectall("""
+            for complexity, ta, na, tr, nr in self.db.selectall("""
                 SELECT length(re_math) as complexity,
-                    sum(eval_A_time)/sum(n_accept),
-                    sum(eval_R_time)/sum(n_reject)
+                    sum(eval_A_time),
+                    sum(n_accept),
+                    sum(eval_R_time),
+                    sum(n_reject)
                 FROM tests
                 WHERE method==?
                     AND pre_time>-1
@@ -297,10 +299,8 @@ class Benchmarker(object):
                 GROUP BY complexity
                 ORDER BY complexity ASC;
             """, [method]):
-                if ta is None: ta = 0.0
-                if tr is None: tr = 0.0
                 x.append(complexity)
-                y.append(ta + tr)
+                y.append(ta/na + tr/nr) # weighted average time for accept & reject
             plt.plot(x, y, label=method)
 
         plt.title("RE Length vs. Avg time for Membership")
