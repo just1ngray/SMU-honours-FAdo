@@ -202,18 +202,19 @@ class Benchmarker(object):
             self.db.executescript("""
                 DROP TABLE IF EXISTS methods;
                 CREATE TABLE methods (
-                    method TEXT PRIMARY KEY
+                    method TEXT PRIMARY KEY,
+                    colour TEXT
                 );
-                INSERT OR IGNORE INTO methods (method) VALUES ('nfaPD');
-                INSERT OR IGNORE INTO methods (method) VALUES ('nfaPDO');
-                INSERT OR IGNORE INTO methods (method) VALUES ('nfaPosition');
-                INSERT OR IGNORE INTO methods (method) VALUES ('nfaFollow');
-                INSERT OR IGNORE INTO methods (method) VALUES ('nfaThompson');
-                INSERT OR IGNORE INTO methods (method) VALUES ('nfaGlushkov');
-                -- INSERT OR IGNORE INTO methods (method) VALUES ('derivative');
-                INSERT OR IGNORE INTO methods (method) VALUES ('pd');
-                INSERT OR IGNORE INTO methods (method) VALUES ('pdo');
-                INSERT OR IGNORE INTO methods (method) VALUES ('backtrack');
+                INSERT OR IGNORE INTO methods (method, colour) VALUES ('nfaPD', '#42d4f4');
+                INSERT OR IGNORE INTO methods (method, colour) VALUES ('nfaPDO', '#469990');
+                INSERT OR IGNORE INTO methods (method, colour) VALUES ('nfaPosition', '#e6194B');
+                INSERT OR IGNORE INTO methods (method, colour) VALUES ('nfaFollow', '#dcbeff');
+                INSERT OR IGNORE INTO methods (method, colour) VALUES ('nfaThompson', '#800000');
+                INSERT OR IGNORE INTO methods (method, colour) VALUES ('nfaGlushkov', '#f58231');
+                -- INSERT OR IGNORE INTO methods (method, colour) VALUES ('derivative', '#a9a9a9');
+                INSERT OR IGNORE INTO methods (method, colour) VALUES ('pd', '#4363d8');
+                INSERT OR IGNORE INTO methods (method, colour) VALUES ('pdo', '#000075');
+                INSERT OR IGNORE INTO methods (method, colour) VALUES ('backtrack', '#000000');
 
                 DROP TABLE IF EXISTS tests;
 
@@ -293,7 +294,7 @@ class Benchmarker(object):
         return (done, todo)
 
     def displayBenchmarkStats(self):
-        for method, in self.db.selectall("SELECT method from methods;"):
+        for method, colour in self.db.selectall("SELECT method, colour from methods;"):
             x = []
             y = []
             for complexity, ta, na, tr, nr in self.db.selectall("""
@@ -313,7 +314,7 @@ class Benchmarker(object):
                 if na == 0: na = float("inf")
                 if nr == 0: nr = float("inf")
                 y.append(ta/na + tr/nr) # weighted average time for accept & reject
-            plt.plot(x, y, label=method)
+            plt.plot(x, y, label=method, linewidth=1.5, color=colour)
 
         plt.title("Membership Time by Expression Complexity")
         plt.legend()
