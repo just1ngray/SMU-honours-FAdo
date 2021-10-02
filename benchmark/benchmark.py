@@ -45,10 +45,10 @@ class BenchExpr(object):
             addAccepting = lambda line: 0
             if hasASTART and hasAEND: # no leading/trailing from the line
                 addAccepting = lambda line: self.accepted.append(next(word))
-            elif hasASTART: # insert word at end of line
-                addAccepting = lambda line: self.accepted.append(line + next(word))
-            elif hasAEND: # insert word at beginning of line
+            elif hasASTART: # insert word at beginning of line
                 addAccepting = lambda line: self.accepted.append(next(word) + line)
+            elif hasAEND: # insert word at end of line
+                addAccepting = lambda line: self.accepted.append(line + next(word))
             else: # insert word in middle of line
                 addAccepting = lambda line: self.accepted.append(
                     line[:len(line)//2] + next(word) + line[len(line)//2:])
