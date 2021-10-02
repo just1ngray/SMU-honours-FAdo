@@ -78,7 +78,7 @@ class BenchExpr(object):
         ndone = 0
 
         try:
-            BenchExpr.OUTPUT.overwrite(str(self), "pre-processing")
+            BenchExpr.OUTPUT.overwrite("pre-processing", str(self))
             processed = self.preprocess()
             pre_time = timeit.timeit(self.preprocess, number=1000)
 
