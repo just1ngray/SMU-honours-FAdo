@@ -28,12 +28,13 @@ class BenchExpr(object):
         """Populates the `accepted` and `rejected` attributes with words"""
         BenchExpr.OUTPUT.overwrite("generating words for", self.re_math)
         self.accepted = list()
-        self.rejected = list()
+        self.rejected = set(copy.copy(BenchExpr.CODE_LINES))
 
         try:
             re = BenchExpr.CONVERTER.math(self.re_math, partialMatch=False)
 
-            # pairGen inserted into lines of code
+            # ACCEPTING: pairGen inserted into lines of code
+            BenchExpr.OUTPUT.overwrite("generating pairGen words for", self.re_math)
             testwords = Deque(re.pairGen())
             if len(testwords) == 0:
                 return
@@ -57,12 +58,33 @@ class BenchExpr(object):
                 addAccepting(next(line))
 
 
-            # pre-computed rejecting words from the lines of code
+            # ACCEPTING: language enumeration
+            BenchExpr.OUTPUT.overwrite("generating enumerated words for", self.re_math)
+            enumerate = re.toInvariantNFA("nfaPosition").enumNFA()
+            minlen = enumerate.shortestWordLength()
+            maxlen = min(minlen + 50, enumerate.longestWordLength())
+            for l in xrange(minlen, maxlen + 1):
+                n = 0
+                for word in enumerate.enumCrossSection(l):
+                    if n > 10: break
+                    n += 1
+                    self.accepted.append(word)
+
+                    # REJECTING: slightly changed words may not be accepted...
+                    # 1. delete one character
+                    for i in xrange(0, len(word)):
+                        self.rejected.add(word[:i] + word[i+1:])
+                    # 2. swap order of 2 characters
+                    for i in xrange(0, len(word)):
+                        for j in xrange(0, i):
+                            self.rejected.add(word[:j] + word[i] + word[j+1:i] + word[j] + word[i+1:])
+
+
+            # REJECTING: filter out words which are really accepted
+            BenchExpr.OUTPUT.overwrite("filtering", len(self.rejected), "rejecting words for", self.re_math)
             pmre = re.partialMatch()
-            pmre.compress()
-            for line in BenchExpr.CODE_LINES:
-                if not pmre.evalWordP_PDO(line):
-                    self.rejected.append(line)
+            pmNFA = pmre.toInvariantNFA("nfaPDO") # TODO: consider switching to compressed pdo evaluation if it can be optimized further
+            self.rejected = list(filter(lambda w: not pmNFA.evalWordP(w), self.rejected))
         except Exception:
             # self.db.execute("""
             #     UPDATE tests
