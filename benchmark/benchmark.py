@@ -321,7 +321,7 @@ class Benchmarker(object):
             line2d[method] = ax.plot(x, y, label=method, linewidth=1.5, color=colour)[0]
 
         legend_to_line = dict()
-        legend = plt.legend()
+        legend = plt.legend(loc="best")
         legendLines = legend.get_lines()
         for l in legendLines:
             l.set_picker(True)
@@ -362,7 +362,7 @@ class Benchmarker(object):
             line2d[method] = ax.plot(x, y, label=method, linewidth=1.5, color=colour)[0]
 
         legend_to_line = dict()
-        legend = plt.legend()
+        legend = plt.legend(loc="best")
         legendLines = legend.get_lines()
         for l in legendLines:
             l.set_picker(True)
