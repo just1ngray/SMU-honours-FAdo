@@ -78,22 +78,16 @@ class uregexp(reex.regexp):
         return False
 
     def evalWordP_PDO(self, word):
-        # computed = set() # TODO remove
-
         current = set([self])
         for sigma in word:
             nxt = set()
             for c in current:
-                encsigma = sigma.encode("utf-8")
-                pds = getattr(c, "_pds_" + encsigma, None)
+                if not hasattr(c, "_pds"):
+                    setattr(c, "_pds", dict())
+                pds = c._pds.get(sigma, None)
                 if pds is None:
                     pds = c.partialDerivatives(sigma)
-                    setattr(c, "_pds_" + encsigma, pds)
-                    # if (c, sigma) in computed: # TODO remove
-                    #     raw_input("\nOptimizable: pd({0}, {1})".format(str(c), sigma)) # TODO remove
-                    # else: # TODO remove
-                    #     computed.add((c, sigma)) # TODO remove
-
+                    c._pds[sigma] = pds
                 nxt.update(pds)
             current = nxt
 
