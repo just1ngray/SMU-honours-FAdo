@@ -321,30 +321,15 @@ class Benchmarker(object):
         todo = self.db.selectall("SELECT count(*) FROM tests WHERE pre_time==-1;")[0][0]
         return (done, todo)
 
-    def displayMembershipStats(self):
+    def _displayResultsPlot(self, query, rowhandler):
         fig, ax = plt.subplots()
         line2d = dict()
 
         for method, colour in self.db.selectall("SELECT method, colour from methods;"):
             x = []
             y = []
-            for complexity, ta, na, tr, nr in self.db.selectall("""
-                SELECT length(re_math) as complexity,
-                    sum(eval_A_time),
-                    sum(n_accept),
-                    sum(eval_R_time),
-                    sum(n_reject)
-                FROM tests
-                WHERE method==?
-                    AND pre_time>-1
-                    AND error==''
-                GROUP BY complexity
-                ORDER BY complexity ASC;
-            """, [method]):
-                x.append(complexity)
-                if na == 0: na = float("inf")
-                if nr == 0: nr = float("inf")
-                y.append(ta/na + tr/nr) # weighted average time for accept & reject
+            for row in self.db.selectall(query, [method]):
+                rowhandler(x, y, row)
             line2d[method] = ax.plot(x, y, label=method, linewidth=1.5, color=colour)[0]
 
         legend_to_line = dict()
@@ -362,20 +347,43 @@ class Benchmarker(object):
             fig.canvas.draw()
         plt.connect("pick_event", _on_pick)
 
-        plt.title("Membership Time by Expression Complexity")
-        plt.xlabel("re_math length")
-        plt.ylabel("avg membership time (s)")
-        plt.show()
+        return plt
+
+    def displayMembershipStats(self):
+        def _rowhandler(x, y, row):
+            complexity, ta, na, tr, nr = row
+            x.append(complexity)
+            if na == 0: na = float("inf")
+            if nr == 0: nr = float("inf")
+            y.append(ta/na + tr/nr) # weighted average time for accept & reject
+
+        plot = self._displayResultsPlot("""
+            SELECT length(re_math) as complexity,
+                sum(eval_A_time),
+                sum(n_accept),
+                sum(eval_R_time),
+                sum(n_reject)
+            FROM tests
+            WHERE method==?
+                AND pre_time>-1
+                AND error==''
+            GROUP BY complexity
+            ORDER BY complexity ASC;
+        """, _rowhandler)
+
+        plot.title("Membership Time by Expression Complexity")
+        plot.xlabel("re_math length")
+        plot.ylabel("avg membership time (s)")
+        plot.show()
 
     def displayConstructionStats(self):
-        fig, ax = plt.subplots()
-        line2d = dict()
+        def _rowhandler(x, y, row):
+            complexity, t = row
+            x.append(complexity)
+            y.append(t/1000.0)
 
-        for method, colour in self.db.selectall("SELECT method, colour from methods;"):
-            x = []
-            y = []
-            for complexity, t in self.db.selectall("""
-                SELECT length(re_math) as complexity,
+        plot = self._displayResultsPlot("""
+            SELECT length(re_math) as complexity,
                     sum(pre_time)
                 FROM tests
                 WHERE method==?
@@ -383,30 +391,36 @@ class Benchmarker(object):
                     AND error==''
                 GROUP BY complexity
                 ORDER BY complexity ASC;
-            """, [method]):
-                x.append(complexity)
-                y.append(t/1000.0)
-            line2d[method] = ax.plot(x, y, label=method, linewidth=1.5, color=colour)[0]
+        """, _rowhandler)
 
-        legend_to_line = dict()
-        legend = plt.legend(loc="best")
-        legendLines = legend.get_lines()
-        for l in legendLines:
-            l.set_picker(True)
-            l.set_pickradius(10)
-            legend_to_line[l] = line2d[l.get_label()]
+        plot.title("Construction Time by Expression Complexity")
+        plot.xlabel("re_math length")
+        plot.ylabel("avg construction time (s)")
+        plot.show()
 
-        def _on_pick(event):
-            line = event.artist
-            legend_to_line[line].set_visible(not line.get_visible())
-            line.set_visible(not line.get_visible())
-            fig.canvas.draw()
-        plt.connect("pick_event", _on_pick)
+    def displaySummaryStats(self):
+        def _rowhandler(x, y, row):
+            complexity, tpre, teval, neval = row
+            x.append(complexity)
+            y.append(tpre/1000.0 + (teval*1.0/neval))
 
-        plt.title("Construction Time by Expression Complexity")
-        plt.xlabel("re_math length")
-        plt.ylabel("avg construction time (s)")
-        plt.show()
+        plot = self._displayResultsPlot("""
+            SELECT length(re_math) as complexity,
+                sum(pre_time),
+                sum(eval_A_time) + sum(eval_R_time),
+                sum(n_accept) + sum(n_reject)
+            FROM tests
+            WHERE method==?
+                AND pre_time>-1
+                AND error==''
+            GROUP BY complexity
+            ORDER BY complexity ASC;
+        """, _rowhandler)
+
+        plot.title("Construction + Avg. Eval Time by Expression Complexity")
+        plot.xlabel("re_math length")
+        plot.ylabel("construction time + avg. eval. time (s)")
+        plot.show()
 
 
 if __name__ == "__main__":
@@ -414,27 +428,24 @@ if __name__ == "__main__":
     benchmarker.printSampleStats()
 
     choice = "-1"
-    while choice != "6":
+    while choice != "7":
         completed, todo = benchmarker.getProgress()
         print("\nCompleted: " + str(completed))
         print("TODO:      " + str(todo))
 
         print("\n========================================")
-        print("1. Display membership results")
-        print("2. Display construction results")
-        print("3. Continue with {0} more tests".format(todo))
-        print("4. Backup all results; {0}/{1} completed".format(completed, todo + completed))
-        print("5. Reset without backing up")
-        print("6. Exit\n")
+        print("1. Continue with {0} more tests".format(todo))
+        print("2. Display summary results (const + avg eval)")
+        print("3. Display membership results")
+        print("4. Display construction results")
+        print("5. Backup all results; {0}/{1} completed".format(completed, todo + completed))
+        print("6. Reset without backing up")
+        print("7. Exit\n")
 
         choice = raw_input("Choose menu option: ")
         print("\n")
 
         if choice == "1":
-            benchmarker.displayMembershipStats()
-        elif choice == "2":
-            benchmarker.displayConstructionStats()
-        elif choice == "3":
             print("Running benchmark... (Ctrl+C to stop)")
             lastExpr = BenchExpr(None, None, None)
             for r in benchmarker:
@@ -454,10 +465,15 @@ if __name__ == "__main__":
                 except KeyboardInterrupt:
                     print("\nStopping...")
                     break
+        elif choice == "2":
+            benchmarker.displaySummaryStats()
+        elif choice == "3":
+            benchmarker.displayMembershipStats()
         elif choice == "4":
-            print("Currently disabled!")
-            exit(0)
+            benchmarker.displayConstructionStats()
         elif choice == "5":
+            print("Currently disabled! Do it manually")
+        elif choice == "6":
             if raw_input("Are you sure? y/(n): ") == "y":
                 benchmarker = Benchmarker(True)
                 print("Reset!")
