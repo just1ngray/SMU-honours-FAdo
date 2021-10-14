@@ -351,6 +351,18 @@ class Benchmarker(object):
             print("\nNo regular expressions sampled - run `make sample` first")
             exit(0)
 
+    def printProgressStats(self):
+        print("\n\niterations count")
+        print("----------------")
+        for iterations, count in self.db.selectall("""
+            SELECT iterations, count(*)
+            FROM tests
+            GROUP BY iterations
+            ORDER BY iterations ASC;
+        """):
+            print(str(iterations).rjust(len("iterations")), count)
+        print("\nExpect up to 3 iterations for every test. Tests are (METHODS x DISTINCT RE_MATH)\n")
+
     def _displayResultsPlot(self, query, rowhandler):
         fig, ax = plt.subplots()
         line2d = dict()
@@ -461,6 +473,8 @@ if __name__ == "__main__":
 
     choice = "-1"
     while choice != "7":
+        benchmarker.printProgressStats()
+
         print("\n========================================")
         print("1. Continue with tests")
         print("2. Display summary results (const + avg eval)")
