@@ -5,6 +5,7 @@ import copy
 import lark.exceptions
 import random
 import sys
+import gc
 
 from util import DBWrapper, ConsoleOverwrite, Deque
 from convert import Converter
@@ -106,6 +107,9 @@ class BenchExpr(object):
         ndone = 0
 
         try:
+            gc.disable()
+            gc.collect()
+
             BenchExpr.OUTPUT.overwrite("pre-processing", str(self))
             processed = self.preprocess()
             pre_time = timeit.timeit(self.preprocess, number=1000)
@@ -124,6 +128,7 @@ class BenchExpr(object):
                 BenchExpr.OUTPUT.overwrite("{0}% - {1}".format(format(ndone*100.0/ntotal, "00.2f"), str(self)))
                 eval_A_time += timeit.timeit(lambda: self._benchGroup(processed, self.accepted[i:i+GROUP_SIZE], _assertion), number=1)
                 ndone += GROUP_SIZE
+                gc.collect()
             self.db.execute("""
                 UPDATE tests
                 SET eval_A_time=?, n_accept=?
@@ -140,6 +145,7 @@ class BenchExpr(object):
                 BenchExpr.OUTPUT.overwrite("{0}% - {1}".format(format(ndone*100.0/ntotal, "00.2f"), str(self)))
                 eval_R_time += timeit.timeit(lambda: self._benchGroup(processed, self.accepted[i:i+GROUP_SIZE], _assertion), number=1)
                 ndone += GROUP_SIZE
+                gc.collect()
             self.db.execute("""
                 UPDATE tests
                 SET eval_R_time=?, n_reject=?
@@ -168,6 +174,8 @@ class BenchExpr(object):
                 """, [str(err), self.re_math, self.method])
             else:
                 raise
+        finally:
+            gc.enable()
 
     def _benchGroup(self, processed, words, assertion):
         for word in words:
@@ -316,6 +324,7 @@ class Benchmarker(object):
                 """, [length])
                 for re_math, method, error in cursor:
                     if error == "":
+                        gc.collect()
                         yield eval("MethodImplementation." + method)(self.db, re_math.decode("utf-8"), method)
             cursor.close()
 
