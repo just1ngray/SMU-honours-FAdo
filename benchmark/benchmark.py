@@ -3,6 +3,7 @@ import timeit
 import matplotlib.pyplot as plt
 import copy
 import lark.exceptions
+import random
 
 from util import DBWrapper, ConsoleOverwrite, Deque
 from convert import Converter
@@ -85,6 +86,11 @@ class BenchExpr(object):
             pmre = re.partialMatch()
             pmNFA = pmre.toInvariantNFA("nfaPDO") # TODO: consider switching to compressed pdo evaluation if it can be optimized further
             self.rejected = list(filter(lambda w: not pmNFA.evalWordP(w), self.rejected))
+
+            # choose a pseudo-random sample of up to 10,000 words
+            r = random.Random(1)
+            self.accepted = r.sample(self.accepted, min(len(self.accepted), 10000))
+            self.rejected = r.sample(self.rejected, min(len(self.rejected), 10000))
         except Exception:
             # self.db.execute("""
             #     UPDATE tests
