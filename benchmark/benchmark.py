@@ -17,8 +17,8 @@ class BenchExpr(object):
     def __init__(self, db, re_math, method):
         super(BenchExpr, self).__init__()
         self.db = db
-        self.method = method
         self.re_math = re_math
+        self.method = method
         self.accepted = list()
         self.rejected = list()
 
@@ -108,6 +108,13 @@ class BenchExpr(object):
             BenchExpr.OUTPUT.overwrite("pre-processing", str(self))
             processed = self.preprocess()
             pre_time = timeit.timeit(self.preprocess, number=1000)
+            self.db.execute("""
+                UPDATE tests
+                SET pre_time=?
+                WHERE re_math=?
+                    AND method=?
+                    AND (pre_time==-1 OR pre_time>?);
+            """, [pre_time, self.re_math, self.method, pre_time])
 
             eval_A_time = 0.0
             def _assertion(b, word):
@@ -116,6 +123,13 @@ class BenchExpr(object):
                 BenchExpr.OUTPUT.overwrite("{0}% - {1}".format(format(ndone*100.0/ntotal, "00.2f"), str(self)))
                 eval_A_time += timeit.timeit(lambda: self._benchGroup(processed, self.accepted[i:i+GROUP_SIZE], _assertion), number=1)
                 ndone += GROUP_SIZE
+            self.db.execute("""
+                UPDATE tests
+                SET eval_A_time=?, n_accept=?
+                WHERE re_math=?
+                    AND method=?
+                    AND (eval_A_time==-1 OR eval_A_time>?);
+            """, [eval_A_time, len(self.accepted), self.re_math, self.method, eval_A_time])
 
             eval_R_time = 0.0
             def _assertion(b, word):
@@ -125,12 +139,19 @@ class BenchExpr(object):
                 BenchExpr.OUTPUT.overwrite("{0}% - {1}".format(format(ndone*100.0/ntotal, "00.2f"), str(self)))
                 eval_R_time += timeit.timeit(lambda: self._benchGroup(processed, self.accepted[i:i+GROUP_SIZE], _assertion), number=1)
                 ndone += GROUP_SIZE
+            self.db.execute("""
+                UPDATE tests
+                SET eval_R_time=?, n_reject=?
+                WHERE re_math=?
+                    AND method=?
+                    AND (eval_R_time==-1 OR eval_R_time>?);
+            """, [eval_A_time, len(self.rejected), self.re_math, self.method, eval_R_time])
 
             self.db.execute("""
                 UPDATE tests
-                SET pre_time=?, eval_A_time=?, eval_R_time=?, n_accept=?, n_reject=?
-                WHERE re_math=? AND method=? AND error='';
-            """, [pre_time, eval_A_time, eval_R_time, len(self.accepted), len(self.rejected), self.re_math, self.method])
+                SET iterations=iterations+1
+                WHERE re_math=? AND method=?;
+            """, [self.re_math, self.method])
         except (errors.FAdoExtError, AssertionError) as err:
             self.db.execute("""
                 UPDATE tests
@@ -253,36 +274,40 @@ class Benchmarker(object):
                         -1 as eval_R_time,
                         -1 as n_accept,
                         -1 as n_reject,
-                        "" as error
+                        "" as error,
+                        0 as iterations
                     FROM methods as m, expressions as e
                     WHERE e.re_math NOT LIKE '%Error%'
                     ORDER BY length(re_math) ASC, re_math ASC, method ASC;
 
                 CREATE INDEX tests_by_method
                 ON tests (method);
+
+                CREATE INDEX tests_by_iterations
+                ON tests (iterations);
             """)
 
     def __iter__(self):
         """Yields BenchExpr objects ordered by the distinct expression"""
-        minlen, maxlen = self.db.selectall("SELECT min(length(re_math)), max(length(re_math)) FROM tests WHERE pre_time==-1;")[0]
-        while self.db.selectall("SELECT count(*) FROM tests WHERE pre_time==-1;")[0][0] > 0:
-            newCursor = self.db._connection.cursor()
+        while self.db.selectall("SELECT count(*) FROM tests WHERE iterations<2;")[0][0] > 0:
+            minlen, maxlen = self.db.selectall("SELECT min(length(re_math)), max(length(re_math)) FROM tests WHERE iterations<2;")[0]
+            cursor = self.db._connection.cursor()
             for length in xrange(minlen, maxlen):
-                newCursor.execute("""
+                cursor.execute("""
                     SELECT re_math, method, error
                     FROM tests
                     WHERE re_math==(
                         SELECT min(re_math)
                         FROM tests
-                        WHERE pre_time==-1
+                        WHERE iterations<2
                             AND length(re_math)==?
                             AND error==''
                     );
                 """, [length])
-                for re_math, method, error in newCursor:
-                    if len(error) == 0:
+                for re_math, method, error in cursor:
+                    if error == "":
                         yield eval("MethodImplementation." + method)(self.db, re_math.decode("utf-8"), method)
-            newCursor.close()
+            cursor.close()
 
     def printSampleStats(self):
         """Prints (stdout) the statistics of the sample collected using `make sample`"""
@@ -315,11 +340,6 @@ class Benchmarker(object):
         if all[-1][2] == 0: # 0 distinct
             print("\nNo regular expressions sampled - run `make sample` first")
             exit(0)
-
-    def getProgress(self):
-        done = self.db.selectall("SELECT count(*) FROM tests WHERE pre_time>-1;")[0][0]
-        todo = self.db.selectall("SELECT count(*) FROM tests WHERE pre_time==-1;")[0][0]
-        return (done, todo)
 
     def _displayResultsPlot(self, query, rowhandler):
         fig, ax = plt.subplots()
@@ -429,16 +449,12 @@ if __name__ == "__main__":
 
     choice = "-1"
     while choice != "7":
-        completed, todo = benchmarker.getProgress()
-        print("\nCompleted: " + str(completed))
-        print("TODO:      " + str(todo))
-
         print("\n========================================")
-        print("1. Continue with {0} more tests".format(todo))
+        print("1. Continue with tests")
         print("2. Display summary results (const + avg eval)")
         print("3. Display membership results")
         print("4. Display construction results")
-        print("5. Backup all results; {0}/{1} completed".format(completed, todo + completed))
+        print("5. Backup all results")
         print("6. Reset without backing up")
         print("7. Exit\n")
 
