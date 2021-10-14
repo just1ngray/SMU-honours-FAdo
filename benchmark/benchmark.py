@@ -4,6 +4,7 @@ import matplotlib.pyplot as plt
 import copy
 import lark.exceptions
 import random
+import sys
 
 from util import DBWrapper, ConsoleOverwrite, Deque
 from convert import Converter
@@ -158,6 +159,15 @@ class BenchExpr(object):
                 SET pre_time=0, eval_A_time=0, eval_R_time=0, n_accept=0, n_reject=0, error=?
                 WHERE re_math=?;
             """, [str(err) + "\nin method " + self.method, self.re_math])
+        except RuntimeError as err:
+            if str(err) == "maximum recursion depth exceeded":
+                self.db.execute("""
+                    UPDATE tests
+                    SET error=?, iterations=iterations+1
+                    WHERE re_math=? AND method=?;
+                """, [str(err), self.re_math, self.method])
+            else:
+                raise
 
     def _benchGroup(self, processed, words, assertion):
         for word in words:
@@ -444,6 +454,8 @@ class Benchmarker(object):
 
 
 if __name__ == "__main__":
+    sys.setrecursionlimit(10**5) # ... 10**3 is default
+
     benchmarker = Benchmarker()
     benchmarker.printSampleStats()
 
