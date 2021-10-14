@@ -85,7 +85,7 @@ class BenchExpr(object):
             BenchExpr.OUTPUT.overwrite("filtering", len(self.rejected), "rejecting words for", self.re_math)
             pmre = re.partialMatch()
             pmNFA = pmre.toInvariantNFA("nfaPDO") # TODO: consider switching to compressed pdo evaluation if it can be optimized further
-            self.rejected = list(filter(lambda w: not pmNFA.evalWordP(w), self.rejected))
+            self.rejected = list(w for w in self.rejected if not pmNFA.evalWordP(w))
 
             # choose a pseudo-random sample of up to 10,000 words
             r = random.Random(1)
