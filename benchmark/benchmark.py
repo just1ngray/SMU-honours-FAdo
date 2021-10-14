@@ -75,10 +75,9 @@ class BenchExpr(object):
                     # 1. delete one character
                     for i in xrange(0, len(word)):
                         self.rejected.add(word[:i] + word[i+1:])
-                    # 2. swap order of 2 characters
-                    for i in xrange(0, len(word)):
-                        for j in xrange(0, i):
-                            self.rejected.add(word[:j] + word[i] + word[j+1:i] + word[j] + word[i+1:])
+                    # 2. swap all neighbouring character pairs
+                    for i in xrange(1, len(word)):
+                        self.rejected.add(word[:i-1] + word[i] + word[i-1] + word[i+1:])
 
 
             # REJECTING: filter out words which are really accepted
