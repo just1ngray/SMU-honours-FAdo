@@ -307,8 +307,8 @@ class Benchmarker(object):
 
     def __iter__(self):
         """Yields BenchExpr objects ordered by the distinct expression"""
-        while self.db.selectall("SELECT count(*) FROM tests WHERE iterations<2;")[0][0] > 0:
-            minlen, maxlen = self.db.selectall("SELECT min(length(re_math)), max(length(re_math)) FROM tests WHERE iterations<2;")[0]
+        while self.db.selectall("SELECT count(*) FROM tests WHERE iterations<=1;")[0][0] > 0:
+            minlen, maxlen = self.db.selectall("SELECT min(length(re_math)), max(length(re_math)) FROM tests WHERE iterations<=1;")[0]
             cursor = self.db._connection.cursor()
             for length in xrange(minlen, maxlen):
                 cursor.execute("""
@@ -317,7 +317,7 @@ class Benchmarker(object):
                     WHERE re_math==(
                         SELECT min(re_math)
                         FROM tests
-                        WHERE iterations<2
+                        WHERE iterations<=1
                             AND length(re_math)==?
                             AND error==''
                     );
@@ -370,7 +370,7 @@ class Benchmarker(object):
             ORDER BY iterations ASC;
         """):
             print(str(iterations).rjust(len("iterations")), count)
-        print("\nExpect up to 3 iterations for every test. Tests are (METHODS x DISTINCT RE_MATH)\n")
+        print("\nExpect up to 2 iterations for every test. Tests are (METHODS x DISTINCT RE_MATH)\n")
 
     def _displayResultsPlot(self, query, rowhandler):
         fig, ax = plt.subplots()
