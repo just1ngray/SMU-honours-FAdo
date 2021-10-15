@@ -7,7 +7,8 @@ init:
 
 bench:
 	@make break
-	python2 benchmark/benchmark.py
+	@echo Run in privileged mode for priority scheduling
+	nice -n -19 python2 benchmark/benchmark.py
 	@make clean
 
 sample:
