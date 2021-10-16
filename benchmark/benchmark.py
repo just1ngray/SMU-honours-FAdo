@@ -107,9 +107,6 @@ class BenchExpr(object):
         ndone = 0
 
         try:
-            gc.disable()
-            gc.collect()
-
             BenchExpr.OUTPUT.overwrite("pre-processing", str(self))
             processed = self.preprocess()
             pre_time = timeit.timeit(self.preprocess, number=1000)
@@ -128,7 +125,6 @@ class BenchExpr(object):
                 BenchExpr.OUTPUT.overwrite("{0}% - {1}".format(format(ndone*100.0/ntotal, "00.2f"), str(self)))
                 eval_A_time += timeit.timeit(lambda: self._benchGroup(processed, self.accepted[i:i+GROUP_SIZE], _assertion), number=1)
                 ndone += GROUP_SIZE
-                gc.collect()
             self.db.execute("""
                 UPDATE tests
                 SET eval_A_time=?, n_accept=?
@@ -145,7 +141,7 @@ class BenchExpr(object):
                 BenchExpr.OUTPUT.overwrite("{0}% - {1}".format(format(ndone*100.0/ntotal, "00.2f"), str(self)))
                 eval_R_time += timeit.timeit(lambda: self._benchGroup(processed, self.accepted[i:i+GROUP_SIZE], _assertion), number=1)
                 ndone += GROUP_SIZE
-                gc.collect()
+            BenchExpr.OUTPUT.overwrite("100% - " + str(self))
             self.db.execute("""
                 UPDATE tests
                 SET eval_R_time=?, n_reject=?
@@ -174,8 +170,6 @@ class BenchExpr(object):
                 """, [str(err), self.re_math, self.method])
             else:
                 raise
-        finally:
-            gc.enable()
 
     def _benchGroup(self, processed, words, assertion):
         for word in words:
@@ -205,15 +199,6 @@ class MethodImplementation:
 
         def testMembership(self, obj, word):
             return obj.evalWordP_PD(word)
-
-    class pdo(BenchExpr):
-        def preprocess(self):
-            re = BenchExpr.CONVERTER.math(self.re_math, partialMatch=True)
-            re.compress()
-            return re
-
-        def testMembership(self, obj, word):
-            return obj.evalWordP_PDO(word)
 
     class backtrack(BenchExpr):
         def preprocess(self):
@@ -280,7 +265,6 @@ class Benchmarker(object):
                 INSERT OR IGNORE INTO methods (method, colour) VALUES ('nfaGlushkov', '#f58231');
                 -- INSERT OR IGNORE INTO methods (method, colour) VALUES ('derivative', '#a9a9a9');
                 INSERT OR IGNORE INTO methods (method, colour) VALUES ('pd', '#4363d8');
-                INSERT OR IGNORE INTO methods (method, colour) VALUES ('pdo', '#000075');
                 INSERT OR IGNORE INTO methods (method, colour) VALUES ('backtrack', '#000000');
 
                 DROP TABLE IF EXISTS tests;
@@ -314,7 +298,8 @@ class Benchmarker(object):
                 cursor.execute("""
                     SELECT re_math, method, error
                     FROM tests
-                    WHERE re_math==(
+                    WHERE iterations<=1
+                        AND re_math==(
                         SELECT min(re_math)
                         FROM tests
                         WHERE iterations<=1
@@ -324,7 +309,6 @@ class Benchmarker(object):
                 """, [length])
                 for re_math, method, error in cursor:
                     if error == "":
-                        gc.collect()
                         yield eval("MethodImplementation." + method)(self.db, re_math.decode("utf-8"), method)
             cursor.close()
 
@@ -498,6 +482,7 @@ if __name__ == "__main__":
 
         if choice == "1":
             print("Running benchmark... (Ctrl+C to stop)")
+            gc.disable()
             lastExpr = BenchExpr(None, None, None)
             for r in benchmarker:
                 try:
@@ -510,12 +495,15 @@ if __name__ == "__main__":
                         lastExpr = r
 
                     r.benchmark()
+                    gc.collect()
                 except (lark.exceptions.UnexpectedToken, errors.AnchorError):
                     print("\n\n", r)
                     raise
                 except KeyboardInterrupt:
                     print("\nStopping...")
                     break
+            gc.enable()
+
         elif choice == "2":
             benchmarker.displaySummaryStats()
         elif choice == "3":

@@ -77,25 +77,6 @@ class uregexp(reex.regexp):
                 return True
         return False
 
-    def evalWordP_PDO(self, word):
-        current = set([self])
-        for sigma in word:
-            nxt = set()
-            for c in current:
-                if not hasattr(c, "_pds"):
-                    setattr(c, "_pds", dict())
-                pds = c._pds.get(sigma, None)
-                if pds is None:
-                    pds = c.partialDerivatives(sigma)
-                    c._pds[sigma] = pds
-                nxt.update(pds)
-            current = nxt
-
-        for c in current:
-            if c.ewp():
-                return True
-        return False
-
     def partialDerivatives(self, sigma):
         """Set of partial derivatives of the regular expression in relation to given symbol.
 
