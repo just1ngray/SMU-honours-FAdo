@@ -493,9 +493,9 @@ if __name__ == "__main__":
                     else:
                         r.genWords()
                         lastExpr = r
+                        gc.collect()
 
                     r.benchmark()
-                    gc.collect()
                 except (lark.exceptions.UnexpectedToken, errors.AnchorError):
                     print("\n\n", r)
                     raise
