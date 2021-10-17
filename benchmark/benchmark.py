@@ -296,27 +296,30 @@ class Benchmarker(object):
 
     def __iter__(self):
         """Yields BenchExpr objects ordered by the distinct expression"""
-        for niter in xrange(0, 3):
-            minlen, maxlen = self.db.selectall("""
-                SELECT min(length(re_math)), max(length(re_math))
+        minlen, maxlen = self.db.selectall("""
+            SELECT min(length(re_math)), max(length(re_math))
+            FROM tests;
+        """)[0]
+        for length in xrange(minlen, maxlen):
+            lencount = self.db.selectall("""
+                SELECT count(DISTINCT re_math)
                 FROM tests
-                WHERE iterations==?;
-            """, [niter])[0]
-            for length in xrange(minlen, maxlen):
-                rows = self.db.selectall("""
-                    SELECT re_math, method
+                WHERE length(re_math)==?;
+            """, [length])[0][0]
+            reqiter = max(2, 20 - lencount) # no. required iterations per test of this re_math length
+            rows = self.db.selectall("""
+                SELECT re_math, method
+                FROM tests
+                WHERE re_math==(
+                    SELECT min(re_math)
                     FROM tests
-                    WHERE iterations==?
-                        AND re_math==(
-                            SELECT min(re_math)
-                            FROM tests
-                            WHERE iterations==?
-                                AND length(re_math)==?
-                                AND error==''
-                        );
-                """, [niter, niter, length])
-                for re_math, method in rows:
-                    yield eval("MethodImplementation." + method)(self.db, re_math.decode("utf-8"), method)
+                    WHERE iterations<?
+                        AND length(re_math)==?
+                        AND error==''
+                ) AND iterations<?;
+            """, [reqiter, length, reqiter])
+            for re_math, method in rows:
+                yield eval("MethodImplementation." + method)(self.db, re_math.decode("utf-8"), method)
 
     def printSampleStats(self):
         """Prints (stdout) the statistics of the sample collected using `make sample`"""
@@ -360,7 +363,7 @@ class Benchmarker(object):
             ORDER BY iterations ASC;
         """):
             print(str(iterations).rjust(len("iterations")), count)
-        print("\nExpect up to 2 iterations for every test. Tests are (METHODS x DISTINCT RE_MATH)\n")
+        print("\n")
 
     def _displayResultsPlot(self, query, rowhandler):
         fig, ax = plt.subplots()
