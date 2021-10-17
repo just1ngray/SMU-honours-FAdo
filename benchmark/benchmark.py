@@ -113,7 +113,8 @@ class BenchExpr(object):
             self.db.execute("""
                 UPDATE tests
                 SET pre_time=?
-                WHERE re_math=?
+                WHERE error==''
+                    AND re_math=?
                     AND method=?
                     AND (pre_time==-1 OR pre_time>?);
             """, [pre_time, self.re_math, self.method, pre_time])
@@ -128,7 +129,8 @@ class BenchExpr(object):
             self.db.execute("""
                 UPDATE tests
                 SET eval_A_time=?, n_accept=?
-                WHERE re_math=?
+                WHERE error==''
+                    AND re_math=?
                     AND method=?
                     AND (eval_A_time==-1 OR eval_A_time>?);
             """, [eval_A_time, len(self.accepted), self.re_math, self.method, eval_A_time])
@@ -145,7 +147,8 @@ class BenchExpr(object):
             self.db.execute("""
                 UPDATE tests
                 SET eval_R_time=?, n_reject=?
-                WHERE re_math=?
+                WHERE error==''
+                    AND re_math=?
                     AND method=?
                     AND (eval_R_time==-1 OR eval_R_time>?);
             """, [eval_A_time, len(self.rejected), self.re_math, self.method, eval_R_time])
@@ -153,7 +156,9 @@ class BenchExpr(object):
             self.db.execute("""
                 UPDATE tests
                 SET iterations=iterations+1
-                WHERE re_math=? AND method=?;
+                WHERE error==''
+                    AND re_math=?
+                    AND method=?;
             """, [self.re_math, self.method])
         except (errors.FAdoExtError, AssertionError) as err:
             self.db.execute("""
@@ -291,26 +296,27 @@ class Benchmarker(object):
 
     def __iter__(self):
         """Yields BenchExpr objects ordered by the distinct expression"""
-        while self.db.selectall("SELECT count(*) FROM tests WHERE iterations<=1;")[0][0] > 0:
-            minlen, maxlen = self.db.selectall("SELECT min(length(re_math)), max(length(re_math)) FROM tests WHERE iterations<=1;")[0]
-            cursor = self.db._connection.cursor()
+        for niter in xrange(0, 3):
+            minlen, maxlen = self.db.selectall("""
+                SELECT min(length(re_math)), max(length(re_math))
+                FROM tests
+                WHERE iterations==?;
+            """, [niter])[0]
             for length in xrange(minlen, maxlen):
-                cursor.execute("""
-                    SELECT re_math, method, error
+                rows = self.db.selectall("""
+                    SELECT re_math, method
                     FROM tests
-                    WHERE iterations<=1
+                    WHERE iterations==?
                         AND re_math==(
-                        SELECT min(re_math)
-                        FROM tests
-                        WHERE iterations<=1
-                            AND length(re_math)==?
-                            AND error==''
-                    );
-                """, [length])
-                for re_math, method, error in cursor:
-                    if error == "":
-                        yield eval("MethodImplementation." + method)(self.db, re_math.decode("utf-8"), method)
-            cursor.close()
+                            SELECT min(re_math)
+                            FROM tests
+                            WHERE iterations==?
+                                AND length(re_math)==?
+                                AND error==''
+                        );
+                """, [niter, niter, length])
+                for re_math, method in rows:
+                    yield eval("MethodImplementation." + method)(self.db, re_math.decode("utf-8"), method)
 
     def printSampleStats(self):
         """Prints (stdout) the statistics of the sample collected using `make sample`"""
