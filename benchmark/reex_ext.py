@@ -3,7 +3,7 @@ from FAdo import reex, fa, common
 import copy
 import random
 
-from util import RangeList, UniUtil, WeightedRandomItem
+from util import Deque, RangeList, UniUtil, WeightedRandomItem
 import errors
 import fa_ext
 
@@ -62,9 +62,13 @@ class uregexp(reex.regexp):
         raise NotImplementedError()
 
     def evalWordP_Derivative(self, word):
+        """Evaluates word membership using exponentially growing single derivatives.
+        I.e., D(a+b,s) = (D(a,s) + D(b,s))
+        """
         return self.evalWordP(word)
 
     def evalWordP_PD(self, word):
+        """Evaluates word membership using partial derivatives."""
         current = set([self])
         for sigma in word:
             nxt = set()
@@ -76,6 +80,21 @@ class uregexp(reex.regexp):
             if c.ewp():
                 return True
         return False
+
+    def __iter__(self):
+        stack = Deque([self])
+        while not stack.isEmpty():
+            current = stack.pop_right()
+            yield current
+            if getattr(current, "arg2", None) != None:
+                stack.insert_right(current.arg2)
+                stack.insert_right(current.arg1)
+            elif getattr(current, "arg", None) != None:
+                stack.insert_right(current.arg)
+
+    def simpleRepr(self):
+        """A simple repr of self that doesn't call children"""
+        raise NotImplementedError()
 
     def partialDerivatives(self, sigma):
         """Set of partial derivatives of the regular expression in relation to given symbol.
@@ -228,6 +247,9 @@ class uconcat(reex.concat, uregexp):
             pds.update(self.arg2.partialDerivatives(sigma))
         return pds
 
+    def simpleRepr(self):
+        return "."
+
     def _memoLF(self):
         if hasattr(self, "_lf"):
             return
@@ -316,6 +338,9 @@ class udisj(reex.disj, uregexp):
     def pairGen(self):
         return self.arg1.pairGen().union(self.arg2.pairGen())
 
+    def simpleRepr(self):
+        return "+"
+
     def _backtrackMatch(self, word):
         for possibility in self.arg1._backtrackMatch(word):
             yield possibility
@@ -396,6 +421,9 @@ class ustar(reex.star, uregexp):
             else:
                 pds.add(uconcat(pd, self))
         return pds
+
+    def simpleRepr(self):
+        return "*"
 
     def _memoLF(self):
         if hasattr(self, "_lf"):
@@ -501,6 +529,9 @@ class uoption(reex.option, uregexp):
     def pairGen(self):
         return set([u""]).union(self.arg.pairGen())
 
+    def simpleRepr(self):
+        return "?"
+
     def _backtrackMatch(self, word):
         yield word # skip optional vertex
 
@@ -553,6 +584,9 @@ class uepsilon(reex.epsilon, uregexp):
 
     def _backtrackMatch(self, word):
         yield word
+
+    def simpleRepr(self):
+        return "@epsilon"
 
     def _dotFormat(self):
         return str(id(self)) + '[label="' + str(self) + '", shape="none"];\n'
@@ -621,7 +655,12 @@ class uatom(reex.atom, uregexp):
         return uepsilon() if sigma in self else uemptyset()
 
     def partialDerivatives(self, sigma):
-        return set([uepsilon()] if self.derivative(sigma) == uepsilon() else [])
+        if type(self.derivative(sigma)) == uepsilon:
+            return set([uepsilon()])
+        return set()
+
+    def simpleRepr(self):
+        return str(self)
 
     def linearForm(self):
         return {self: {uepsilon()}}
@@ -956,6 +995,9 @@ class anchor(uepsilon):
 
     def __repr__(self):
         return "anchor('{0}')".format(self.label)
+
+    def simpleRepr(self):
+        return self.label
 
     def _pmBoth(self):
         if self.label == "<ASTART>":
