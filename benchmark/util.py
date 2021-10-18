@@ -460,6 +460,7 @@ class Deque(object):
 
         return item
 
+# NOTE THIS IS CURRENTLY UNUSED, BUT I LIKED THE IDEA ENOUGH TO SAVE IT SOMEWHERE
 class PartialIdentitySet(object):
     """Entire identities of an object don't necessarily need to be known to add an item to a set.
     For example: if you are given the set S={AAA, ABC, AAB, ABA, BBA} and want to add the item C,
