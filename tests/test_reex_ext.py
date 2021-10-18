@@ -146,9 +146,6 @@ class TestEvalWordP(unittest.TestCase):
     def test_evalWordP_PD(self):
         self.run_tests("evalWordP_PD")
 
-    def test_evalWordP_PDO(self):
-        self.run_tests("evalWordP_PDO")
-
     def test_evalWordP_Backtrack(self):
         self.run_tests("evalWordP_Backtrack")
 
