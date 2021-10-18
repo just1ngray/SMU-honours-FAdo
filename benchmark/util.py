@@ -460,6 +460,95 @@ class Deque(object):
 
         return item
 
+class PartialIdentitySet(object):
+    """Entire identities of an object don't necessarily need to be known to add an item to a set.
+    For example: if you are given the set S={AAA, ABC, AAB, ABA, BBA} and want to add the item C,
+    then there is no need to "know" anything but the first character of each item in S.
+
+    self.items scheme: [item, [current id], generator(item)]
+    """
+    @staticmethod
+    def uregexp_generator(re):
+        stack = Deque([re])
+        def addNext():
+            if stack.isEmpty():
+                return None
+            current = stack.pop_right()
+            if getattr(current, "arg2", None) != None:
+                stack.insert_right(current.arg2)
+                stack.insert_right(current.arg1)
+            elif getattr(current, "arg", None) != None:
+                stack.insert_right(current.arg)
+            return current.simpleRepr()
+        return addNext
+
+    @staticmethod
+    def str_generator(string):
+        chars = iter(string)
+        def addNext():
+            try:
+                return next(chars)
+            except StopIteration:
+                return None
+        return addNext
+
+    def __init__(self, generator, maxsize):
+        self._items = [[None, None, None]] * maxsize
+        self._generator = generator
+        self._size = 0
+
+    def __iter__(self):
+        for i in xrange(self._size):
+            yield self._items[i][0]
+
+    def __len__(self):
+        return self._size
+
+    def __str__(self):
+        content = ""
+        for item, idseq, _ in self._items:
+            if item is None: break
+            content += ", " + str(item) + "/" + str(idseq)
+        return "{" + content[2:] + "}"
+
+    def add(self, item):
+        candidateIndices = range(self._size)
+        iterators = [iter(self._items[i][1]) for i in candidateIndices]
+
+        gen = self._generator(item)
+        itemSeq = Deque([gen()])
+
+        while len(candidateIndices) > 0:
+            nextCandidates = list()
+            for candidateIndex in candidateIndices:
+                candidateSeqVal = self._next(candidateIndex, iterators[candidateIndex])
+                if candidateSeqVal is not None and itemSeq.peek_right() == candidateSeqVal:
+                    nextCandidates.append(candidateIndex)
+
+            nextItemSeq = gen()
+            if nextItemSeq is None:
+                for candidateIndex in nextCandidates:
+                    candidateSeqVal = self._next(candidateIndex, iterators[candidateIndex])
+                    if candidateSeqVal is None:
+                        return # have a duplicate item
+                break # have a short item to add
+            else:
+                itemSeq.insert_right(nextItemSeq)
+                candidateIndices = nextCandidates
+
+        self._items[self._size] = [item, itemSeq, gen]
+        self._size += 1
+
+    def _next(self, itemIndex, iterator):
+        try:
+            return next(iterator)
+        except StopIteration:
+            nextVal = self._items[itemIndex][2]()
+            if nextVal is not None:
+                self._items[itemIndex][1].insert_right(nextVal)
+            return nextVal
+
+
 def radixOrder(a, b):
     if len(a) == len(b):
         return -1 if a < b else 1
