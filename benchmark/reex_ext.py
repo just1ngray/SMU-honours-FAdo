@@ -621,7 +621,7 @@ class uatom(reex.atom, uregexp):
         return uepsilon() if sigma in self else uemptyset()
 
     def partialDerivatives(self, sigma):
-        return set([uepsilon()] if sigma in self else [])
+        return set([uepsilon()] if self.derivative(sigma) == uepsilon() else [])
 
     def linearForm(self):
         return {self: {uepsilon()}}
