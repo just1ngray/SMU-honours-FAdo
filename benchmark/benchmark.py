@@ -8,10 +8,6 @@ import gc
 from util import DBWrapper, Deque, ConsoleOverwrite
 from convert import Converter
 
-# Recursion beyond ~17k seems to crash the Python interpreter on my machine
-# Note this is still 15x the default value
-MAX_SIZE = 15000
-
 class Benchmarker():
     def __init__(self):
         self.db = DBWrapper()
@@ -335,7 +331,10 @@ class Benchmarker():
 
 
 if __name__ == "__main__":
-    sys.setrecursionlimit(MAX_SIZE)
+    # Default recursion limit is 1,000. Backtracking algorithm would then only accept words of length < 1,000.
+    # a^i in L(a*) can be answered for i upto ~17,000 before Python interpreter crashes.
+    # Hence 12,000 is taken as a somewhat conservative value.
+    sys.setrecursionlimit(12000)
     benchmarker = Benchmarker()
 
     choice = "1"
