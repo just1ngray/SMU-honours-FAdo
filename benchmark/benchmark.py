@@ -1,531 +1,291 @@
 from __future__ import print_function
-import timeit
 import matplotlib.pyplot as plt
-import copy
-import lark.exceptions
-import random
 import sys
+import timeit
+import random
 import gc
 
-from util import DBWrapper, ConsoleOverwrite, Deque
+from util import DBWrapper, Deque, ConsoleOverwrite
 from convert import Converter
-import errors
 
-class BenchExpr(object):
-    CONVERTER = Converter()
-    OUTPUT = ConsoleOverwrite("Bench:")
-    CODE_LINES = Deque(filter(lambda l: len(l) > 0, open("./benchmark/reex_ext.py", "r").read().splitlines()))
-
-    def __init__(self, db, re_math, method):
-        super(BenchExpr, self).__init__()
-        self.db = db
-        self.re_math = re_math
-        self.method = method
-        self.accepted = list()
-        self.rejected = list()
-
-    def __str__(self):
-        return "{0}: {1}".format(self.method, self.re_math.encode("utf-8"))
-
-    def genWords(self):
-        """Populates the `accepted` and `rejected` attributes with words"""
-        BenchExpr.OUTPUT.overwrite("generating words for", self.re_math)
-        self.accepted = list()
-        self.rejected = set(copy.copy(BenchExpr.CODE_LINES))
-
-        try:
-            re = BenchExpr.CONVERTER.math(self.re_math, partialMatch=False)
-
-            # ACCEPTING: pairGen inserted into lines of code
-            BenchExpr.OUTPUT.overwrite("generating pairGen words for", self.re_math)
-            testwords = Deque(re.pairGen())
-            if len(testwords) == 0:
-                return
-            word = testwords.iter_cycle()               # cyclically iterate through pairGen words... next(word)
-            line = BenchExpr.CODE_LINES.iter_cycle()    # cyclically iterate through code lines...... next(line)
-
-            hasASTART = "<ASTART>" in self.re_math
-            hasAEND = "<AEND>" in self.re_math
-            addAccepting = lambda line: 0
-            if hasASTART and hasAEND: # no leading/trailing from the line
-                addAccepting = lambda line: self.accepted.append(next(word))
-            elif hasASTART: # insert word at beginning of line
-                addAccepting = lambda line: self.accepted.append(next(word) + line)
-            elif hasAEND: # insert word at end of line
-                addAccepting = lambda line: self.accepted.append(line + next(word))
-            else: # insert word in middle of line
-                addAccepting = lambda line: self.accepted.append(
-                    line[:len(line)//2] + next(word) + line[len(line)//2:])
-
-            for _ in xrange(max(len(testwords), len(BenchExpr.CODE_LINES))):
-                addAccepting(next(line))
-
-
-            # ACCEPTING: language enumeration
-            BenchExpr.OUTPUT.overwrite("generating enumerated words for", self.re_math)
-            enumerate = re.toInvariantNFA("nfaPosition").enumNFA()
-            minlen = enumerate.shortestWordLength()
-            maxlen = min(minlen + 50, enumerate.longestWordLength())
-            for l in xrange(minlen, maxlen + 1):
-                n = 0
-                for word in enumerate.enumCrossSection(l):
-                    if n > 10: break
-                    n += 1
-                    self.accepted.append(word)
-
-                    # REJECTING: slightly changed words may not be accepted...
-                    # 1. delete one character
-                    for i in xrange(0, len(word)):
-                        self.rejected.add(word[:i] + word[i+1:])
-                    # 2. swap all neighbouring character pairs
-                    for i in xrange(1, len(word)):
-                        self.rejected.add(word[:i-1] + word[i] + word[i-1] + word[i+1:])
-
-
-            # REJECTING: filter out words which are really accepted
-            BenchExpr.OUTPUT.overwrite("filtering", len(self.rejected), "rejecting words for", self.re_math)
-            pmre = re.partialMatch()
-            pmNFA = pmre.toInvariantNFA("nfaPDO") # TODO: consider switching to compressed pdo evaluation if it can be optimized further
-            self.rejected = list(w for w in self.rejected if not pmNFA.evalWordP(w))
-
-            # choose a pseudo-random sample of up to 10,000 words
-            r = random.Random(1)
-            self.accepted = r.sample(self.accepted, min(len(self.accepted), 10000))
-            self.rejected = r.sample(self.rejected, min(len(self.rejected), 10000))
-        except Exception:
-            # self.db.execute("""
-            #     UPDATE tests
-            #     SET pre_time=0, eval_time=0, error=?
-            #     WHERE re_math=?;
-            # """, [str(e) + "\nwhile generating words", self.re_math])
-            raise
-
-    def benchmark(self):
-        """Runs the benchmark and updates the `tests` table"""
-        GROUP_SIZE = 100
-        ntotal = len(self.accepted) + len(self.rejected)
-        ndone = 0
-
-        try:
-            BenchExpr.OUTPUT.overwrite("pre-processing", str(self))
-            processed = self.preprocess()
-            pre_time = timeit.timeit(self.preprocess, number=1000)
-            self.db.execute("""
-                UPDATE tests
-                SET pre_time=?
-                WHERE error==''
-                    AND re_math=?
-                    AND method=?
-                    AND (pre_time==-1 OR pre_time>?);
-            """, [pre_time, self.re_math, self.method, pre_time])
-
-            eval_A_time = 0.0
-            def _assertion(b, word):
-                assert b == True, str(self) + " didn't accept '{0}'".format(word.encode("utf-8"))
-            for i in xrange(0, len(self.accepted), GROUP_SIZE):
-                BenchExpr.OUTPUT.overwrite("{0}% - {1}".format(format(ndone*100.0/ntotal, "00.2f"), str(self)))
-                eval_A_time += timeit.timeit(lambda: self._benchGroup(processed, self.accepted[i:i+GROUP_SIZE], _assertion), number=1)
-                ndone += GROUP_SIZE
-            self.db.execute("""
-                UPDATE tests
-                SET eval_A_time=?, n_accept=?
-                WHERE error==''
-                    AND re_math=?
-                    AND method=?
-                    AND (eval_A_time==-1 OR eval_A_time>?);
-            """, [eval_A_time, len(self.accepted), self.re_math, self.method, eval_A_time])
-
-            eval_R_time = 0.0
-            def _assertion(b, word):
-                assert b == True, str(self) + " didn't reject '{0}'".format(word.encode("utf-8"))
-            ndone = len(self.accepted)
-            for i in xrange(0, len(self.rejected), GROUP_SIZE):
-                BenchExpr.OUTPUT.overwrite("{0}% - {1}".format(format(ndone*100.0/ntotal, "00.2f"), str(self)))
-                eval_R_time += timeit.timeit(lambda: self._benchGroup(processed, self.accepted[i:i+GROUP_SIZE], _assertion), number=1)
-                ndone += GROUP_SIZE
-            BenchExpr.OUTPUT.overwrite("100% - " + str(self))
-            self.db.execute("""
-                UPDATE tests
-                SET eval_R_time=?, n_reject=?
-                WHERE error==''
-                    AND re_math=?
-                    AND method=?
-                    AND (eval_R_time==-1 OR eval_R_time>?);
-            """, [eval_A_time, len(self.rejected), self.re_math, self.method, eval_R_time])
-
-            self.db.execute("""
-                UPDATE tests
-                SET iterations=iterations+1
-                WHERE error==''
-                    AND re_math=?
-                    AND method=?;
-            """, [self.re_math, self.method])
-        except (errors.FAdoExtError, AssertionError) as err:
-            self.db.execute("""
-                UPDATE tests
-                SET pre_time=0, eval_A_time=0, eval_R_time=0, n_accept=0, n_reject=0, error=?
-                WHERE re_math=?;
-            """, [str(err) + "\nin method " + self.method, self.re_math])
-        except RuntimeError as err:
-            if str(err) == "maximum recursion depth exceeded":
-                self.db.execute("""
-                    UPDATE tests
-                    SET error=?, iterations=iterations+1
-                    WHERE re_math=? AND method=?;
-                """, [str(err), self.re_math, self.method])
-            else:
-                raise
-
-    def _benchGroup(self, processed, words, assertion):
-        for word in words:
-            assertion(self.testMembership(processed, word), word)
-
-    def preprocess(self):
-        """One-time cost of parsing, compiling, etc into an object which can
-        evaluate membership"""
-        raise NotImplementedError("preprocess must be implemented in the child")
-
-    def testMembership(self, obj, word):
-        """returns if the word is accepted by the given object"""
-        return obj.evalWordP(word)
-
-class MethodImplementation:
-    """Method-specific implementations of BenchExpr"""
-    class derivative(BenchExpr):
-        def preprocess(self):
-            return BenchExpr.CONVERTER.math(self.re_math, partialMatch=True)
-
-        def testMembership(self, obj, word):
-            return obj.evalWordP_Derivative(word)
-
-    class pd(BenchExpr):
-        def preprocess(self):
-            return BenchExpr.CONVERTER.math(self.re_math, partialMatch=True)
-
-        def testMembership(self, obj, word):
-            return obj.evalWordP_PD(word)
-
-    class backtrack(BenchExpr):
-        def preprocess(self):
-            return BenchExpr.CONVERTER.math(self.re_math, partialMatch=True)
-
-        def testMembership(self, obj, word):
-            return obj.evalWordP_Backtrack(word)
-
-    class nfaPD(BenchExpr):
-        def preprocess(self):
-            re = BenchExpr.CONVERTER.math(self.re_math, partialMatch=True)
-            return re.toInvariantNFA("nfaPD")
-
-    class nfaPDO(BenchExpr):
-        def preprocess(self):
-            re = BenchExpr.CONVERTER.math(self.re_math, partialMatch=True)
-            return re.toInvariantNFA("nfaPDO")
-
-    class nfaPosition(BenchExpr):
-        def preprocess(self):
-            re = BenchExpr.CONVERTER.math(self.re_math, partialMatch=True)
-            return re.toInvariantNFA("nfaPosition")
-
-    class nfaFollow(BenchExpr):
-        def preprocess(self):
-            re = BenchExpr.CONVERTER.math(self.re_math, partialMatch=True)
-            return re.toInvariantNFA("nfaFollow")
-
-    class nfaThompson(BenchExpr):
-        def preprocess(self):
-            re = BenchExpr.CONVERTER.math(self.re_math, partialMatch=True)
-            return re.toInvariantNFA("nfaThompson")
-
-    class nfaGlushkov(BenchExpr):
-        def preprocess(self):
-            re = BenchExpr.CONVERTER.math(self.re_math, partialMatch=True)
-            return re.toInvariantNFA("nfaGlushkov")
-
-
-class Benchmarker(object):
-    def __init__(self, reset=False):
-        super(Benchmarker, self).__init__()
-        self.memo_expr = dict()
-        self.memo_words = set()
+class Benchmarker():
+    def __init__(self):
         self.db = DBWrapper()
-
-        exists = len(self.db.selectall("""
-            SELECT name
-            FROM sqlite_master
-            WHERE type='table' AND name='tests';
-        """)) > 0
-        if not exists or reset:
-            self.db.executescript("""
-                DROP TABLE IF EXISTS methods;
-                CREATE TABLE methods (
-                    method TEXT PRIMARY KEY,
-                    colour TEXT
-                );
-                INSERT OR IGNORE INTO methods (method, colour) VALUES ('nfaPD', '#42d4f4');
-                INSERT OR IGNORE INTO methods (method, colour) VALUES ('nfaPDO', '#469990');
-                INSERT OR IGNORE INTO methods (method, colour) VALUES ('nfaPosition', '#e6194B');
-                INSERT OR IGNORE INTO methods (method, colour) VALUES ('nfaFollow', '#dcbeff');
-                INSERT OR IGNORE INTO methods (method, colour) VALUES ('nfaThompson', '#800000');
-                INSERT OR IGNORE INTO methods (method, colour) VALUES ('nfaGlushkov', '#f58231');
-                -- INSERT OR IGNORE INTO methods (method, colour) VALUES ('derivative', '#a9a9a9');
-                INSERT OR IGNORE INTO methods (method, colour) VALUES ('pd', '#4363d8');
-                INSERT OR IGNORE INTO methods (method, colour) VALUES ('backtrack', '#000000');
-
-                DROP TABLE IF EXISTS tests;
-
-                CREATE TABLE tests AS
-                    SELECT DISTINCT e.re_math, m.method,
-                        -1 as pre_time,
-                        -1 as eval_A_time,
-                        -1 as eval_R_time,
-                        -1 as n_accept,
-                        -1 as n_reject,
-                        "" as error,
-                        0 as iterations
-                    FROM methods as m, expressions as e
-                    WHERE e.re_math NOT LIKE '%Error%'
-                    ORDER BY length(re_math) ASC, re_math ASC, method ASC;
-
-                CREATE INDEX tests_by_method
-                ON tests (method);
-
-                CREATE INDEX tests_by_iterations
-                ON tests (iterations);
-            """)
+        console = ConsoleOverwrite()
+        self.write = console.overwrite
+        self.convert = Converter()
+        self.code_lines = Deque(filter(lambda l: len(l) > 0, \
+            open("./benchmark/reex_ext.py", "r").read().splitlines()))
+        self.methods = set(x[0] for x in self.db.selectall("SELECT method FROM methods;"))
+        gc.disable()
 
     def __iter__(self):
-        """Yields BenchExpr objects ordered by the distinct expression"""
-        minlen, maxlen = self.db.selectall("""
-            SELECT min(length(re_math)), max(length(re_math))
-            FROM tests;
-        """)[0]
-        for length in xrange(minlen, maxlen):
-            lencount = self.db.selectall("""
-                SELECT count(DISTINCT re_math)
-                FROM tests
-                WHERE length(re_math)==?;
-            """, [length])[0][0]
-            reqiter = max(2, 12 - lencount) # no. required iterations per test of this re_math length
-            rows = self.db.selectall("""
-                SELECT re_math, method
-                FROM tests
-                WHERE re_math==(
-                    SELECT min(re_math)
-                    FROM tests
-                    WHERE iterations<?
-                        AND length(re_math)==?
-                        AND error==''
-                ) AND iterations<?;
-            """, [reqiter, length, reqiter])
-            for re_math, method in rows:
-                yield eval("MethodImplementation." + method)(self.db, re_math.decode("utf-8"), method)
+        """Yields string expressions to benchmark."""
+        for re_math, in self.db.selectall("""
+            SELECT re_math
+            FROM in_tests
+            WHERE itersleft>0
+                AND error=='';
+        """):
+            yield re_math.decode("utf-8")
 
-    def printSampleStats(self):
-        """Prints (stdout) the statistics of the sample collected using `make sample`"""
-        all = self.db.selectall("""
-            SELECT lang, ntotal, ndistinct
-            FROM (
-                -- main content --
-                SELECT 0 as rn, lang, count(re_math) as ntotal, count(DISTINCT re_math) as ndistinct
-                FROM expressions
-                WHERE re_math NOT LIKE '%Error%'
-                GROUP BY lang
+    def initTestTables(self):
+        """Overwrites current in_tests and out_tests tables."""
+        self.write("Creating in_tests and out_tests")
+        self.db.executescript("""
+            DROP TABLE IF EXISTS methods;
+            CREATE TABLE methods (
+                method TEXT PRIMARY KEY,
+                colour TEXT
+            );
+            INSERT OR IGNORE INTO methods (method, colour) VALUES ('nfaPD', '#42d4f4');
+            INSERT OR IGNORE INTO methods (method, colour) VALUES ('nfaPDO', '#469990');
+            INSERT OR IGNORE INTO methods (method, colour) VALUES ('nfaPosition', '#e6194B');
+            INSERT OR IGNORE INTO methods (method, colour) VALUES ('nfaFollow', '#dcbeff');
+            INSERT OR IGNORE INTO methods (method, colour) VALUES ('nfaThompson', '#800000');
+            INSERT OR IGNORE INTO methods (method, colour) VALUES ('nfaGlushkov', '#f58231');
+            -- INSERT OR IGNORE INTO methods (method, colour) VALUES ('derivative', '#a9a9a9');
+            INSERT OR IGNORE INTO methods (method, colour) VALUES ('pd', '#4363d8');
+            INSERT OR IGNORE INTO methods (method, colour) VALUES ('backtrack', '#000000');
 
-                -- blank line --
-                UNION SELECT 1 as rn, '', '', ''
+            DROP TABLE IF EXISTS in_tests;
+            CREATE TABLE in_tests AS
+                SELECT DISTINCT e.re_math,
+                    -1 as n_evalA,
+                    -1 as n_evalR,
+                    -1 as length,
+                    0 as itersleft,
+                    '' as error
+                FROM expressions as e
+                WHERE e.re_math NOT LIKE '%Error%'
+                ORDER BY re_math ASC;
+            CREATE INDEX in_tests_re_math
+            ON in_tests (re_math);
 
-                -- total row --
-                UNION SELECT 2 as rn, 'Total', count(re_math), count(DISTINCT re_math)
-                FROM expressions
-                WHERE re_math NOT LIKE '%Error%'
-
-                ORDER BY rn ASC, ntotal DESC
+            DROP TABLE IF EXISTS out_tests;
+            CREATE TABLE out_tests (
+                re_math TEXT,
+                method  TEXT,
+                t_pre   REAL,
+                t_evalA REAL,
+                t_evalR REAL,
+                PRIMARY KEY (re_math, method),
+                FOREIGN KEY (method) REFERENCES methods (method),
+                FOREIGN KEY (re_math) REFERENCES in_tests (re_math)
             );
         """)
-        print("\n\nSAMPLING STATISTICS:\n")
-        print("language           ntotal  ndistinct")
-        print("------------------------------------")
-        for row in all:
-            print(row[0].ljust(16), str(row[1]).rjust(8), str(row[2]).rjust(8))
+        self.write("Collecting re_math by length")
+        reByLength = dict()
+        for re_math, in self.db.selectall("SELECT re_math FROM in_tests;"):
+            exprs = reByLength.get(len(re_math), Deque())
+            exprs.insert_right(re_math)
+            reByLength[len(re_math)] = exprs
 
-        if all[-1][2] == 0: # 0 distinct
-            print("\nNo regular expressions sampled - run `make sample` first")
-            exit(0)
+        self.write("Filling calculated information for in_tests")
+        for length in reByLength:
+            itersreq = max(2, 11 - len(reByLength[length]))
+            for re_math in reByLength[length]:
+                self.db.execute("""
+                    UPDATE in_tests
+                    SET length=?, itersleft=?
+                    WHERE re_math=?;
+                """, [length, itersreq, re_math])
 
-    def printProgressStats(self):
-        print("\n\niterations count")
-        print("----------------")
-        for iterations, count in self.db.selectall("""
-            SELECT iterations, count(*)
-            FROM tests
-            GROUP BY iterations
-            ORDER BY iterations ASC;
-        """):
-            print(str(iterations).rjust(len("iterations")), count)
-        print("\n")
+    def generateWords(self, re_math):
+        re = self.convert.math(re_math)
+        pmre = re.partialMatch()
+        nfa = pmre.toInvariantNFA("nfaPDO")
+        enum = nfa.enumNFA()
+        accepted = list()
+        rejected = set()
 
-    def _displayResultsPlot(self, query, rowhandler):
-        fig, ax = plt.subplots()
-        line2d = dict()
+        # ACCEPTING: pairGen inserted into lines of code
+        self.write(re_math[:32], "generating accepting pairGen words")
+        testwords = Deque(re.pairGen())
+        word = testwords.iter_cycle()          # cyclically iterate through pairGen words... next(word)
+        line = self.code_lines.iter_cycle()    # cyclically iterate through code lines...... next(line)
 
-        for method, colour in self.db.selectall("SELECT method, colour from methods;"):
-            x = []
-            y = []
-            for row in self.db.selectall(query, [method]):
-                rowhandler(x, y, row)
-            line2d[method] = ax.plot(x, y, label=method, linewidth=1.5, color=colour)[0]
+        hasASTART = "<ASTART>" in re_math
+        hasAEND = "<AEND>" in re_math
+        addAccepting = lambda line: 0
+        if hasASTART and hasAEND: # no leading/trailing from the line
+            addAccepting = lambda line: accepted.append(next(word))
+        elif hasASTART: # insert word at beginning of line
+            addAccepting = lambda line: accepted.append(next(word) + line)
+        elif hasAEND: # insert word at end of line
+            addAccepting = lambda line: accepted.append(line + next(word))
+        else: # insert word in middle of line
+            addAccepting = lambda line: accepted.append(
+                line[:len(line)//2] + next(word) + line[len(line)//2:])
+        for _ in xrange(max(len(testwords), len(self.code_lines))):
+            addAccepting(next(line))
 
-        legend_to_line = dict()
-        legend = plt.legend(loc="best")
-        legendLines = legend.get_lines()
-        for l in legendLines:
-            l.set_picker(True)
-            l.set_pickradius(10)
-            legend_to_line[l] = line2d[l.get_label()]
+        # ACCEPTING: language enumeration
+        self.write(re_math[:32], "generating accepting enumerated words")
+        minlen = enum.shortestWordLength()
+        maxlen = min(minlen + 50, enum.longestWordLength())
+        for l in xrange(minlen, maxlen + 1):
+            n = 0
+            for word in enum.enumCrossSection(l):
+                if n > 10: break
+                n += 1
+                accepted.append(word)
 
-        def _on_pick(event):
-            line = event.artist
-            legend_to_line[line].set_visible(not line.get_visible())
-            line.set_visible(not line.get_visible())
-            fig.canvas.draw()
-        plt.connect("pick_event", _on_pick)
+                # REJECTING: slightly changed words may not be accepted...
+                # 1. delete one character
+                # 2. replace each character with '~'
+                for i in xrange(0, len(word)):
+                    rejected.add(word[:i] + word[i+1:])
+                    rejected.add(word[:i] + "~" + word[i+1:])
+                # 3. swap all neighbouring character pairs
+                for i in xrange(1, len(word)):
+                    rejected.add(word[:i-1] + word[i] + word[i-1] + word[i+1:])
 
-        return plt
+        # LIMIT WORD LENGTH
+        self.write(re_math[:32], "limiting test word length to <= 1000")
+        accepted = [x for x in accepted if len(x) <= 1000]
+        rejected = [x for x in rejected if len(x) <= 1000]
 
-    def displayMembershipStats(self):
-        def _rowhandler(x, y, row):
-            complexity, ta, na, tr, nr = row
-            x.append(complexity)
-            if na == 0: na = float("inf")
-            if nr == 0: nr = float("inf")
-            y.append(ta/na + tr/nr) # weighted average time for accept & reject
+        # REJECTING: filter out words which are really accepted
+        self.write(re_math[:32], "filtering", len(rejected), "possibly rejected words")
+        rejected = list(w for w in rejected if not nfa.evalWordP(w))
 
-        plot = self._displayResultsPlot("""
-            SELECT length(re_math) as complexity,
-                sum(eval_A_time),
-                sum(n_accept),
-                sum(eval_R_time),
-                sum(n_reject)
-            FROM tests
-            WHERE method==?
-                AND pre_time>-1
-                AND error==''
-            GROUP BY complexity
-            ORDER BY complexity ASC;
-        """, _rowhandler)
+        # choose a pseudo-random sample of up to 10,000 words
+        self.write(re_math[:32], "choosing pseudo-random sample up to size 10,000 for A and R")
+        r = random.Random(1)
+        accepted = r.sample(accepted, min(len(accepted), 10000))
+        rejected = r.sample(rejected, min(len(rejected), 10000))
+        return (accepted, rejected)
 
-        plot.title("Membership Time by Expression Complexity")
-        plot.xlabel("re_math length")
-        plot.ylabel("avg membership time (s)")
-        plot.show()
+    def benchmark(self, re_math):
+        prev_itersleft = self.db.selectall("SELECT itersleft FROM in_tests WHERE re_math=?;", [re_math])[0][0]
+        def _rollback():
+            self.db.execute("""
+                DELETE FROM out_tests
+                WHERE re_math=?;
+            """, [re_math])
+            self.db.execute("""
+                UPDATE in_tests
+                SET itersleft=?
+                WHERE re_math=?;
+            """, [prev_itersleft, re_math])
 
-    def displayConstructionStats(self):
-        def _rowhandler(x, y, row):
-            complexity, t = row
-            x.append(complexity)
-            y.append(t/1000.0)
+        try:
+            self.db.execute("""
+                INSERT OR IGNORE INTO out_tests (re_math, method, t_pre, t_evalA, t_evalR)
+                    SELECT in_tests.re_math, methods.method,
+                        9999999.0 as t_pre,
+                        9999999.0 as t_evalA,
+                        9999999.0 as t_evalR
+                    FROM in_tests, methods
+                    WHERE in_tests.re_math=?;
+            """, [re_math])
 
-        plot = self._displayResultsPlot("""
-            SELECT length(re_math) as complexity,
-                    sum(pre_time)
-                FROM tests
-                WHERE method==?
-                    AND pre_time>-1
-                    AND error==''
-                GROUP BY complexity
-                ORDER BY complexity ASC;
-        """, _rowhandler)
+            GROUP_SIZE = 100
+            w_accepted, w_rejected = self.generateWords(re_math)
+            ntotal = len(w_accepted) + len(w_rejected)
 
-        plot.title("Construction Time by Expression Complexity")
-        plot.xlabel("re_math length")
-        plot.ylabel("avg construction time (s)")
-        plot.show()
+            self.write(re_math[:32], "str to partial matching regular expression tree")
+            pmre = self.convert.math(re_math, partialMatch=True)
+            t_str2pmre = timeit.timeit(lambda: self.convert.math(re_math, partialMatch=True), number=100)
 
-    def displaySummaryStats(self):
-        def _rowhandler(x, y, row):
-            complexity, tpre, teval, neval = row
-            x.append(complexity)
-            y.append(tpre/1000.0 + (teval*1.0/neval))
+            for method in self.methods:
+                self.write(re_math[:32], method, "partial matching regular expression tree to final")
+                ndone = 0
+                evalWord = self.getEvalMethod(pmre, method)
+                t_pmre2final = 0.0
+                if "nfa" in method:
+                    t_pmre2final = timeit.timeit(lambda: pmre.toInvariantNFA(method), number=100)
+                self.db.execute("""
+                    UPDATE out_tests
+                    SET t_pre=?
+                    WHERE re_math=? AND method=? AND t_pre>?;
+                """, [t_str2pmre+t_pmre2final, re_math, method, t_str2pmre+t_pmre2final])
 
-        plot = self._displayResultsPlot("""
-            SELECT length(re_math) as complexity,
-                sum(pre_time),
-                sum(eval_A_time) + sum(eval_R_time),
-                sum(n_accept) + sum(n_reject)
-            FROM tests
-            WHERE method==?
-                AND pre_time>-1
-                AND error==''
-            GROUP BY complexity
-            ORDER BY complexity ASC;
-        """, _rowhandler)
+                t_evalA = 0.0
+                for i in xrange(0, len(w_accepted), GROUP_SIZE):
+                    self.write(re_math[:32], method, "{0}%".format(format(ndone*100.0/ntotal, "00.2f")))
+                    words = w_accepted[i:i+GROUP_SIZE]
+                    t_evalA += timeit.timeit(lambda: self.evalMany(evalWord, words, True, method), number=1)
+                    ndone += GROUP_SIZE
+                self.db.execute("""
+                    UPDATE out_tests
+                    SET t_evalA=?
+                    WHERE re_math=? AND method=? AND t_evalA>?;
+                """, [t_evalA, re_math, method, t_evalA])
 
-        plot.title("Construction + Avg. Eval Time by Expression Complexity")
-        plot.xlabel("re_math length")
-        plot.ylabel("construction time + avg. eval. time (s)")
-        plot.show()
+                t_evalR = 0.0
+                ndone = len(w_accepted)
+                for i in xrange(0, len(w_rejected), GROUP_SIZE):
+                    self.write(re_math[:32], method, "{0}%".format(format(ndone*100.0/ntotal, "00.2f")))
+                    words = w_rejected[i:i+GROUP_SIZE]
+                    t_evalR += timeit.timeit(lambda: self.evalMany(evalWord, words, False, method), number=1)
+                    ndone += GROUP_SIZE
+                self.db.execute("""
+                    UPDATE out_tests
+                    SET t_evalR=?
+                    WHERE re_math=? AND method=? AND t_evalR>?;
+                """, [t_evalR, re_math, method, t_evalR])
 
+            self.write(re_math[:32], "finalizing")
+            self.db.execute("""
+                UPDATE in_tests
+                SET itersleft=itersleft-1, n_evalA=?, n_evalR=?
+                WHERE re_math=?;
+            """, [len(w_accepted), len(w_rejected), re_math])
+        except KeyboardInterrupt:
+            _rollback()
+            raise
+        except Exception as error:
+            self.db.execute("""
+                UPDATE in_tests
+                SET error=?
+                WHERE re_math=?;
+            """, [str(error), re_math])
+            _rollback()
+        finally:
+            self.write("running gc")
+            gc.collect()
+
+    def evalMany(self, evalWordFtn, words, expectedVal, method):
+        for w in words:
+            assert evalWordFtn(w) == expectedVal, w + " was not evaluated " + str(expectedVal) + " in " + method
+
+    def getEvalMethod(self, pmre, method):
+        if "nfa" in method:
+            nfa = pmre.toInvariantNFA(method)
+            return nfa.evalWordP
+        elif method == "derivative":
+            return pmre.evalWordP_Derivative
+        elif method == "pd":
+            return pmre.evalWordP_PD
+        elif method == "backtrack":
+            return pmre.evalWordP_Backtrack
+
+def menu():
+    print("\n")
+    print("1. Test")
+    print("2. Reset")
+    print("X. Exit")
 
 if __name__ == "__main__":
-    sys.setrecursionlimit(10**5) # ... 10**3 is default
-
+    sys.setrecursionlimit(10**5) # default: 10**3
     benchmarker = Benchmarker()
-    benchmarker.printSampleStats()
 
-    choice = "-1"
-    while choice != "7":
-        benchmarker.printProgressStats()
-
-        print("\n========================================")
-        print("1. Continue with tests")
-        print("2. Display summary results (const + avg eval)")
-        print("3. Display membership results")
-        print("4. Display construction results")
-        print("5. Backup all results")
-        print("6. Reset without backing up")
-        print("7. Exit\n")
-
+    choice = "1"
+    while choice.upper() != "X":
+        menu()
         choice = raw_input("Choose menu option: ")
-        print("\n")
-
         if choice == "1":
-            print("Running benchmark... (Ctrl+C to stop)")
-            gc.disable()
-            lastExpr = BenchExpr(None, None, None)
-            for r in benchmarker:
-                try:
-                    # take advantage of Benchmarker iteration being ordered by re_math and re-generate words sparingly
-                    if r.re_math == lastExpr.re_math:
-                        r.accepted = copy.copy(lastExpr.accepted)
-                        r.rejected = copy.copy(lastExpr.rejected)
-                    else:
-                        r.genWords()
-                        lastExpr = r
-                        gc.collect()
-
-                    r.benchmark()
-                except (lark.exceptions.UnexpectedToken, errors.AnchorError):
-                    print("\n\n", r)
-                    raise
-                except KeyboardInterrupt:
-                    print("\nStopping...")
-                    break
-            gc.enable()
-
+            print("Running tests. Press Ctrl+C to stop")
+            try:
+                for expr in benchmarker:
+                    benchmarker.benchmark(expr)
+            except KeyboardInterrupt:
+                pass
         elif choice == "2":
-            benchmarker.displaySummaryStats()
-        elif choice == "3":
-            benchmarker.displayMembershipStats()
-        elif choice == "4":
-            benchmarker.displayConstructionStats()
-        elif choice == "5":
-            print("Currently disabled! Do it manually")
-        elif choice == "6":
-            if raw_input("Are you sure? y/(n): ") == "y":
-                benchmarker = Benchmarker(True)
+            if raw_input("Are you sure you want to delete all results? y/(n): ") == "y":
+                benchmarker.initTestTables()
                 print("Reset!")
             else:
-                print("Cancelled!")
-
-    print("\n\nExiting...")
+                print("Aborted. Did not reset.")
