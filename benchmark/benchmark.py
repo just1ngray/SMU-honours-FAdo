@@ -62,6 +62,9 @@ class Benchmarker():
             CREATE INDEX in_tests_re_math
             ON in_tests (re_math);
 
+            CREATE INDEX in_tests_length
+            ON in_tests (length);
+
             DROP TABLE IF EXISTS out_tests;
             CREATE TABLE out_tests (
                 re_math TEXT,
@@ -100,7 +103,7 @@ class Benchmarker():
         rejected = set()
 
         # ACCEPTING: pairGen inserted into lines of code
-        self.write(re_math[:32], "generating accepting pairGen words")
+        self.write(re_math[:50], "generating accepting pairGen words")
         testwords = Deque(re.pairGen())
         word = testwords.iter_cycle()          # cyclically iterate through pairGen words... next(word)
         line = self.code_lines.iter_cycle()    # cyclically iterate through code lines...... next(line)
@@ -121,7 +124,7 @@ class Benchmarker():
             addAccepting(next(line))
 
         # ACCEPTING: language enumeration
-        self.write(re_math[:32], "generating accepting enumerated words")
+        self.write(re_math[:50], "generating accepting enumerated words")
         minlen = enum.shortestWordLength()
         maxlen = min(minlen + 50, enum.longestWordLength())
         for l in xrange(minlen, maxlen + 1):
@@ -142,16 +145,16 @@ class Benchmarker():
                     rejected.add(word[:i-1] + word[i] + word[i-1] + word[i+1:])
 
         # LIMIT WORD LENGTH
-        self.write(re_math[:32], "limiting test word length to <= 1000")
+        self.write(re_math[:50], "limiting test word length to <= 1000")
         accepted = [x for x in accepted if len(x) <= 1000]
         rejected = [x for x in rejected if len(x) <= 1000]
 
         # REJECTING: filter out words which are really accepted
-        self.write(re_math[:32], "filtering", len(rejected), "possibly rejected words")
+        self.write(re_math[:50], "filtering", len(rejected), "possibly rejected words")
         rejected = list(w for w in rejected if not nfa.evalWordP(w))
 
         # choose a pseudo-random sample of up to 10,000 words
-        self.write(re_math[:32], "choosing pseudo-random sample up to size 10,000 for A and R")
+        self.write(re_math[:50], "choosing pseudo-random sample up to size 10,000 for A and R")
         r = random.Random(1)
         accepted = r.sample(accepted, min(len(accepted), 10000))
         rejected = r.sample(rejected, min(len(rejected), 10000))
@@ -185,12 +188,12 @@ class Benchmarker():
             w_accepted, w_rejected = self.generateWords(re_math)
             ntotal = len(w_accepted) + len(w_rejected)
 
-            self.write(re_math[:32], "str to partial matching regular expression tree")
+            self.write(re_math[:50], "str to partial matching regular expression tree")
             pmre = self.convert.math(re_math, partialMatch=True)
             t_str2pmre = timeit.timeit(lambda: self.convert.math(re_math, partialMatch=True), number=100)
 
             for method in self.methods:
-                self.write(re_math[:32], method, "partial matching regular expression tree to final")
+                self.write(re_math[:50], method, "partial matching regular expression tree to final")
                 ndone = 0
                 evalWord = self.getEvalMethod(pmre, method)
                 t_pmre2final = 0.0
@@ -204,7 +207,7 @@ class Benchmarker():
 
                 t_evalA = 0.0
                 for i in xrange(0, len(w_accepted), GROUP_SIZE):
-                    self.write(re_math[:32], method, "{0}%".format(format(ndone*100.0/ntotal, "00.2f")))
+                    self.write(re_math[:50], method, "{0}%".format(format(ndone*100.0/ntotal, "00.2f")))
                     words = w_accepted[i:i+GROUP_SIZE]
                     t_evalA += timeit.timeit(lambda: self.evalMany(evalWord, words, True, method), number=1)
                     ndone += GROUP_SIZE
@@ -217,7 +220,7 @@ class Benchmarker():
                 t_evalR = 0.0
                 ndone = len(w_accepted)
                 for i in xrange(0, len(w_rejected), GROUP_SIZE):
-                    self.write(re_math[:32], method, "{0}%".format(format(ndone*100.0/ntotal, "00.2f")))
+                    self.write(re_math[:50], method, "{0}%".format(format(ndone*100.0/ntotal, "00.2f")))
                     words = w_rejected[i:i+GROUP_SIZE]
                     t_evalR += timeit.timeit(lambda: self.evalMany(evalWord, words, False, method), number=1)
                     ndone += GROUP_SIZE
@@ -227,7 +230,7 @@ class Benchmarker():
                     WHERE re_math=? AND method=? AND t_evalR>?;
                 """, [t_evalR, re_math, method, t_evalR])
 
-            self.write(re_math[:32], "finalizing")
+            self.write(re_math[:50], "finalizing")
             self.db.execute("""
                 UPDATE in_tests
                 SET itersleft=itersleft-1, n_evalA=?, n_evalR=?
@@ -262,30 +265,114 @@ class Benchmarker():
         elif method == "backtrack":
             return pmre.evalWordP_Backtrack
 
-def menu():
-    print("\n")
-    print("1. Test")
-    print("2. Reset")
-    print("X. Exit")
+    def statsToDo(self):
+        return self.db.selectall("""
+            SELECT length, sum(itersleft)
+            FROM in_tests
+            WHERE error==''
+            GROUP BY length
+            ORDER BY length ASC;
+        """)
+
+    def displayResults(self):
+        def _rowhandler(x, y, row):
+            length, avgpre, t_evalA, n_evalA, t_evalR, n_evalR = row
+            x.append(length)
+            if n_evalA == 0: n_evalA = float("inf")
+            if n_evalR == 0: n_evalR = float("inf")
+            y.append(avgpre + t_evalA/n_evalA + t_evalR/n_evalR)
+
+        plot = self._displayInteractivePlot("""
+            SELECT tin.length,
+                sum(tout.t_pre)/100.0 as avgpre,
+                sum(tout.t_evalA) as t_evalA,
+                sum(tin.n_evalA) as n_evalA,
+                sum(tout.t_evalR) as t_evalR,
+                sum(tin.n_evalR) as n_evalR
+            FROM in_tests as tin, out_tests as tout
+            WHERE tin.re_math==tout.re_math
+                AND method==?
+            GROUP BY length
+            ORDER BY length ASC;
+        """, _rowhandler)
+
+        plot.title("Expression Length vs. Average Time to Eval. Membership on a Word")
+        plot.xlabel("re_math length (# chars)")
+        plot.ylabel("average time to construct object, then evaluate an average word (s)")
+        plot.show()
+
+    def _displayInteractivePlot(self, query, rowhandler):
+        fig, ax = plt.subplots()
+        line2d = dict()
+        for method, colour in self.db.selectall("SELECT method, colour from methods;"):
+            x = []
+            y = []
+            for row in self.db.selectall(query, [method]):
+                rowhandler(x, y, row)
+            line2d[method] = ax.plot(x, y, label=method, linewidth=1.5, color=colour)[0]
+        legend_to_line = dict()
+        legend = plt.legend(loc="best")
+        legendLines = legend.get_lines()
+        for l in legendLines:
+            l.set_picker(True)
+            l.set_pickradius(10)
+            legend_to_line[l] = line2d[l.get_label()]
+        def _on_pick(event):
+            line = event.artist
+            legend_to_line[line].set_visible(not line.get_visible())
+            line.set_visible(not line.get_visible())
+            fig.canvas.draw()
+        plt.connect("pick_event", _on_pick)
+        return plt
+
+
 
 if __name__ == "__main__":
     sys.setrecursionlimit(10**5) # default: 10**3
     benchmarker = Benchmarker()
 
     choice = "1"
-    while choice.upper() != "X":
-        menu()
-        choice = raw_input("Choose menu option: ")
-        if choice == "1":
+    while choice != "Q":
+        print("\n")
+        print("D. Display summary of test results")
+        print("P. Print progress (# iterations per length bucket remaining)")
+        print("T. Test through in_tests")
+        print("R. Reset in_tests and out_tests")
+        print("Q. Quit")
+        choice = raw_input("Choose menu option: ").upper().lstrip()[0]
+
+        if choice == "T":
             print("Running tests. Press Ctrl+C to stop")
             try:
                 for expr in benchmarker:
                     benchmarker.benchmark(expr)
             except KeyboardInterrupt:
                 pass
-        elif choice == "2":
-            if raw_input("Are you sure you want to delete all results? y/(n): ") == "y":
+        elif choice == "P":
+            todostats = [0] * 4
+            for length, count in benchmarker.statsToDo():
+                if length < 20:
+                    todostats[0] += count
+                elif length < 100:
+                    todostats[1] += count
+                elif length < 500:
+                    todostats[2] += count
+                else:
+                    todostats[3] += count
+            print("\n\nNumber of iterations left per expression bucket length:")
+            print("|\xce\xb1|<20       {:,}".format(todostats[0]))
+            print("20<=|\xce\xb1|<100  {:,}".format(todostats[1]))
+            print("100<=|\xce\xb1|<500 {:,}".format(todostats[2]))
+            print("500<=|\xce\xb1|     {:,}".format(todostats[3]))
+            raw_input("Press Enter to continue ... ")
+        elif choice == "R":
+            if raw_input("Are you sure you want to permanently delete all results? y/(n): ") == "y":
                 benchmarker.initTestTables()
                 print("Reset!")
             else:
                 print("Aborted. Did not reset.")
+            raw_input("Press Enter to continue ... ")
+        elif choice == "D":
+            benchmarker.displayResults()
+
+    print("\nBye!")
