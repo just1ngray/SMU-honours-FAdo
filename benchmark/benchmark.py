@@ -306,7 +306,7 @@ class Benchmarker(object):
                 FROM tests
                 WHERE length(re_math)==?;
             """, [length])[0][0]
-            reqiter = max(2, 20 - lencount) # no. required iterations per test of this re_math length
+            reqiter = max(2, 12 - lencount) # no. required iterations per test of this re_math length
             rows = self.db.selectall("""
                 SELECT re_math, method
                 FROM tests
