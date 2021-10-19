@@ -346,7 +346,7 @@ if __name__ == "__main__":
         print("T. Test through in_tests")
         print("R. Reset in_tests and out_tests")
         print("Q. Quit")
-        choice = raw_input("Choose menu option: ").upper().lstrip()[0]
+        choice = raw_input("Choose menu option: ").upper().lstrip()[0:]
 
         if choice == "T":
             print("Running tests. Press Ctrl+C to stop")
