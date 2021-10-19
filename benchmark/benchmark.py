@@ -8,6 +8,10 @@ import gc
 from util import DBWrapper, Deque, ConsoleOverwrite
 from convert import Converter
 
+# Recursion beyond ~17k seems to crash the Python interpreter on my machine
+# Note this is still 15x the default value
+MAX_SIZE = 15000
+
 class Benchmarker():
     def __init__(self):
         self.db = DBWrapper()
@@ -144,11 +148,6 @@ class Benchmarker():
                 for i in xrange(1, len(word)):
                     rejected.add(word[:i-1] + word[i] + word[i-1] + word[i+1:])
 
-        # LIMIT WORD LENGTH
-        self.write(re_math[:50], "limiting test word length to <= 1000")
-        accepted = [x for x in accepted if len(x) <= 1000]
-        rejected = [x for x in rejected if len(x) <= 1000]
-
         # REJECTING: filter out words which are really accepted
         self.write(re_math[:50], "filtering", len(rejected), "possibly rejected words")
         rejected = list(w for w in rejected if not nfa.evalWordP(w))
@@ -173,13 +172,13 @@ class Benchmarker():
                 WHERE re_math=?;
             """, [prev_itersleft, re_math])
 
-        try:
+        try: # catch errors and delete the results of the test
             self.db.execute("""
                 INSERT OR IGNORE INTO out_tests (re_math, method, t_pre, t_evalA, t_evalR)
                     SELECT in_tests.re_math, methods.method,
-                        9999999.0 as t_pre,
-                        9999999.0 as t_evalA,
-                        9999999.0 as t_evalR
+                        1000000.0 as t_pre,
+                        1000000.0 as t_evalA,
+                        1000000.0 as t_evalR
                     FROM in_tests, methods
                     WHERE in_tests.re_math=?;
             """, [re_math])
@@ -192,43 +191,51 @@ class Benchmarker():
             pmre = self.convert.math(re_math, partialMatch=True)
             t_str2pmre = timeit.timeit(lambda: self.convert.math(re_math, partialMatch=True), number=100)
 
-            for method in self.methods:
-                self.write(re_math[:50], method, "partial matching regular expression tree to final")
-                ndone = 0
-                evalWord = self.getEvalMethod(pmre, method)
-                t_pmre2final = 0.0
-                if "nfa" in method:
-                    t_pmre2final = timeit.timeit(lambda: pmre.toInvariantNFA(method), number=100)
-                self.db.execute("""
-                    UPDATE out_tests
-                    SET t_pre=?
-                    WHERE re_math=? AND method=? AND t_pre>?;
-                """, [t_str2pmre+t_pmre2final, re_math, method, t_str2pmre+t_pmre2final])
+            try: # catch max. recursion errors and handle gracefully for the specific method
+                for method in self.methods:
+                    self.write(re_math[:50], method, "partial matching regular expression tree to final")
+                    ndone = 0
+                    evalWord = self.getEvalMethod(pmre, method)
+                    t_pmre2final = 0.0
+                    if "nfa" in method:
+                        t_pmre2final = timeit.timeit(lambda: pmre.toInvariantNFA(method), number=100)
+                    self.db.execute("""
+                        UPDATE out_tests
+                        SET t_pre=?
+                        WHERE re_math=? AND method=? AND t_pre>?;
+                    """, [t_str2pmre+t_pmre2final, re_math, method, t_str2pmre+t_pmre2final])
 
-                t_evalA = 0.0
-                for i in xrange(0, len(w_accepted), GROUP_SIZE):
-                    self.write(re_math[:50], method, "{0}%".format(format(ndone*100.0/ntotal, "00.2f")))
-                    words = w_accepted[i:i+GROUP_SIZE]
-                    t_evalA += timeit.timeit(lambda: self.evalMany(evalWord, words, True, method), number=1)
-                    ndone += GROUP_SIZE
-                self.db.execute("""
-                    UPDATE out_tests
-                    SET t_evalA=?
-                    WHERE re_math=? AND method=? AND t_evalA>?;
-                """, [t_evalA, re_math, method, t_evalA])
+                    t_evalA = 0.0
+                    for i in xrange(0, len(w_accepted), GROUP_SIZE):
+                        self.write(re_math[:50], method, "{0}%".format(format(ndone*100.0/ntotal, "00.2f")))
+                        words = w_accepted[i:i+GROUP_SIZE]
+                        t_evalA += timeit.timeit(lambda: self.evalMany(evalWord, words, True, method), number=1)
+                        ndone += GROUP_SIZE
+                    self.db.execute("""
+                        UPDATE out_tests
+                        SET t_evalA=?
+                        WHERE re_math=? AND method=? AND t_evalA>?;
+                    """, [t_evalA, re_math, method, t_evalA])
 
-                t_evalR = 0.0
-                ndone = len(w_accepted)
-                for i in xrange(0, len(w_rejected), GROUP_SIZE):
-                    self.write(re_math[:50], method, "{0}%".format(format(ndone*100.0/ntotal, "00.2f")))
-                    words = w_rejected[i:i+GROUP_SIZE]
-                    t_evalR += timeit.timeit(lambda: self.evalMany(evalWord, words, False, method), number=1)
-                    ndone += GROUP_SIZE
-                self.db.execute("""
-                    UPDATE out_tests
-                    SET t_evalR=?
-                    WHERE re_math=? AND method=? AND t_evalR>?;
-                """, [t_evalR, re_math, method, t_evalR])
+                    t_evalR = 0.0
+                    ndone = len(w_accepted)
+                    for i in xrange(0, len(w_rejected), GROUP_SIZE):
+                        self.write(re_math[:50], method, "{0}%".format(format(ndone*100.0/ntotal, "00.2f")))
+                        words = w_rejected[i:i+GROUP_SIZE]
+                        t_evalR += timeit.timeit(lambda: self.evalMany(evalWord, words, False, method), number=1)
+                        ndone += GROUP_SIZE
+                    self.db.execute("""
+                        UPDATE out_tests
+                        SET t_evalR=?
+                        WHERE re_math=? AND method=? AND t_evalR>?;
+                    """, [t_evalR, re_math, method, t_evalR])
+            except RuntimeError as error:
+                if str(error) == "maximum recursion depth exceeded":
+                    # leave whatever calculated value as-is... might be the default 1,000,000.0
+                    # to indicate that this cannot be solved
+                    pass
+                else:
+                    raise
 
             self.write(re_math[:50], "finalizing")
             self.db.execute("""
@@ -328,7 +335,7 @@ class Benchmarker():
 
 
 if __name__ == "__main__":
-    sys.setrecursionlimit(10**5) # default: 10**3
+    sys.setrecursionlimit(MAX_SIZE)
     benchmarker = Benchmarker()
 
     choice = "1"
