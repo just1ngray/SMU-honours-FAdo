@@ -64,11 +64,14 @@ class ConsoleOverwrite():
         """Finds terminal size.
         https://www.w3resource.com/python-exercises/python-basic-exercise-56.php
         """
-        import fcntl, termios, struct
-        th, tw, hp, wp = struct.unpack('HHHH',
-            fcntl.ioctl(0, termios.TIOCGWINSZ,
-            struct.pack('HHHH', 0, 0, 0, 0)))
-        return tw, th
+        try:
+            import fcntl, termios, struct
+            th, tw, hp, wp = struct.unpack('HHHH',
+                fcntl.ioctl(0, termios.TIOCGWINSZ,
+                struct.pack('HHHH', 0, 0, 0, 0)))
+            return tw, th
+        except:
+            return 120, 40
 
 class DBWrapper(object):
     def __init__(self, name="database.db"):
