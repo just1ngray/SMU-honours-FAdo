@@ -21,13 +21,14 @@ class Benchmarker():
 
     def __iter__(self):
         """Yields string expressions to benchmark."""
-        for re_math, in self.db.selectall("""
-            SELECT re_math
-            FROM in_tests
-            WHERE itersleft>0
-                AND error=='';
-        """):
-            yield re_math.decode("utf-8")
+        while self.db.selectall("SELECT sum(itersleft) FROM in_tests WHERE error='';")[0][0] > 0:
+            for re_math, in self.db.selectall("""
+                SELECT re_math
+                FROM in_tests
+                WHERE itersleft>0
+                    AND error=='';
+            """):
+                yield re_math.decode("utf-8")
 
     def initTestTables(self):
         """Overwrites current in_tests and out_tests tables."""
@@ -384,6 +385,8 @@ if __name__ == "__main__":
                 print("Aborted. Did not reset.")
             raw_input("Press Enter to continue ... ")
         elif choice == "D":
+            # IDEA:
+            # overall time = pre_construct_time + (95% word solve time)
             benchmarker.displayResults()
 
     print("\nBye!")
