@@ -278,12 +278,16 @@ class Benchmarker():
         """)
 
     def displayResults(self):
+        yvals = Deque()
         def _rowhandler(x, y, row):
             length, avgpre, t_evalA, n_evalA, t_evalR, n_evalR = row
             x.append(length)
             if n_evalA == 0: n_evalA = float("inf")
             if n_evalR == 0: n_evalR = float("inf")
-            y.append(avgpre + t_evalA/n_evalA + t_evalR/n_evalR)
+            h = avgpre + t_evalA/n_evalA + t_evalR/n_evalR
+            if h < 1000:
+                yvals.insert_right(h)
+            y.append(h)
 
         plot = self._displayInteractivePlot("""
             SELECT tin.length,
@@ -302,6 +306,7 @@ class Benchmarker():
         plot.title("Expression Length vs. Average Time to Eval. Membership on a Word")
         plot.xlabel("re_math length (# chars)")
         plot.ylabel("average time to construct object, then evaluate an average word (s)")
+        plot.ylim(0.0, sorted(yvals)[min(int(len(yvals) * 0.99)+1, len(yvals)-1)])
         plot.show()
 
     def _displayInteractivePlot(self, query, rowhandler):
