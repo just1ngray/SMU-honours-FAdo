@@ -183,6 +183,8 @@ class Benchmarker():
             GROUP_SIZE = 100
             w_accepted, w_rejected = self.generateWords(re_math)
             ntotal = len(w_accepted) + len(w_rejected)
+            self.write("running gc")
+            gc.collect() # remove unused words from memory... especially the potentially rejected ones
 
             self.write(re_math[:50], "str to partial matching regular expression tree")
             pmre = self.convert.math(re_math, partialMatch=True)
