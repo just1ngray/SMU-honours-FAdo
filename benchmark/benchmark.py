@@ -187,8 +187,8 @@ class Benchmarker():
             pmre = self.convert.math(re_math, partialMatch=True)
             t_str2pmre = timeit.timeit(lambda: self.convert.math(re_math, partialMatch=True), number=100)
 
-            try: # catch max. recursion errors and handle gracefully for the specific method
-                for method in self.methods:
+            for method in self.methods:
+                try: # catch max. recursion errors and handle gracefully for the specific method
                     self.write(re_math[:50], method, "partial matching regular expression tree to final")
                     ndone = 0
                     evalWord = self.getEvalMethod(pmre, method)
@@ -225,13 +225,13 @@ class Benchmarker():
                         SET t_evalR=?
                         WHERE re_math=? AND method=? AND t_evalR>?;
                     """, [t_evalR, re_math, method, t_evalR])
-            except RuntimeError as error:
-                if str(error) == "maximum recursion depth exceeded":
-                    # leave whatever calculated value as-is... might be the default 1,000,000.0
-                    # to indicate that this cannot be solved
-                    pass
-                else:
-                    raise
+                except RuntimeError as error:
+                    if str(error) == "maximum recursion depth exceeded":
+                        # leave whatever calculated value as-is... might be the default 1,000,000.0
+                        # to indicate that this cannot be solved
+                        pass
+                    else:
+                        raise
 
             self.write(re_math[:50], "finalizing")
             self.db.execute("""
