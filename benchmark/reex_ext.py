@@ -921,13 +921,17 @@ class chars(uatom):
                 yield word[1:]
 
     def pairGen(self):
-        symbols = set()
-        for s, e in self.ranges:
-            symbols.add(s)
-            symbols.add(UniUtil.chr((UniUtil.ord(s) + UniUtil.ord(e)) // 2))
-            symbols.add(e)
-
         r = random.Random(1)
+        symbols = set()
+        if self.neg:
+            population = "(A)&b/58 ,"
+            symbols = set(s for s in population if type(self.derivative(s)) is uepsilon)
+        else:
+            for s, e in self.ranges:
+                symbols.add(s)
+                symbols.add(UniUtil.chr((UniUtil.ord(s) + UniUtil.ord(e)) // 2))
+                symbols.add(e)
+
         # max sample size arbitrarily chosen as 5
         return set(r.sample(symbols, min(5, len(symbols))))
 
