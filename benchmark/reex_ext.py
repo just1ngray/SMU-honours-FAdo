@@ -20,6 +20,14 @@ class uregexp(reex.regexp):
         The Computer Journal, Volume 63, Issue 1, January 2020, Pages 41-65
         https://doi.org/10.1093/comjnl/bxy137
         """
+        cpy = copy.deepcopy(self)
+        cpy.compress()
+        r = random.Random(1)
+        def sample(iterable, upto):
+            return set(r.sample(iterable, min(len(iterable), upto)))
+        return cpy._pairGen(sample)
+
+    def _pairGen(self, sample):
         raise NotImplementedError()
 
     def toInvariantNFA(self, method):
@@ -127,10 +135,10 @@ class uregexp(reex.regexp):
             filenameOut = fname + ext
 
         foo = open(fnameGV, "w")
-        foo.write("strict digraph {\n"
+        foo.write("digraph {\n"
             + 'label="{0}";\n'.format(str(self).encode("string-escape"))
             + 'labelloc="t";\n'
-            + self._dotFormat()
+            + self._dotFormat(set())
             + "\n}\n")
         foo.close()
 
@@ -151,7 +159,7 @@ class uregexp(reex.regexp):
         else:
             os.system("open %s" % filenameOut)
 
-    def _dotFormat(self):
+    def _dotFormat(self, done):
         """Returns a string representation of self in graphviz dot format"""
         raise NotImplementedError()
 
@@ -273,13 +281,24 @@ class uconcat(reex.concat, uregexp):
                 else:
                     self._lf[head] = set(self.arg2._lf[head])
 
-    def pairGen(self):
+    def _pairGen(self, sample):
+        MAX_PRODUCT = 10000
+
         # pairwise generation (aka 2-wise) is equivalent to combination generation for
         # 2 arguments as we have in concat (arg1 & arg2)
-        words = set()
-        for prefix in self.arg1.pairGen():
-            for suffix in self.arg2.pairGen():
-                words.add(prefix + suffix)
+        words = getattr(self, "_pairGenWords", None)
+        if words is None:
+            print(">>uconcat calculating")
+            arg1 = self.arg1._pairGen(sample)
+            arg2 = self.arg2._pairGen(sample)
+            if len(arg1) * len(arg2) > MAX_PRODUCT:
+                c = MAX_PRODUCT / 2.0 / (len(arg1) + len(arg2))
+                arg1 = sample(arg1, int(len(arg1) * c) + 1)
+                arg2 = sample(arg2, int(len(arg2) * c) + 1)
+
+            words = set(x+y for x in arg1 for y in arg2)
+            setattr(self, "_pairGenWords", words)
+            print("<<uconcat done")
         return words
 
     def _backtrackMatch(self, word):
@@ -287,9 +306,12 @@ class uconcat(reex.concat, uregexp):
             for p2 in self.arg2._backtrackMatch(p1):
                 yield p2
 
-    def _dotFormat(self):
+    def _dotFormat(self, done):
+        if id(self) in done:
+            return ""
+        done.add(id(self))
         return str(id(self)) + '[label=".", shape="circle", ordering="out"];\n' \
-            + self.arg1._dotFormat() + self.arg2._dotFormat() \
+            + self.arg1._dotFormat(done) + self.arg2._dotFormat(done) \
             + str(id(self)) + " -> " + str(id(self.arg1)) + ";\n" \
             + str(id(self)) + " -> " + str(id(self.arg2)) + ";\n"
 
@@ -335,8 +357,8 @@ class udisj(reex.disj, uregexp):
     def __str__(self):
         return "({0} + {1})".format(str(self.arg1), str(self.arg2))
 
-    def pairGen(self):
-        return self.arg1.pairGen().union(self.arg2.pairGen())
+    def _pairGen(self, sample):
+        return self.arg1._pairGen(sample).union(self.arg2._pairGen(sample))
 
     def simpleRepr(self):
         return "+"
@@ -348,9 +370,12 @@ class udisj(reex.disj, uregexp):
         for possibility in self.arg2._backtrackMatch(word):
             yield possibility
 
-    def _dotFormat(self):
+    def _dotFormat(self, done):
+        if id(self) in done:
+            return ""
+        done.add(id(self))
         return str(id(self)) + '[label="+", shape="circle", ordering="out"];\n' \
-            + self.arg1._dotFormat() + self.arg2._dotFormat() \
+            + self.arg1._dotFormat(done) + self.arg2._dotFormat(done) \
             + str(id(self)) + " -> " + str(id(self.arg1)) + ";\n" \
             + str(id(self)) + " -> " + str(id(self.arg2)) + ";\n"
 
@@ -444,24 +469,28 @@ class ustar(reex.star, uregexp):
     def __repr__(self):
         return "u" + super(ustar, self).__repr__()
 
-    def pairGen(self):
-        uncovered = self.arg.pairGen()
-        covered = copy.copy(uncovered)
-        cross = dict([x, copy.copy(uncovered)] for x in uncovered)
+    def _pairGen(self, sample):
+        words = getattr(self, "_pairGenWords", None)
+        if words is None:
+            uncovered = sample(self.arg._pairGen(sample), 100)
+            covered = copy.copy(uncovered)
+            cross = dict([x, copy.copy(uncovered)] for x in uncovered)
 
-        for word in uncovered:
-            word = [word]
-            while True:
-                last = word[-1]
-                nxt = cross.get(last, None) # type: set|None
-                if nxt is None:
-                    covered.add(reduce(lambda p,c: p+c, word, u""))
-                    break
-                word.append(nxt.pop())
-                if len(nxt) == 0:
-                    del cross[last]
-
-        return set([u""]).union(covered)
+            for word in uncovered:
+                word = Deque([word])
+                while True:
+                    last = word.peek_right()
+                    nxt = cross.get(last, None) # type: set|None
+                    if nxt is None or len(word) >= 25: # allow up to 25 repetitions of self
+                        covered.add(u"".join(word))
+                        break
+                    word.insert_right(nxt.pop())
+                    if len(nxt) == 0:
+                        del cross[last]
+            covered.add(u"")
+            words = covered
+            setattr(self, "_pairGenWords", words)
+        return words
 
     def _backtrackMatch(self, word):
         for remaining in self.arg._backtrackMatch(word):
@@ -470,9 +499,12 @@ class ustar(reex.star, uregexp):
 
         yield word
 
-    def _dotFormat(self):
+    def _dotFormat(self, done):
+        if id(self) in done:
+            return ""
+        done.add(id(self))
         return str(id(self)) + '[label="*", shape="circle"];\n' \
-            + self.arg._dotFormat() \
+            + self.arg._dotFormat(done) \
             + str(id(self)) + " -> " + str(id(self.arg)) + ";\n"
 
     def _pmBoth(self):
@@ -526,8 +558,8 @@ class uoption(reex.option, uregexp):
     def __repr__(self):
         return "u" + super(uoption, self).__repr__()
 
-    def pairGen(self):
-        return set([u""]).union(self.arg.pairGen())
+    def _pairGen(self, sample):
+        return self.arg._pairGen(sample).union(set([u""]))
 
     def simpleRepr(self):
         return "?"
@@ -538,9 +570,12 @@ class uoption(reex.option, uregexp):
         for possibility in self.arg._backtrackMatch(word):
             yield possibility
 
-    def _dotFormat(self):
+    def _dotFormat(self, done):
+        if id(self) in done:
+            return ""
+        done.add(id(self))
         return str(id(self)) + '[label="?", shape="circle"];\n' \
-            + self.arg._dotFormat() \
+            + self.arg._dotFormat(done) \
             + str(id(self)) + " -> " + str(id(self.arg)) + ";\n"
 
     def _pmBoth(self):
@@ -579,7 +614,7 @@ class uepsilon(reex.epsilon, uregexp):
         memo[id(self)] = cpy
         return cpy
 
-    def pairGen(self):
+    def _pairGen(self, sample):
         return set([u""])
 
     def _backtrackMatch(self, word):
@@ -588,7 +623,7 @@ class uepsilon(reex.epsilon, uregexp):
     def simpleRepr(self):
         return "@epsilon"
 
-    def _dotFormat(self):
+    def _dotFormat(self, done):
         return str(id(self)) + '[label="' + str(self) + '", shape="none"];\n'
 
     def _pmBoth(self):
@@ -623,7 +658,7 @@ class uemptyset(reex.emptyset, uregexp):
         memo[id(self)] = cpy
         return cpy
 
-    def pairGen(self):
+    def _pairGen(self, sample):
         return set()
 
 class uatom(reex.atom, uregexp):
@@ -738,14 +773,14 @@ class uatom(reex.atom, uregexp):
             return copy.deepcopy(self)
         return self
 
-    def pairGen(self):
+    def _pairGen(self, sample):
         return set([self.val])
 
     def _backtrackMatch(self, word):
         if len(word) > 0 and word[0] == self.val:
             yield word[1:]
 
-    def _dotFormat(self):
+    def _dotFormat(self, done):
         val = str(self) if self.val != " " else "SPACE"
         return str(id(self)) + '[label="' + val.encode("string-escape") + '", shape="none"];\n'
 
@@ -920,20 +955,22 @@ class chars(uatom):
             if word[0] in self:
                 yield word[1:]
 
-    def pairGen(self):
-        r = random.Random(1)
-        symbols = set()
-        if self.neg:
-            population = "(A)&b/58 ,"
-            symbols = set(s for s in population if type(self.derivative(s)) is uepsilon)
-        else:
-            for s, e in self.ranges:
-                symbols.add(s)
-                symbols.add(UniUtil.chr((UniUtil.ord(s) + UniUtil.ord(e)) // 2))
-                symbols.add(e)
-
-        # max sample size arbitrarily chosen as 5
-        return set(r.sample(symbols, min(5, len(symbols))))
+    def _pairGen(self, sample):
+        words = getattr(self, "_pairGenWords", None)
+        if words is None:
+            symbols = set()
+            if self.neg:
+                population = "(A)&b/58 ,_0%lk`"
+                symbols = set(s for s in population if type(self.derivative(s)) is uepsilon)
+            else:
+                for s, e in self.ranges:
+                    symbols.add(s)
+                    symbols.add(UniUtil.chr((UniUtil.ord(s) + UniUtil.ord(e)) // 2))
+                    symbols.add(e)
+            # max sample size arbitrarily chosen as 5
+            words = symbols
+            setattr(self, "_pairGenWords", words)
+        return words
 
 class dotany(uatom):
     """Class that represents the wildcard symbol that accepts everything."""
@@ -978,8 +1015,8 @@ class dotany(uatom):
         if len(word) > 0:
             yield word[1:]
 
-    def pairGen(self):
-        return set(u"a. S") # arbitrarily chosen characters... there is likely a better scheme
+    def _pairGen(self, sample):
+        return set(u"(A)&b/58 ,_0%lk`") # arbitrarily chosen characters
 
 class anchor(uepsilon):
     """A class used to keep anchors but treat them functionally as @epsilon."""
