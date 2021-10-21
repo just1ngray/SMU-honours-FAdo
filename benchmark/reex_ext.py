@@ -288,7 +288,6 @@ class uconcat(reex.concat, uregexp):
         # 2 arguments as we have in concat (arg1 & arg2)
         words = getattr(self, "_pairGenWords", None)
         if words is None:
-            print(">>uconcat calculating")
             arg1 = self.arg1._pairGen(sample)
             arg2 = self.arg2._pairGen(sample)
             if len(arg1) * len(arg2) > MAX_PRODUCT:
@@ -298,7 +297,6 @@ class uconcat(reex.concat, uregexp):
 
             words = set(x+y for x in arg1 for y in arg2)
             setattr(self, "_pairGenWords", words)
-            print("<<uconcat done")
         return words
 
     def _backtrackMatch(self, word):
