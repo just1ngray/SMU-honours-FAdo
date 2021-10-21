@@ -577,16 +577,16 @@ class uoption(reex.option, uregexp):
             + str(id(self)) + " -> " + str(id(self.arg)) + ";\n"
 
     def _pmBoth(self):
-        return udisj(self.arg._pmBoth(), uepsilon())
+        return udisj(self.arg._pmBoth(), uepsilon()._pmBoth())
 
     def _pmStart(self):
-        return udisj(self.arg._pmStart(), uepsilon())
+        return udisj(self.arg._pmStart(), uepsilon()._pmStart())
 
     def _pmEnd(self):
-        return udisj(self.arg._pmEnd(), uepsilon())
+        return udisj(self.arg._pmEnd(), uepsilon()._pmEnd())
 
     def _pmNeither(self):
-        return udisj(self.arg._pmNeither(), uepsilon())
+        return udisj(self.arg._pmNeither(), uepsilon()._pmNeither())
 
     def _containsT(self, T):
         if type(self) is T:
