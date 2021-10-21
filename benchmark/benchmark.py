@@ -320,7 +320,7 @@ class Benchmarker():
             y = []
             for row in self.db.selectall(query, [method]):
                 rowhandler(x, y, row)
-            line2d[method] = ax.plot(x, y, label=method, linewidth=1.5, color=colour)[0]
+            line2d[method] = ax.plot(x, y, label=method, linewidth=1, color=colour)[0]
         legend_to_line = dict()
         legend = plt.legend(loc="best")
         legendLines = legend.get_lines()
