@@ -540,8 +540,16 @@ class PartialIdentitySet(object):
                 itemSeq.insert_right(nextItemSeq)
                 candidateIndices = nextCandidates
 
+        if len(self._items) + 1 > self._size:
+            self.double()
         self._items[self._size] = [item, itemSeq, gen]
         self._size += 1
+
+    def double(self):
+        alloc = [[None, None, None]] * len(self._items) * 2
+        for i in xrange(len(self._items)):
+            alloc[i] = self._items[i]
+        self._items = alloc
 
     def _next(self, itemIndex, iterator):
         try:
