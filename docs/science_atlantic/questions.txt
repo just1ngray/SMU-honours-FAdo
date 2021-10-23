@@ -1,0 +1,23 @@
+Here is a summary of the questions asked:
+-------------------------------------------------------------------------------
+1. Have you considered solving other language properties other than membership?
+    > Yes, I could look into this. But this project is focusing on how regular
+      expressions are used in practice. This means the membership problem is
+      front and center. Programmers don't care as much about other language
+      properties.
+
+
+2. Can partial derivatives be extended to work with backreferences?
+    > Maybe. This is outside the scope of the project since I am dealing with
+      regular expressions generating regular languages, and backreferences
+      make the language inherently non-regular.
+
+
+3. Why does it take so long to run these tests? Membership is in milliseconds.
+    > Generating the test words and the partial derivative algorithm. Other
+      algorithms are slower to construct, but is faster to run the input word.
+      PD doesn't save any information, and if you evaluate just 2 words, it's
+      faster to construct nfaPDO than evaluate PD twice.
+    > We are also grouping words and testing membership of grouped words. This
+      is an effort to remove floating-point errors since we are measuring the
+      membership time of 100 words instead of just 1.
