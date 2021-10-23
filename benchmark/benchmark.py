@@ -280,7 +280,7 @@ class Benchmarker():
             ORDER BY length ASC;
         """)
 
-    def displayResults(self):
+    def displayResults(self, bucketsize):
         yvals = Deque()
         def _rowhandler(x, y, row):
             length, avgpre, t_evalA, n_evalA, t_evalR, n_evalR = row
@@ -303,9 +303,9 @@ class Benchmarker():
             WHERE tin.re_math==tout.re_math
                 AND method==?
                 AND itersleft==0
-            GROUP BY length
+            GROUP BY length/{0}
             ORDER BY length ASC;
-        """, _rowhandler)
+        """.format(bucketsize), _rowhandler)
 
         plot.title("Expression Length vs. Average Time to Eval. Membership on a Word")
         plot.xlabel("re_math length (# chars)")
@@ -390,6 +390,12 @@ if __name__ == "__main__":
         elif choice == "D":
             # IDEA:
             # overall time = pre_construct_time + (95% word solve time)
-            benchmarker.displayResults()
+            bucketsize = 2
+            try:
+                bucketsize = int(raw_input("How detailed do you want the graph? Bucket size = (2) "))
+            except ValueError:
+                pass
+            print("Displaying with bucket size ", bucketsize)
+            benchmarker.displayResults(bucketsize)
 
     print("\nBye!")
