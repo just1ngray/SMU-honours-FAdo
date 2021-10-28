@@ -310,7 +310,6 @@ class Benchmarker():
         plot.title("Expression Length vs. Average Time to Eval. Membership on a Word")
         plot.xlabel("re_math length (# chars)")
         plot.ylabel("average time to construct object, then evaluate an average word (s)")
-        plot.ylim(0.0, 0.5)
         plot.show()
 
     def _displayInteractivePlot(self, query, rowhandler):
