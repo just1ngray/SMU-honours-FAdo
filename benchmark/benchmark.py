@@ -5,7 +5,7 @@ import timeit
 import random
 import gc
 
-from util import DBWrapper, Deque, ConsoleOverwrite
+from util import DBWrapper, Deque, ConsoleOverwrite, parseIntSafe
 from convert import Converter
 
 class Benchmarker():
@@ -280,16 +280,13 @@ class Benchmarker():
             ORDER BY length ASC;
         """)
 
-    def displayResults(self, bucketsize):
-        yvals = Deque()
+    def displayResults(self, lengthBucketSize, nConstructions, nEvals):
         def _rowhandler(x, y, row):
             length, avgpre, t_evalA, n_evalA, t_evalR, n_evalR = row
             x.append(length)
             if n_evalA == 0: n_evalA = float("inf")
             if n_evalR == 0: n_evalR = float("inf")
-            h = avgpre + t_evalA/n_evalA + t_evalR/n_evalR
-            if h < 1000:
-                yvals.insert_right(h)
+            h = (nConstructions * avgpre) + (t_evalA/n_evalA + t_evalR/n_evalR)*nEvals
             y.append(h)
 
         plot = self._displayInteractivePlot("""
@@ -305,11 +302,11 @@ class Benchmarker():
                 AND itersleft==0
             GROUP BY length/{0}
             ORDER BY length ASC;
-        """.format(bucketsize), _rowhandler)
+        """.format(lengthBucketSize), _rowhandler)
 
         plot.title("Expression Length vs. Average Time to Eval. Membership on a Word")
         plot.xlabel("re_math length (# chars)")
-        plot.ylabel("average time to construct object, then evaluate an average word (s)")
+        plot.ylabel("t_avg to construct x{0}, + t_avg word evaluate x{1}".format(nConstructions, nEvals))
         plot.show()
 
     def _displayInteractivePlot(self, query, rowhandler):
@@ -387,14 +384,17 @@ if __name__ == "__main__":
                 print("Aborted. Did not reset.")
             raw_input("Press Enter to continue ... ")
         elif choice == "D":
-            # IDEA:
-            # overall time = pre_construct_time + (95% word solve time)
-            bucketsize = 2
-            try:
-                bucketsize = int(raw_input("How detailed do you want the graph? Bucket size = (2) "))
-            except ValueError:
-                pass
-            print("Displaying with bucket size ", bucketsize)
-            benchmarker.displayResults(bucketsize)
+            lengthBucketSize = 2
+            nConstructions = 1
+            nEvals = 1
+
+            if raw_input("Do you want to configure the plot specification? y/(n): ").lower().lstrip() == "y":
+                lengthBucketSize = parseIntSafe(raw_input("\tExpression length bucket width: "), lengthBucketSize)
+                nConstructions = parseIntSafe(raw_input("\tNumber of constructions: "), nConstructions)
+                nEvals = parseIntSafe(raw_input("\tNumber of average word evaluations: "), nEvals)
+            print("lengthBucketSize =", lengthBucketSize)
+            print("nConstructions =", nConstructions)
+            print("nEvals =", nEvals)
+            benchmarker.displayResults(lengthBucketSize, nConstructions, nEvals)
 
     print("\nBye!")

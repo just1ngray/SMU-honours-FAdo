@@ -566,3 +566,9 @@ def radixOrder(a, b):
         return -1 if a < b else 1
     else:
         return len(a) - len(b)
+
+def parseIntSafe(val, default):
+    try:
+        return int(val)
+    except ValueError:
+        return default
