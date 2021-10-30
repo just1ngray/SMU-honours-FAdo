@@ -1,6 +1,8 @@
 from __future__ import print_function
 import matplotlib.pyplot as plt
 import sys
+import os
+import time
 import timeit
 import random
 import gc
@@ -353,12 +355,38 @@ if __name__ == "__main__":
         choice = raw_input("Choose menu option: ").upper().lstrip()[0:]
 
         if choice == "T":
-            print("Running tests. Press Ctrl+C to stop")
+            benchmarker = None
+            withChildren = raw_input("Do you want to use a child worker? (y)/n: ").lower().lstrip() != "n"
+            print("\nRunning tests. Press Ctrl+C to stop")
+            print("-----------------------------------")
+            if withChildren:
+                pid = None
+                try:
+                    while True:
+                        print("Creating a new child worker...")
+                        pid = os.fork()
+                        if pid == 0: # child
+                            break
+                        else: # parent
+                            time.sleep(21600) # 6h
+                            os.kill(pid, 2)
+                            os.waitpid(pid, 0)
+                except KeyboardInterrupt:
+                    os.kill(pid, 2)
+                    os.waitpid(pid, 0)
+                    continue
+
             try:
+                benchmarker = Benchmarker()
                 for expr in benchmarker:
                     benchmarker.benchmark(expr)
             except KeyboardInterrupt:
                 pass
+            finally:
+                if withChildren:
+                    exit(0)
+            if benchmarker is None:
+                benchmarker = Benchmarker()
         elif choice == "P":
             todostats = [0] * 4
             for length, count in benchmarker.statsToDo():
