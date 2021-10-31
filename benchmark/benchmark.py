@@ -18,7 +18,11 @@ class Benchmarker():
         self.convert = Converter()
         self.code_lines = Deque(filter(lambda l: len(l) > 0, \
             open("./benchmark/reex_ext.py", "r").read().splitlines()))
-        self.methods = set(x[0] for x in self.db.selectall("SELECT method FROM methods;"))
+        self.methods = list(x[0] for x in self.db.selectall("""
+            SELECT method
+            FROM methods
+            ORDER BY substr(replace(method, 'nfa', 'zzz'), 0, 4);
+        """)) # nfa methods go last since they are the most "time consistent"
         gc.disable()
 
     def __iter__(self):
@@ -41,15 +45,15 @@ class Benchmarker():
                 method TEXT PRIMARY KEY,
                 colour TEXT
             );
+            INSERT OR IGNORE INTO methods (method, colour) VALUES ('pd', '#4363d8');
+            -- INSERT OR IGNORE INTO methods (method, colour) VALUES ('derivative', '#a9a9a9');
+            INSERT OR IGNORE INTO methods (method, colour) VALUES ('backtrack', '#000000');
             INSERT OR IGNORE INTO methods (method, colour) VALUES ('nfaPD', '#42d4f4');
             INSERT OR IGNORE INTO methods (method, colour) VALUES ('nfaPDO', '#469990');
             INSERT OR IGNORE INTO methods (method, colour) VALUES ('nfaPosition', '#e6194B');
             INSERT OR IGNORE INTO methods (method, colour) VALUES ('nfaFollow', '#dcbeff');
             INSERT OR IGNORE INTO methods (method, colour) VALUES ('nfaThompson', '#800000');
             INSERT OR IGNORE INTO methods (method, colour) VALUES ('nfaGlushkov', '#f58231');
-            -- INSERT OR IGNORE INTO methods (method, colour) VALUES ('derivative', '#a9a9a9');
-            INSERT OR IGNORE INTO methods (method, colour) VALUES ('pd', '#4363d8');
-            INSERT OR IGNORE INTO methods (method, colour) VALUES ('backtrack', '#000000');
 
             DROP TABLE IF EXISTS in_tests;
             CREATE TABLE in_tests AS
@@ -193,7 +197,6 @@ class Benchmarker():
 
             GROUP_SIZE = 100
             w_accepted, w_rejected = self.generateWords(re_math)
-            ntotal = len(w_accepted) + len(w_rejected)
             self.write("running gc")
             gc.collect() # remove unused words from memory... especially the potentially rejected ones
 
@@ -204,7 +207,6 @@ class Benchmarker():
             for method in self.methods:
                 try: # catch max. recursion errors and handle gracefully for the specific method
                     self.write(re_math[:50], method, "partial matching regular expression tree to final")
-                    ndone = 0
                     evalWord = self.getEvalMethod(pmre, method)
                     t_pmre2final = 0.0
                     if "nfa" in method:
@@ -216,14 +218,15 @@ class Benchmarker():
                     """, [t_str2pmre+t_pmre2final, re_math, method, t_str2pmre+t_pmre2final])
 
                     t_evalA = 0.0
+                    ndone = 0
                     for i in xrange(0, len(w_accepted), GROUP_SIZE):
-                        if t_evalA > 600: # 10m
-                            raise Exception("Took too long to evaluate in " + method)
-
-                        self.write(re_math[:50], method, "{0}%".format(format(ndone*100.0/ntotal, "00.2f")))
+                        self.write(re_math[:50], method, "accepting {0}%".format(format(ndone*100.0/len(w_accepted), "00.3f")))
                         words = w_accepted[i:i+GROUP_SIZE]
                         t_evalA += timeit.timeit(lambda: self.evalMany(evalWord, words, True, method), number=1)
                         ndone += GROUP_SIZE
+
+                        if t_evalA/ndone > 0.25:
+                            raise Exception(method + " predicted to be slower than 0.25s per accepting word evaluation")
                     self.db.execute("""
                         UPDATE out_tests
                         SET t_evalA=?
@@ -231,15 +234,15 @@ class Benchmarker():
                     """, [t_evalA, re_math, method, t_evalA])
 
                     t_evalR = 0.0
-                    ndone = len(w_accepted)
+                    ndone = 0
                     for i in xrange(0, len(w_rejected), GROUP_SIZE):
-                        if t_evalA > 600: # 10m
-                            raise Exception("Took too long to evaluate in " + method)
-
-                        self.write(re_math[:50], method, "{0}%".format(format(ndone*100.0/ntotal, "00.2f")))
+                        self.write(re_math[:50], method, "rejecting {0}%".format(format(ndone*100.0/len(w_rejected), "00.3f")))
                         words = w_rejected[i:i+GROUP_SIZE]
                         t_evalR += timeit.timeit(lambda: self.evalMany(evalWord, words, False, method), number=1)
                         ndone += GROUP_SIZE
+
+                        if t_evalR/ndone > 0.25:
+                            raise Exception(method + " predicted to be slower than 0.25s per rejecting word evaluation")
                     self.db.execute("""
                         UPDATE out_tests
                         SET t_evalR=?
