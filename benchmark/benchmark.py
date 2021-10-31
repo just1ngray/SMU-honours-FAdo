@@ -97,6 +97,15 @@ class Benchmarker():
                     WHERE re_math=?;
                 """, [length, itersreq, re_math])
 
+    def itersRequired(self, re_math):
+        count = self.db.selectall("""
+            SELECT count(*)
+            FROM in_tests
+            WHERE re_math==?
+                AND length==?;
+        """, [re_math, len(re_math)])[0][0]
+        return max(2, 11 - count)
+
     def generateWords(self, re_math):
         re = self.convert.math(re_math)
         pmre = re.partialMatch()
@@ -256,9 +265,9 @@ class Benchmarker():
         except Exception as error:
             self.db.execute("""
                 UPDATE in_tests
-                SET error=?
+                SET error=?, itersleft=?
                 WHERE re_math=?;
-            """, [str(error), re_math])
+            """, [str(error), self.itersRequired(re_math), re_math])
             _rollback()
         finally:
             self.write("running gc")
