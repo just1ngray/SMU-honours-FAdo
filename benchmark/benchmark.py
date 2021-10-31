@@ -209,7 +209,7 @@ class Benchmarker():
                     t_evalA = 0.0
                     for i in xrange(0, len(w_accepted), GROUP_SIZE):
                         if t_evalA > 600: # 10m
-                            raise Exception("Took too long to evaluate")
+                            raise Exception("Took too long to evaluate in " + method)
 
                         self.write(re_math[:50], method, "{0}%".format(format(ndone*100.0/ntotal, "00.2f")))
                         words = w_accepted[i:i+GROUP_SIZE]
@@ -225,7 +225,7 @@ class Benchmarker():
                     ndone = len(w_accepted)
                     for i in xrange(0, len(w_rejected), GROUP_SIZE):
                         if t_evalA > 600: # 10m
-                            raise Exception("Took too long to evaluate")
+                            raise Exception("Took too long to evaluate in " + method)
 
                         self.write(re_math[:50], method, "{0}%".format(format(ndone*100.0/ntotal, "00.2f")))
                         words = w_rejected[i:i+GROUP_SIZE]
