@@ -2,6 +2,7 @@ from __future__ import print_function
 import matplotlib.pyplot as plt
 import sys
 import os
+import psutil
 import time
 import timeit
 import random
@@ -13,8 +14,8 @@ from convert import Converter
 class Benchmarker():
     def __init__(self):
         self.db = DBWrapper()
-        console = ConsoleOverwrite()
-        self.write = console.overwrite
+        # console = ConsoleOverwrite()
+        self.write = lambda *x: 0 # console.overwrite
         self.convert = Converter()
         self.code_lines = Deque(filter(lambda l: len(l) > 0, \
             open("./benchmark/reex_ext.py", "r").read().splitlines()))
@@ -23,18 +24,18 @@ class Benchmarker():
             FROM methods
             ORDER BY substr(replace(method, 'nfa', 'zzz'), 0, 4);
         """)) # nfa methods go last since they are the most "time consistent"
-        gc.disable()
+
+    def isDone(self):
+        return self.db.selectall("SELECT sum(itersleft) FROM in_tests WHERE error='';")[0][0] == 0
 
     def __iter__(self):
-        """Yields string expressions to benchmark."""
-        while self.db.selectall("SELECT sum(itersleft) FROM in_tests WHERE error='';")[0][0] > 0:
-            for re_math, in self.db.selectall("""
-                SELECT re_math
-                FROM in_tests
-                WHERE itersleft>0
-                    AND error=='';
-            """):
-                yield re_math.decode("utf-8")
+        for re_math, in self.db.selectall("""
+            SELECT re_math
+            FROM in_tests
+            WHERE itersleft>0
+                AND error=='';
+        """):
+            yield re_math.decode("utf-8")
 
     def initTestTables(self):
         """Overwrites current in_tests and out_tests tables."""
@@ -225,8 +226,8 @@ class Benchmarker():
                         t_evalA += timeit.timeit(lambda: self.evalMany(evalWord, words, True, method), number=1)
                         ndone += GROUP_SIZE
 
-                        if t_evalA/ndone > 0.25:
-                            raise Exception(method + " predicted to be slower than 0.25s per accepting word evaluation")
+                        # if t_evalA/ndone > 0.25:
+                        #     raise Exception(method + " predicted to be slower than 0.25s per accepting word evaluation")
                     self.db.execute("""
                         UPDATE out_tests
                         SET t_evalA=?
@@ -241,8 +242,8 @@ class Benchmarker():
                         t_evalR += timeit.timeit(lambda: self.evalMany(evalWord, words, False, method), number=1)
                         ndone += GROUP_SIZE
 
-                        if t_evalR/ndone > 0.25:
-                            raise Exception(method + " predicted to be slower than 0.25s per rejecting word evaluation")
+                        # if t_evalR/ndone > 0.25:
+                        #     raise Exception(method + " predicted to be slower than 0.25s per rejecting word evaluation")
                     self.db.execute("""
                         UPDATE out_tests
                         SET t_evalR=?
@@ -373,37 +374,47 @@ if __name__ == "__main__":
         choice = raw_input("Choose menu option: ").upper().lstrip()[0:]
 
         if choice == "T":
-            benchmarker = None
-            withChildren = raw_input("Do you want to use a child worker? (y)/n: ").lower().lstrip() != "n"
+            nworkers = parseIntSafe(raw_input("How many worker processes? (1): "), 1)
             print("\nRunning tests. Press Ctrl+C to stop")
             print("-----------------------------------")
-            if withChildren:
-                pid = None
-                try:
-                    while True:
-                        print("Creating a new child worker...")
-                        pid = os.fork()
-                        if pid == 0: # child
-                            break
-                        else: # parent
-                            time.sleep(21600) # 6h
-                            os.kill(pid, 2)
-                            os.waitpid(pid, 0)
-                except KeyboardInterrupt:
-                    os.kill(pid, 2)
-                    os.waitpid(pid, 0)
-                    benchmarker = Benchmarker()
-                    continue
+            gbFree = lambda: psutil.virtual_memory().available / 1000 / 1000 / 1000
+            workers = set()
 
             try:
-                benchmarker = Benchmarker()
-                for expr in benchmarker:
-                    benchmarker.benchmark(expr)
+                while True:
+                    if benchmarker is None:
+                        benchmarker = Benchmarker()
+                    re_maths = [x for x in benchmarker]
+                    benchmarker = None
+                    if len(re_maths) == 0:
+                        print("Done benchmarking!")
+                        break
+
+                    for expr in re_maths:
+                        while len(workers) >= nworkers or gbFree() < 5:
+                            for pid in workers.copy():
+                                os.waitpid(pid, os.WNOHANG)
+                                if not psutil.pid_exists(pid):
+                                    workers.discard(pid)
+                            time.sleep(0.25)
+
+                        pid = os.fork()
+                        if pid == 0: # child
+                            try:
+                                gc.disable()
+                                Benchmarker().benchmark(expr)
+                            except:
+                                pass
+                            finally:
+                                exit(0)
+                        else: # parent
+                            print("Benchmarking", expr.encode("utf-8").encode("string-escape"), "...")
+                            workers.add(pid)
             except KeyboardInterrupt:
-                pass
+                for pid in workers:
+                    os.kill(pid, 2)
             finally:
-                if withChildren:
-                    exit(0)
+                benchmarker = Benchmarker()
         elif choice == "P":
             todostats = [0] * 4
             for length, count in benchmarker.statsToDo():
