@@ -392,6 +392,7 @@ if __name__ == "__main__":
                 except KeyboardInterrupt:
                     os.kill(pid, 2)
                     os.waitpid(pid, 0)
+                    benchmarker = Benchmarker()
                     continue
 
             try:
@@ -403,8 +404,6 @@ if __name__ == "__main__":
             finally:
                 if withChildren:
                     exit(0)
-            if benchmarker is None:
-                benchmarker = Benchmarker()
         elif choice == "P":
             todostats = [0] * 4
             for length, count in benchmarker.statsToDo():
