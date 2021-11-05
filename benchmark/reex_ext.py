@@ -41,6 +41,23 @@ class uregexp(reex.regexp):
         nfa = self.toNFA(method)
         return fa_ext.InvariantNFA(nfa)
 
+    def nfaPosition(self, lstar=True):
+        return fa_ext.InvariantNFA(super(uregexp, self).nfaPosition(lstar))
+
+    def nfaFollow(self):
+        return fa_ext.InvariantNFA(super(uregexp, self).nfaFollow())
+
+    def nfaGlushkov(self):
+        return fa_ext.InvariantNFA(super(uregexp, self).nfaGlushkov())
+
+    def nfaPD(self):
+        return fa_ext.InvariantNFA(super(uregexp, self).nfaPD())
+
+    def nfaPDO(self):
+        return fa_ext.InvariantNFA(super(uregexp, self).nfaPDO())
+
+    # TODO: nfaThompson is defined without the use of other methods, must be treated differently
+
     def evalWordP_Backtrack(self, word):
         """Using an algorithm similar to native programming language implementations to
         solve the membership problem. Allows for extended functionality such as backreferences,
