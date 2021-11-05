@@ -8,7 +8,7 @@ import timeit
 import random
 import gc
 
-from util import DBWrapper, Deque, ConsoleOverwrite, parseIntSafe
+from util import DBWrapper, Deque, parseIntSafe # ConsoleOverwrite
 from convert import Converter
 
 class Benchmarker():
@@ -17,8 +17,7 @@ class Benchmarker():
         # console = ConsoleOverwrite()
         self.write = lambda *x: 0 # console.overwrite
         self.convert = Converter()
-        self.code_lines = Deque(filter(lambda l: len(l) > 0, \
-            open("./benchmark/reex_ext.py", "r").read().splitlines()))
+        self.code_lines = Deque(open("./example_code_file.txt", "r").read().splitlines())
         self.methods = list(x[0] for x in self.db.selectall("""
             SELECT method
             FROM methods
@@ -109,7 +108,7 @@ class Benchmarker():
             WHERE re_math==?
                 AND length==?;
         """, [re_math, len(re_math)])[0][0]
-        return max(2, 11 - count)
+        return max(2, 6 - count)
 
     def generateWords(self, re_math):
         re = self.convert.math(re_math)
@@ -186,20 +185,29 @@ class Benchmarker():
             """, [prev_itersleft, re_math])
 
         try: # catch errors and delete the results of the test
-            self.db.execute("""
-                INSERT OR IGNORE INTO out_tests (re_math, method, t_pre, t_evalA, t_evalR)
-                    SELECT in_tests.re_math, methods.method,
-                        1000000.0 as t_pre,
-                        1000000.0 as t_evalA,
-                        1000000.0 as t_evalR
-                    FROM in_tests, methods
-                    WHERE in_tests.re_math=?;
-            """, [re_math])
-
             GROUP_SIZE = 100
             w_accepted, w_rejected = self.generateWords(re_math)
             self.write("running gc")
             gc.collect() # remove unused words from memory... especially the potentially rejected ones
+
+            n_evalA, n_evalR = self.db.selectall("""
+                SELECT n_evalA n_evalR
+                FROM in_tests
+                WHERE re_math==?;
+            """)[0]
+            if len(w_accepted) != n_evalA or len(w_rejected) != n_evalR: # different word generating scheme... reset
+                self.db.execute("DELETE FROM out_tests WHERE re_math==?;", [re_math])
+                self.db.execute("UPDATE in_tests SET itersleft=? WHERE re_math==?;", [self.itersRequired(re_math), re_math])
+
+            self.db.execute("""
+                    INSERT OR IGNORE INTO out_tests (re_math, method, t_pre, t_evalA, t_evalR)
+                        SELECT in_tests.re_math, methods.method,
+                            1000000.0 as t_pre,
+                            1000000.0 as t_evalA,
+                            1000000.0 as t_evalR
+                        FROM in_tests, methods
+                        WHERE in_tests.re_math=?;
+                """, [re_math])
 
             self.write(re_math[:50], "str to partial matching regular expression tree")
             pmre = self.convert.math(re_math, partialMatch=True)
@@ -225,9 +233,6 @@ class Benchmarker():
                         words = w_accepted[i:i+GROUP_SIZE]
                         t_evalA += timeit.timeit(lambda: self.evalMany(evalWord, words, True, method), number=1)
                         ndone += GROUP_SIZE
-
-                        # if t_evalA/ndone > 0.25:
-                        #     raise Exception(method + " predicted to be slower than 0.25s per accepting word evaluation")
                     self.db.execute("""
                         UPDATE out_tests
                         SET t_evalA=?
@@ -241,9 +246,6 @@ class Benchmarker():
                         words = w_rejected[i:i+GROUP_SIZE]
                         t_evalR += timeit.timeit(lambda: self.evalMany(evalWord, words, False, method), number=1)
                         ndone += GROUP_SIZE
-
-                        # if t_evalR/ndone > 0.25:
-                        #     raise Exception(method + " predicted to be slower than 0.25s per rejecting word evaluation")
                     self.db.execute("""
                         UPDATE out_tests
                         SET t_evalR=?
@@ -377,7 +379,8 @@ if __name__ == "__main__":
             nworkers = parseIntSafe(raw_input("How many worker processes? (1): "), 1)
             print("\nRunning tests. Press Ctrl+C to stop")
             print("-----------------------------------")
-            gbFree = lambda: psutil.virtual_memory().available / 1000 / 1000 / 1000
+            def gbFree():
+                return psutil.virtual_memory().available / 1000 / 1000 / 1000
             workers = set()
 
             try:
@@ -385,6 +388,7 @@ if __name__ == "__main__":
                     if benchmarker is None:
                         benchmarker = Benchmarker()
                     re_maths = [x for x in benchmarker]
+                    random.shuffle(re_maths)
                     benchmarker = None
                     if len(re_maths) == 0:
                         print("Done benchmarking!")
