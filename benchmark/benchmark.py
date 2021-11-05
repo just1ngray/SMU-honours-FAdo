@@ -191,10 +191,10 @@ class Benchmarker():
             gc.collect() # remove unused words from memory... especially the potentially rejected ones
 
             n_evalA, n_evalR = self.db.selectall("""
-                SELECT n_evalA n_evalR
+                SELECT n_evalA, n_evalR
                 FROM in_tests
                 WHERE re_math==?;
-            """)[0]
+            """, [re_math])[0]
             if len(w_accepted) != n_evalA or len(w_rejected) != n_evalR: # different word generating scheme... reset
                 self.db.execute("DELETE FROM out_tests WHERE re_math==?;", [re_math])
                 self.db.execute("UPDATE in_tests SET itersleft=? WHERE re_math==?;", [self.itersRequired(re_math), re_math])
