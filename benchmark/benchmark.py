@@ -93,7 +93,7 @@ class Benchmarker():
 
         self.write("Filling calculated information for in_tests")
         for length in reByLength:
-            itersreq = max(2, 11 - len(reByLength[length]))
+            itersreq = max(2, 6 - len(reByLength[length]))
             for re_math in reByLength[length]:
                 self.db.execute("""
                     UPDATE in_tests
@@ -105,9 +105,8 @@ class Benchmarker():
         count = self.db.selectall("""
             SELECT count(*)
             FROM in_tests
-            WHERE re_math==?
-                AND length==?;
-        """, [re_math, len(re_math)])[0][0]
+            WHERE length==?;
+        """, [len(re_math)])[0][0]
         return max(2, 6 - count)
 
     def generateWords(self, re_math):
