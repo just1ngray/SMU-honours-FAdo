@@ -94,15 +94,19 @@ class uregexp(reex.regexp):
 
     def evalWordP_PD(self, word):
         """Evaluates word membership using partial derivatives."""
-        current = set([self])
+        memo = dict() # re.rpn(): {str.sigma: dict(pd.rpn(), pd)}
+        current = dict([(self.rpn(), self)])
         for sigma in word:
-            nxt = set()
-            for c in current:
-                nxt.update(c.partialDerivatives(sigma))
+            nxt = dict()
+            for pdstr, pd in current.items():
+                if not memo.has_key(pdstr):
+                    memo[pdstr] = dict([(sigma, dict([(x.rpn(), x) for x in pd.partialDerivatives(sigma)]))])
+                elif not memo[pdstr].has_key(sigma):
+                    memo[pdstr][sigma] = dict([(x.rpn(), x) for x in pd.partialDerivatives(sigma)])
+                nxt.update(memo[pdstr][sigma])
             current = nxt
-
-        for c in current:
-            if c.ewp():
+        for pd in current.values():
+            if pd.ewp():
                 return True
         return False
 
@@ -225,6 +229,15 @@ class uregexp(reex.regexp):
             Compressing Regular Expressions"
         """
         self.compress = lambda u=dict(): None # prevent needless re-compression
+
+    def _delAttr(self, attr):
+        """Recursively deletes self.attr if it exists in this tree"""
+        raise NotImplementedError()
+
+    def _memoRPN(self):
+        """Recursively saves the rpn of subtrees as attributes of the class.
+        Returns the memoized rpn string value"""
+        raise NotImplementedError()
 
 class uconcat(reex.concat, uregexp):
     def __init__(self, arg1, arg2):
@@ -360,6 +373,19 @@ class uconcat(reex.concat, uregexp):
 
         super(uconcat, self).compress(uniqueSubtrees)
 
+    def _delAttr(self, attr):
+        if hasattr(self, attr):
+            delattr(self, attr)
+            self.arg1._delAttr(attr)
+            self.arg2._delAttr(attr)
+
+    def _memoRPN(self):
+        if not hasattr(self, "_rpn"):
+            self.arg1._memoRPN()
+            self.arg2._memoRPN()
+            self._rpn = ".%s%s" % (self.arg1._rpn, self.arg2._rpn)
+        return self._rpn
+
 class udisj(reex.disj, uregexp):
     def __init__(self, arg1, arg2):
         super(udisj, self).__init__(arg1, arg2, sigma=None)
@@ -423,6 +449,19 @@ class udisj(reex.disj, uregexp):
                 uniqueSubtrees[repr(self)] = self
 
         super(udisj, self).compress(uniqueSubtrees)
+
+    def _delAttr(self, attr):
+        if hasattr(self, attr):
+            delattr(self, attr)
+            self.arg1._delAttr(attr)
+            self.arg2._delAttr(attr)
+
+    def _memoRPN(self):
+        if not hasattr(self, "_rpn"):
+            self.arg1._memoRPN()
+            self.arg2._memoRPN()
+            self._rpn = "+%s%s" % (self.arg1._rpn, self.arg2._rpn)
+        return self._rpn
 
 class ustar(reex.star, uregexp):
     def __init__(self, arg):
@@ -558,6 +597,17 @@ class ustar(reex.star, uregexp):
 
         super(ustar, self).compress(uniqueSubtrees)
 
+    def _delAttr(self, attr):
+        if hasattr(self, attr):
+            delattr(self, attr)
+            self.arg._delAttr(attr)
+
+    def _memoRPN(self):
+        if not hasattr(self, "_rpn"):
+            self.arg._memoRPN()
+            self._rpn = "*%s" % (self.arg._rpn)
+        return self._rpn
+
 class uoption(reex.option, uregexp):
     def __init__(self, arg):
         super(uoption, self).__init__(arg, sigma=None)
@@ -620,6 +670,17 @@ class uoption(reex.option, uregexp):
 
         super(uoption, self).compress(uniqueSubtrees)
 
+    def _delAttr(self, attr):
+        if hasattr(self, attr):
+            delattr(self, attr)
+            self.arg._delAttr(attr)
+
+    def _memoRPN(self):
+        if not hasattr(self, "_rpn"):
+            self.arg._memoRPN()
+            self._rpn = "?%s" % (self.arg._rpn)
+        return self._rpn
+
 class uepsilon(reex.epsilon, uregexp):
     def __init__(self):
         super(uepsilon, self).__init__(sigma=None)
@@ -663,6 +724,16 @@ class uepsilon(reex.epsilon, uregexp):
         if not uniqueSubtrees.has_key(repr(self)):
             uniqueSubtrees[repr(self)] = self
         super(uepsilon, self).compress(uniqueSubtrees)
+
+    def _delAttr(self, attr):
+        if hasattr(self, attr):
+            setattr(self, attr, None) # weird right!?
+            delattr(self, attr)
+
+    def _memoRPN(self):
+        if not hasattr(self, "_rpn"):
+            self._rpn = self.rpn()
+        return self._rpn
 
 class uemptyset(reex.emptyset, uregexp):
     def __init__(self):
@@ -818,6 +889,18 @@ class uatom(reex.atom, uregexp):
         if not uniqueSubtrees.has_key(repr(self)):
             uniqueSubtrees[repr(self)] = self
         super(uatom, self).compress(uniqueSubtrees)
+
+    def rpn(self):
+        return "%s" % repr(self.val).replace("'", "\\'")
+
+    def _delAttr(self, attr):
+        if hasattr(self, attr):
+            delattr(self, attr)
+
+    def _memoRPN(self):
+        if not hasattr(self, "_rpn"):
+            self._rpn = self.rpn()
+        return self._rpn
 
 class chars(uatom):
     """A character class which can match any single character or a range of characters contained within it
