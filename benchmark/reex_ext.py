@@ -20,22 +20,21 @@ class uregexp(reex.regexp):
         The Computer Journal, Volume 63, Issue 1, January 2020, Pages 41-65
         https://doi.org/10.1093/comjnl/bxy137
         """
-        cpy = copy.deepcopy(self)
-        cpy.compress()
+        compressed = self.compress()
         r = random.Random(1)
         def sample(iterable, upto):
             return set(r.sample(iterable, min(len(iterable), upto)))
-        return cpy._pairGen(sample)
+        return compressed._pairGen(sample)
 
     def _pairGen(self, sample):
         raise NotImplementedError()
 
     def toInvariantNFA(self, method):
         """Convert self into an InvariantNFA using a construction method
-        methods include: nfaPD, nfaPDO, nfaPosition, nfaFollow, nfaGlushkov, nfaThompson
+        methods include: nfaPD, nfaPDO, nfaPDK, nfaPosition, nfaFollow, nfaGlushkov, nfaThompson
         :raises exceptions.UnknownREtoNFAMethod: if the provided method is not recognized
         """
-        if method not in set(["nfaPD", "nfaPDO", "nfaPosition", "nfaFollow", "nfaGlushkov", "nfaThompson"]):
+        if method not in set(["nfaPD", "nfaPDO", "nfaPosition", "nfaFollow", "nfaGlushkov", "nfaThompson", "nfaPDK"]):
             raise errors.UnknownREtoNFAMethod(method)
 
         nfa = self.toNFA(method)
@@ -57,6 +56,40 @@ class uregexp(reex.regexp):
         return fa_ext.InvariantNFA(super(uregexp, self).nfaPDO())
 
     # TODO: nfaThompson is defined without the use of other methods, must be treated differently
+
+    def nfaPDK(self):
+        """Constructs the partial derivative automaton using the algorithm from:
+        S. Konstantinidis, et al. "Partial Derivative Automaton by Compressing Regular Expressions"
+
+        ..Note: states in the nfa are named according to their rpn representation
+        """
+        compressed = self.compress()
+        todo = Deque([compressed])
+        nfa = fa_ext.InvariantNFA()
+        rpn2regexp = dict()
+
+        index = nfa.addState(compressed._memoRPN())
+        rpn2regexp[compressed._rpn] = compressed
+        nfa.addInitial(index)
+        if compressed.ewp():
+            nfa.addFinal(index)
+
+        while len(todo) > 0:
+            re = todo.pop_left()
+            re._memoLF()
+            for transition in re._lf:
+                for pd in re._lf[transition]:
+                    index = None
+                    pd._memoRPN()
+                    try:
+                        index = nfa.addState(pd._rpn)
+                        if pd.ewp():
+                            nfa.addFinal(index)
+                        todo.insert_right(pd)
+                    except common.DuplicateName:
+                        index = nfa.stateIndex(pd._rpn)
+                    nfa.addTransition(nfa.stateIndex(re._rpn), transition, index)
+        return nfa
 
     def evalWordP_Backtrack(self, word):
         """Using an algorithm similar to native programming language implementations to
@@ -219,16 +252,14 @@ class uregexp(reex.regexp):
         raise NotImplementedError()
 
     def compress(self, uniqueSubtrees=dict()):
-        """Mutates self to a compressed version where duplicate subtrees
+        """Constructs a compressed version of self where duplicate subtrees
             reference the same objects in memory.
-        :param dict uniqueSubtrees: <repr, reference> to unique subtrees
-        :post: compress method is overwritten to be trivial, and self is of
-            compressed form.
+        :param dict uniqueSubtrees: <rpn, reference> to unique subtrees
 
         ..see: S. Konstantinidis, et al. "Partial Derivative Automaton by
             Compressing Regular Expressions"
         """
-        self.compress = lambda u=dict(): None # prevent needless re-compression
+        raise NotImplementedError()
 
     def _delAttr(self, attr):
         """Recursively deletes self.attr if it exists in this tree"""
@@ -361,17 +392,22 @@ class uconcat(reex.concat, uregexp):
         return self.arg1._containsT(T) or self.arg2._containsT(T)
 
     def compress(self, uniqueSubtrees=dict()):
-        for arg in ["arg1", "arg2"]:
-            attr = getattr(self, arg)
-            rep = repr(attr)
+        self._memoRPN()
+        arg1 = None
+        arg2 = None
+        rpn1 = self.arg1._rpn
+        rpn2 = self.arg2._rpn
 
-            if uniqueSubtrees.has_key(rep):
-                setattr(self, arg, uniqueSubtrees[rep])
-            else:
-                attr.compress(uniqueSubtrees)
-                uniqueSubtrees[repr(self)] = self
+        if rpn1 not in uniqueSubtrees:
+            uniqueSubtrees[rpn1] = self.arg1.compress(uniqueSubtrees)
+        arg1 = uniqueSubtrees[rpn1]
 
-        super(uconcat, self).compress(uniqueSubtrees)
+        if rpn2 not in uniqueSubtrees:
+            uniqueSubtrees[rpn2] = self.arg2.compress(uniqueSubtrees)
+        arg2 = uniqueSubtrees[rpn2]
+
+        self._delAttr("_rpn")
+        return uconcat(arg1, arg2)
 
     def _delAttr(self, attr):
         if hasattr(self, attr):
@@ -438,17 +474,26 @@ class udisj(reex.disj, uregexp):
         return self.arg1._containsT(T) or self.arg2._containsT(T)
 
     def compress(self, uniqueSubtrees=dict()):
-        for arg in ["arg1", "arg2"]:
-            attr = getattr(self, arg)
-            rep = repr(attr)
+        self._memoRPN()
+        arg1 = None
+        arg2 = None
+        rpn1 = self.arg1._rpn
+        rpn2 = self.arg2._rpn
 
-            if uniqueSubtrees.has_key(rep):
-                setattr(self, arg, uniqueSubtrees[rep])
-            else:
-                attr.compress(uniqueSubtrees)
-                uniqueSubtrees[repr(self)] = self
+        if rpn1 in uniqueSubtrees:
+            arg1 = uniqueSubtrees[rpn1]
+        else:
+            arg1 = self.arg1.compress(uniqueSubtrees)
+            uniqueSubtrees[rpn1] = arg1
 
-        super(udisj, self).compress(uniqueSubtrees)
+        if rpn2 in uniqueSubtrees:
+            arg2 = uniqueSubtrees[rpn2]
+        else:
+            arg2 = self.arg2.compress(uniqueSubtrees)
+            uniqueSubtrees[rpn2] = arg2
+
+        self._delAttr("_rpn")
+        return udisj(arg1, arg2)
 
     def _delAttr(self, attr):
         if hasattr(self, attr):
@@ -588,14 +633,18 @@ class ustar(reex.star, uregexp):
         return self.arg._containsT(T)
 
     def compress(self, uniqueSubtrees=dict()):
-        reprArg = repr(self.arg)
-        if uniqueSubtrees.has_key(reprArg):
-            self.arg = uniqueSubtrees[reprArg]
-        else:
-            self.arg.compress(uniqueSubtrees)
-            uniqueSubtrees[repr(self)] = self
+        self._memoRPN()
+        arg = None
+        rpn = self.arg._rpn
 
-        super(ustar, self).compress(uniqueSubtrees)
+        if rpn in uniqueSubtrees:
+            arg = uniqueSubtrees[rpn]
+        else:
+            arg = self.arg.compress(uniqueSubtrees)
+            uniqueSubtrees[rpn] = arg
+
+        self._delAttr("_rpn")
+        return ustar(arg)
 
     def _delAttr(self, attr):
         if hasattr(self, attr):
@@ -661,14 +710,18 @@ class uoption(reex.option, uregexp):
         return self.arg._containsT(T)
 
     def compress(self, uniqueSubtrees=dict()):
-        reprArg = repr(self.arg)
-        if uniqueSubtrees.has_key(reprArg):
-            self.arg = uniqueSubtrees[reprArg]
-        else:
-            self.arg.compress(uniqueSubtrees)
-            uniqueSubtrees[repr(self)] = self
+        self._memoRPN()
+        arg = None
+        rpn = self.arg._rpn
 
-        super(uoption, self).compress(uniqueSubtrees)
+        if rpn in uniqueSubtrees:
+            arg = uniqueSubtrees[rpn]
+        else:
+            arg = self.arg.compress(uniqueSubtrees)
+            uniqueSubtrees[rpn] = arg
+
+        self._delAttr("_rpn")
+        return uoption(arg)
 
     def _delAttr(self, attr):
         if hasattr(self, attr):
@@ -721,9 +774,13 @@ class uepsilon(reex.epsilon, uregexp):
         return type(self) is T
 
     def compress(self, uniqueSubtrees=dict()):
-        if not uniqueSubtrees.has_key(repr(self)):
-            uniqueSubtrees[repr(self)] = self
-        super(uepsilon, self).compress(uniqueSubtrees)
+        rpn = self.rpn()
+        if rpn in uniqueSubtrees:
+            return uniqueSubtrees[rpn]
+        else:
+            ref = uepsilon()
+            uniqueSubtrees[rpn] = ref
+            return ref
 
     def _delAttr(self, attr):
         if hasattr(self, attr):
@@ -886,12 +943,16 @@ class uatom(reex.atom, uregexp):
         return type(self) is T
 
     def compress(self, uniqueSubtrees=dict()):
-        if not uniqueSubtrees.has_key(repr(self)):
-            uniqueSubtrees[repr(self)] = self
-        super(uatom, self).compress(uniqueSubtrees)
+        rpn = self.rpn()
+        if rpn in uniqueSubtrees:
+            return uniqueSubtrees[rpn]
+        else:
+            ref = copy.deepcopy(self)
+            uniqueSubtrees[rpn] = ref
+            return ref
 
     def rpn(self):
-        return "%s" % repr(self.val).replace("'", "\\'")
+        return "%s" % repr(self.val.replace("'", "\\'"))
 
     def _delAttr(self, attr):
         if hasattr(self, attr):

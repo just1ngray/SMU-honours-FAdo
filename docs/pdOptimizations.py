@@ -257,11 +257,14 @@ def nfaPDOEval(re, word):
     nfa = re.nfaPDO()
     return nfa.evalWordP(word)
 
+def nfaPDKEval(re, word):
+    """Inserted as an after-thought to test the performance of this algorithm."""
+    nfa = re.nfaPDK()
+    return nfa.evalWordP(word)
 
 
 # SETUP the methods to evaluate and randomly sample some valid mathematized expressions to test
-# methods = [memo4rpn2, memo4rpn, memo4, nfaPDOEval, memo2rpn, memo2, naive, partialNFA, partialNFA2, memo1, memo3]
-methods = [memo4rpn, memo4rpn2]
+methods = [memo4rpn2, memo4rpn, memo4, nfaPDOEval, nfaPDKEval, memo2rpn, memo2, naive, partialNFA, partialNFA2, memo1, memo3]
 expressions = map(lambda row: row[0].decode("utf-8"), \
     DBWrapper().selectall("SELECT re_math FROM in_tests ORDER BY random() LIMIT ?;", [NUM_EXPRESSIONS]))
 

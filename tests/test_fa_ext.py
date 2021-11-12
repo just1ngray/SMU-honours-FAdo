@@ -44,6 +44,10 @@ class TestInvariantNFA(unittest.TestCase):
         self.infa = lambda expr: self.convert.math(expr).toInvariantNFA("nfaPDO")
         self.runner()
 
+    def test_nfaPDK(self):
+        self.infa = lambda expr: self.convert.math(expr).toInvariantNFA("nfaPDK")
+        self.runner()
+
     def test_nfaFollow(self):
         self.infa = lambda expr: self.convert.math(expr).toInvariantNFA("nfaFollow")
         self.runner()
