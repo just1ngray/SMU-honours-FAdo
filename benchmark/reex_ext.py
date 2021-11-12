@@ -66,10 +66,8 @@ class uregexp(reex.regexp):
         compressed = self.compress()
         todo = Deque([compressed])
         nfa = fa_ext.InvariantNFA()
-        rpn2regexp = dict()
 
         index = nfa.addState(compressed._memoRPN())
-        rpn2regexp[compressed._rpn] = compressed
         nfa.addInitial(index)
         if compressed.ewp():
             nfa.addFinal(index)
