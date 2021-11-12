@@ -18,11 +18,7 @@ class Benchmarker():
         self.write = lambda *x: 0 # console.overwrite
         self.convert = Converter()
         self.code_lines = Deque(open("./example_code_file.txt", "r").read().splitlines())
-        self.methods = list(x[0] for x in self.db.selectall("""
-            SELECT method
-            FROM methods
-            ORDER BY substr(replace(method, 'nfa', 'zzz'), 0, 4);
-        """)) # nfa methods go last since they are the most "time consistent"
+        self.methods = list(x[0] for x in self.db.selectall("SELECT method FROM methods;"))
 
     def isDone(self):
         return self.db.selectall("SELECT sum(itersleft) FROM in_tests WHERE error='';")[0][0] == 0
@@ -48,7 +44,7 @@ class Benchmarker():
             INSERT OR IGNORE INTO methods (method, colour) VALUES ('pd', '#4363d8');
             -- INSERT OR IGNORE INTO methods (method, colour) VALUES ('derivative', '#a9a9a9');
             INSERT OR IGNORE INTO methods (method, colour) VALUES ('backtrack', '#000000');
-            INSERT OR IGNORE INTO methods (method, colour) VALUES ('nfaPD', '#42d4f4');
+            INSERT OR IGNORE INTO methods (method, colour) VALUES ('nfaPDK', '#42d4f4');
             INSERT OR IGNORE INTO methods (method, colour) VALUES ('nfaPDO', '#469990');
             INSERT OR IGNORE INTO methods (method, colour) VALUES ('nfaPosition', '#e6194B');
             INSERT OR IGNORE INTO methods (method, colour) VALUES ('nfaFollow', '#dcbeff');
@@ -112,7 +108,7 @@ class Benchmarker():
     def generateWords(self, re_math):
         re = self.convert.math(re_math)
         pmre = re.partialMatch()
-        nfa = pmre.toInvariantNFA("nfaPDO")
+        nfa = pmre.toInvariantNFA("nfaPDK")
         enum = nfa.enumNFA()
         accepted = list()
         rejected = set()
