@@ -317,7 +317,6 @@ class Benchmarker():
             FROM in_tests as tin, out_tests as tout
             WHERE tin.re_math==tout.re_math
                 AND method==?
-                AND itersleft==0
             GROUP BY length/{0}
             ORDER BY length ASC;
         """.format(lengthBucketSize), _rowhandler)
