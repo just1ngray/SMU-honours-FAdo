@@ -27,12 +27,19 @@ Compressed Regular Expressions  Manipulation
    You should have received a copy of the GNU General Public Licensealong with this program; if not, write to the
    Free Software Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA."""
 
-from reex import *
-from fl import *
-from cfg import *
-from fa import NFA
+from FAdo.reex import *
+from FAdo.fl import *
+from FAdo.cfg import *
+from FAdo.fa import NFA
 import time
 
+
+ID_EPSILON = 0
+ID_STAR = 1
+ID_OPTION = 2
+ID_CONC = 3
+ID_DISJ = 4
+ID_SYMB = 5
 
 class dnode(object):
     def __init__(self, op, arg1=None, arg2=None):
