@@ -27,11 +27,8 @@ Compressed Regular Expressions  Manipulation
    You should have received a copy of the GNU General Public Licensealong with this program; if not, write to the
    Free Software Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA."""
 
-from FAdo.reex import *
-from FAdo.fl import *
-from FAdo.cfg import *
-from FAdo.fa import NFA
-import time
+import reex_ext
+from fa_ext import InvariantNFA
 
 
 ID_EPSILON = 0
@@ -80,34 +77,34 @@ class dag(object):
         return self.count - 1
 
     def getIdx(self, reg):
-        if isinstance(reg, atom):
-            return self.getAtomIdx(reg.val)
-        elif isinstance(reg, disj):
+        if isinstance(reg, reex_ext.uatom):
+            return self.getAtomIdx(reg)
+        elif isinstance(reg, reex_ext.udisj):
             id1 = self.getIdx(reg.arg1)
             id2 = self.getIdx(reg.arg2)
             return self.getDisjIdx(id1, id2)
-        elif isinstance(reg, concat):
+        elif isinstance(reg, reex_ext.uconcat):
             id1 = self.getIdx(reg.arg1)
             id2 = self.getIdx(reg.arg2)
             return self.getConcatIdx(id1, id2)
-        elif isinstance(reg, star):
+        elif isinstance(reg, reex_ext.ustar):
             id = self.getIdx(reg.arg)
             return self.getStarIdx(id)
-        elif isinstance(reg, option):
+        elif isinstance(reg, reex_ext.uoption):
             id = self.getIdx(reg.arg)
             return self.getOptionIdx(id)
         else:  # It must be epsilon
             return 0
 
-    def getAtomIdx(self, val):
-        if val in self.leafs:
-            return self.leafs[val]
+    def getAtomIdx(self, reg):
+        if reg.val in self.leafs:
+            return self.leafs[reg.val]
         else:
             id = self.count
             self.count += 1
-            self.leafs[val] = id
+            self.leafs[reg.val] = id
             new = dnode(ID_SYMB)
-            new.diff[val] = set([0])
+            new.diff[reg] = set([0])
             self.table[id] = new
             return id
 
@@ -223,28 +220,24 @@ class dag(object):
             self.doDelayed()
 
     def doDelayed(self):
-            while self.diff2do:
-                inode = self.diff2do.pop()
-                node = self.table[inode]
-                assert node.op == ID_CONC
-                if self.table[node.arg1].ewp:
-                    node.diff = self.plusLF(self.catLF(node.arg1, node.arg2), self.table[node.arg2].diff)
-                else:
-                    node.diff = self.catLF(node.arg1, node.arg2)
-
-    # def delay(self, id):
-    #     if id not in self.beingDone:
-    #         self.diff2do.add(id)
+        while self.diff2do:
+            inode = self.diff2do.pop()
+            node = self.table[inode]
+            assert node.op == ID_CONC
+            if self.table[node.arg1].ewp:
+                node.diff = self.plusLF(self.catLF(node.arg1, node.arg2), self.table[node.arg2].diff)
+            else:
+                node.diff = self.catLF(node.arg1, node.arg2)
 
     def NFA(self):
-        aut = NFA()
+        aut = InvariantNFA()
         todo, done = {self.root}, set()
         id = aut.addState(self.root)
         aut.addInitial(id)
         while len(todo):
-            st = todo.pop()
+            st = todo.pop() # integer index
             done.add(st)
-            stn = self.table[st]
+            stn = self.table[st] # reference to the dnode
             sti = aut.stateIndex(st)
             if stn.ewp:
                 aut.addFinal(sti)
@@ -257,100 +250,7 @@ class dag(object):
         return aut
 
 
-
-def adfaregexp(reg):
-    """
-    Transforming regexp in adfa
-    """
-    aut = ADFA()
-    initial = aut.addState()
-    aut.setInitial(initial)
-    final = aut.addState("@final")
-    aut.addFinal(final)
-    stack = [(reg, initial)]
-    aux_sigma = {disj: ("@d1", "@d2"), concat: ("@c1", "@c2"), star: "@s", option: "@o"}
-    while stack:
-        reg, state_idx = stack.pop()
-        if type(reg) == epsilon:
-            aut.addTransition(state_idx, "@e", final)
-        if type(reg) == atom:
-            aut.addTransition(state_idx, str(reg.val), final)
-        if type(reg) == star:
-            reg1 = reg.arg
-            next_state_idx = aut.addState()
-            stack.append((reg1, next_state_idx))
-            aut.addTransition(state_idx, aux_sigma[star], next_state_idx)
-        if type(reg) == option:
-            reg1 = reg.arg
-            next_state_idx = aut.addState()
-            stack.append((reg1, next_state_idx))
-            aut.addTransition(state_idx, aux_sigma[option], next_state_idx)
-        if type(reg) == disj or type(reg) == concat:
-            reg1 = reg.arg2
-            reg2 = reg.arg2
-            next_state_idx = aut.addState()
-            stack.append((reg1, next_state_idx))
-            aut.addTransition(state_idx, aux_sigma[type(reg)][0], next_state_idx)
-            next_state_idx = aut.addState()
-            stack.append((reg2, next_state_idx))
-            aut.addTransition(state_idx, aux_sigma[type(reg)][1], next_state_idx)
-    return aut
-
 def pddag(self):
     return dag(self).NFA()
 
-setattr(regexp,'nfaPDDAG', pddag)
-
-
-def avg_samples(k=2, n=10, amount=100):
-    """
-    Tests
-    """
-    g = reStringRGenerator(smallAlphabet(k), size=n, cfgr=reGrammar['g_rpn_snf_option'])
-    t0 = t1 = t2 = 0
-    s0 = s1 = s2 = 0
-    for i in range(amount):
-        a = str2regexp(g.generate(), parser=ParserRPN)
-        t = time.time()
-        aut = dag(a).NFA()
-        t0 += (time.time() - t)
-        s0 += len(aut)
-        t = time.time()
-        pos = a.nfaGlushkov()
-        t1 += (time.time() - t)
-        s1 += len(pos)
-        try:
-            assert pos.HKeqP(aut)
-        except:
-            print(a)
-            break
-
-    print n, k, ":", t0, t1, s0 * 1.0 / amount, s1 * 1.0 / amount
-
-
-if __name__ == "__main__":
-    # a = str2regexp("a*a*")
-    # a = str2regexp("(aab)*+a(aab)*")
-    a = str2regexp("(ab)*a+(ab)*")
-    # a = str2regexp("(@epsilon ((b* + @epsilon) (b + b*))) + (((b ((a* a) + b)) ((@epsilon (b + @epsilon)) a)) b)")
-    # a = str2regexp("((a-)b)*+ab*")
-    # a = str2regexp("(b a) + ((a b) a)*")
-    # a = str2regexp("(b a) + (a b)a")
-    # a = str2regexp("(a (a (a (b + @epsilon))))*")
-    # a = str2regexp("((a + @epsilon) + @epsilon) + ((((b @epsilon) + (a a)) (@epsilon + @epsilon))* a)")
-    # a = str2regexp("((b + a) (((a (b + (b + b))*)) - (b + a*))) b")
-    # a = str2regexp( "(a + @epsilon ((b+(aa) )(@epsilon+@epsilon))* a)")
-    # a = str2regexp("(@epsilon (a (@epsilon + b))*) @epsilon")
-    # a = str2regexp("(a+b)(a+ba*+b)*")
-    # a = str2regexp("(((((((((b (b + (((b* a) (((b a) (a + ((((a)- + (b a)*) + b) ((((a + (((b* + (((b* ((a + a))-) a*) + (b + b))) ((b (a + (b + ((a + b))-))))-) ((a + (b + ((((b + (a (b + (a + b)))*) b) (a ((b ((((b a) + b) (a)-))-)* + a))) (a* b))*)) (a + b)))) (b (b ((a ((((((((a (a + b)) + ((b (a a)) + ((b + ((b (((b (b + a)))- b)) + ((((b)- + (((a b) (a* + (((b (a + (((a + a) (a)-) a)*)))- (((a b))- + (((a)- (a + b)))-)))) + (b a))*) + a) (a* b)))) ((((((b* b))- a) ((((b (a)-) b)* b) + a)) (((a (a)-) b) b)) + b)))) a))- a))- (a a)) ((a a) + (b + a)))))-))*))- b)))) a)) (a)-))*))- + ((a)- a)) a) (b)-) ((a (b + (a)-)) b))* b) (((((a a*) (b + (((a + (a a)) + (((((((a)- + ((a (((a)- + ((b* + a*) + ((a a) a))) + (a)-)) + ((a a*))-)) b) b*) + a) + ((b + (a + a)) (b + a)*)))-) b)*)))- (b)-) ((b b) + ((((a ((((((a* + ((b + (((b + a) + a) + (((b)- (a* (a + a))) a))) + a)) + (((b + a))- (a + b))) a)* b) a) b))* (((a + b) + (a + a)) a)))- + a)))) b) b*")
-    t = dag(a)
-    f = t.NFA()
-    d = adfaregexp(a).minimal().trim()
-    f.display()
-    print len(f)
-    pdo = a.nfaPD()
-    print len(pdo)
-    pdo.display()
-    print pdo.HKeqP(f)
-    print pdo ==f
-    avg_samples(2,100)
+setattr(reex_ext.uregexp,'nfaPDDAG', pddag)

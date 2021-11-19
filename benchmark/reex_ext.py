@@ -31,10 +31,11 @@ class uregexp(reex.regexp):
 
     def toInvariantNFA(self, method):
         """Convert self into an InvariantNFA using a construction method
-        methods include: nfaPD, nfaPDO, nfaPDK, nfaPosition, nfaFollow, nfaGlushkov, nfaThompson
+        methods include: nfaPD, nfaPDO, nfaPDK, nfaPDDAG, nfaPosition, nfaFollow, nfaGlushkov, nfaThompson
         :raises exceptions.UnknownREtoNFAMethod: if the provided method is not recognized
         """
-        if method not in set(["nfaPD", "nfaPDO", "nfaPosition", "nfaFollow", "nfaGlushkov", "nfaThompson", "nfaPDK"]):
+        if method not in set(["nfaPD", "nfaPDO", "nfaPosition", "nfaFollow", "nfaGlushkov", \
+                "nfaThompson", "nfaPDK", "nfaPDDAG"]):
             raise errors.UnknownREtoNFAMethod(method)
 
         nfa = self.toNFA(method)
@@ -267,6 +268,8 @@ class uregexp(reex.regexp):
         """Recursively saves the rpn of subtrees as attributes of the class.
         Returns the memoized rpn string value"""
         raise NotImplementedError()
+
+import pddag
 
 class uconcat(reex.concat, uregexp):
     def __init__(self, arg1, arg2):
