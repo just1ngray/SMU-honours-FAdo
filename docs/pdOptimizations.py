@@ -22,7 +22,7 @@ from benchmark.util import DBWrapper, Deque
 OUTPUT_FILE = "docs/pd_results.txt" # where the results will be posted
 WIDTH = 16                          # the column width (# chars) in the output file
 PROC_WORKERS = 2                    # number of worker processes to evaluate expressions (keep sufficiently low to avoid throttling)
-NUM_EXPRESSIONS = 32                # number of expressions to sample and test against the algorithms
+NUM_EXPRESSIONS = 50                # number of expressions to sample and test against the algorithms
 ITERATIONS_PER_METHOD = 2           # number of times each method will test each expression, then minimum time is taken
 
 benchmarker = Benchmarker()
@@ -249,22 +249,15 @@ def partialNFA2(re, word):
     re._delAttr("_lf")
     return answer
 
-def nfaPDOEval(re, word):
-    """Perform the entire nfaPDO construction, then evaluate the word on it.
-    The chosen algorithm should out-perform nfaPDOEval since the NFA created in nfaPDO will
-    only be partially used when evaluating the given word. That is, time will be spent constructing
-    useless states with respect to the single evaluation word."""
-    nfa = re.nfaPDO()
-    return nfa.evalWordP(word)
-
-def nfaPDKEval(re, word):
-    """Inserted as an after-thought to test the performance of this algorithm."""
-    nfa = re.nfaPDK()
-    return nfa.evalWordP(word)
-
+def construct(method):
+    """Perform the given nfa construction, then evaluate on the word"""
+    def f(re, word):
+        return re.toInvariantNFA(method).evalWordP(word)
+    f.__name__ = method
+    return f
 
 # SETUP the methods to evaluate and randomly sample some valid mathematized expressions to test
-methods = [memo4rpn2, memo4rpn, memo4, nfaPDOEval, nfaPDKEval, memo2rpn, memo2, naive, partialNFA, partialNFA2, memo1, memo3]
+methods = [construct("nfaPDK"), construct("nfaPDDAG"), construct("nfaPDO")]
 expressions = map(lambda row: row[0].decode("utf-8"), \
     DBWrapper().selectall("SELECT re_math FROM in_tests ORDER BY random() LIMIT ?;", [NUM_EXPRESSIONS]))
 
@@ -289,8 +282,8 @@ def handleExpression(re_math):
             for _ in range(ITERATIONS_PER_METHOD):
                 times.append(timeit(lambda: timeAll(re, method, acc, rej), number=1))
             output += str(min(times)).rjust(WIDTH)
-        except AssertionError:
-            output += "AssertionError".rjust(WIDTH)
+        except AssertionError as e:
+            output += e.message
 
     f = open(OUTPUT_FILE, "a")
     f.write(output + "\t|\t" + str(len(acc)+len(rej)) + " - " + str(len(str(re))) + " - " + str(re) + "\n")
@@ -299,6 +292,7 @@ def handleExpression(re_math):
 
 # DRIVE THE PROGRAM
 f = None
+workers = set()
 try:
     f = open(OUTPUT_FILE, "w")
     for method in methods:
@@ -306,8 +300,7 @@ try:
     f.write("\n")
     f.close()
 
-    workers = set()
-    while len(expressions) > 0:
+    while len(expressions) > 0 or len(workers) > 0:
         while len(workers) >= PROC_WORKERS:
             for pid in copy.copy(workers):
                 os.waitpid(pid, os.WNOHANG)
@@ -323,6 +316,9 @@ try:
             exit(0)
         else:
             workers.add(pid)
+except KeyboardInterrupt:
+    for pid in workers:
+        os.kill(pid, 9)
 except:
     raise
 finally:
