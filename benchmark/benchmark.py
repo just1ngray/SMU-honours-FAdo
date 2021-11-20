@@ -46,6 +46,7 @@ class Benchmarker():
             INSERT OR IGNORE INTO methods (method, colour) VALUES ('backtrack', '#000000');
             INSERT OR IGNORE INTO methods (method, colour) VALUES ('nfaPDK', '#42d4f4');
             INSERT OR IGNORE INTO methods (method, colour) VALUES ('nfaPDO', '#469990');
+            INSERT OR IGNORE INTO methods (method, colour) VALUES ('nfaPDDAG', '#a9a9a9');
             INSERT OR IGNORE INTO methods (method, colour) VALUES ('nfaPosition', '#e6194B');
             INSERT OR IGNORE INTO methods (method, colour) VALUES ('nfaFollow', '#dcbeff');
             INSERT OR IGNORE INTO methods (method, colour) VALUES ('nfaThompson', '#800000');
@@ -351,8 +352,79 @@ class Benchmarker():
         return plt
 
 
+def gbFree():
+    """Returns an integer number of GB free on system"""
+    return psutil.virtual_memory().available / 1000 / 1000 / 1000
+
+def catchup(method):
+    """Benchmark a new method while saving previous results.
+    Important: Make sure the method exists in methods table!!
+    """
+    benchmarker = Benchmarker()
+    todo = Deque()
+
+    for re_math, itersleft in benchmarker.db.selectall("""
+        SELECT re_math, itersleft
+        FROM in_tests
+        WHERE n_evalA>-1
+            AND ? NOT IN (
+                SELECT method
+                FROM out_tests
+                WHERE out_tests.re_math==in_tests.re_math
+            )
+        ORDER BY random();
+    """, [method]):
+        print(re_math)
+        re_math = re_math.decode("utf-8")
+        itersTodo = benchmarker.itersRequired(re_math) - itersleft
+        if itersTodo > 0:
+            todo.insert_right((re_math, itersTodo, itersleft))
+
+    benchmarker = None
+    nworkers = parseIntSafe(raw_input("How many worker processes? (1): "), 1)
+    print("Catching up. Press Ctrl+C to stop")
+    print("---------------------------------")
+    workers = set()
+    try:
+        while len(todo) > 0 or len(workers) > 0:
+            while len(workers) >= nworkers or gbFree() < 5:
+                for pid in workers.copy():
+                    os.waitpid(pid, os.WNOHANG)
+                    if not psutil.pid_exists(pid):
+                        workers.discard(pid)
+                time.sleep(0.25)
+
+            re_math, itersTodo, itersDone = todo.pop_left()
+            printable = re_math.encode("utf-8").encode("string-escape")
+            pid = os.fork()
+            if pid == 0: # child
+                try:
+                    gc.disable()
+                    benchmarker = Benchmarker()
+                    benchmarker.methods = set([method])
+                    for i in range(itersTodo):
+                        print("\t", "iteration", i+1, "of:", printable)
+                        benchmarker.benchmark(re_math)
+                except:
+                    pass
+                finally:
+                    benchmarker.db.execute("""
+                        UPDATE in_tests
+                        SET itersleft=?
+                        WHERE re_math==?;
+                    """, [itersDone, re_math])
+                    exit(0)
+            else: # parent
+                print("Catching up", printable, "...")
+                workers.add(pid)
+    except KeyboardInterrupt:
+        pass
 
 if __name__ == "__main__":
+    catchup("nfaPDDAG")
+    exit(0)
+
+
     # Default recursion limit is 1,000. Backtracking algorithm would then only accept words of length < 1,000.
     # a^i in L(a*) can be answered for i upto ~17,000 before Python interpreter crashes.
     # Hence 12,000 is taken as a somewhat conservative value.
@@ -373,10 +445,8 @@ if __name__ == "__main__":
             nworkers = parseIntSafe(raw_input("How many worker processes? (1): "), 1)
             print("\nRunning tests. Press Ctrl+C to stop")
             print("-----------------------------------")
-            def gbFree():
-                return psutil.virtual_memory().available / 1000 / 1000 / 1000
-            workers = set()
 
+            workers = set()
             try:
                 while True:
                     if benchmarker is None:
