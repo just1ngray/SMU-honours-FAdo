@@ -374,7 +374,6 @@ def catchup(method):
             )
         ORDER BY random();
     """, [method]):
-        print(re_math)
         re_math = re_math.decode("utf-8")
         itersTodo = benchmarker.itersRequired(re_math) - itersleft
         if itersTodo > 0:
@@ -386,7 +385,7 @@ def catchup(method):
     print("---------------------------------")
     workers = set()
     try:
-        while len(todo) > 0 or len(workers) > 0:
+        while len(todo) > 0:
             while len(workers) >= nworkers or gbFree() < 5:
                 for pid in workers.copy():
                     os.waitpid(pid, os.WNOHANG)
