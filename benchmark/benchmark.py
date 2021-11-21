@@ -299,42 +299,54 @@ class Benchmarker():
             ORDER BY length ASC;
         """)
 
-    def displayResults(self, lengthBucketSize, nConstructions, nEvals):
-        def _rowhandler(x, y, row):
-            length, avgpre, t_evalA, n_evalA, t_evalR, n_evalR = row
-            x.append(length)
-            if n_evalA == 0: n_evalA = float("inf")
-            if n_evalR == 0: n_evalR = float("inf")
-            h = (nConstructions * avgpre) + (t_evalA/n_evalA + t_evalR/n_evalR)*nEvals
-            y.append(h)
-
-        plot = self._displayInteractivePlot("""
-            SELECT tin.length,
-                sum(tout.t_pre)/100.0 as avgpre,
-                sum(tout.t_evalA) as t_evalA,
-                sum(tin.n_evalA) as n_evalA,
-                sum(tout.t_evalR) as t_evalR,
-                sum(tin.n_evalR) as n_evalR
+    def cleanup(self):
+        """Cleans up invalid tests!"""
+        for re_math, in self.db.selectall("""
+            SELECT tout.re_math
             FROM in_tests as tin, out_tests as tout
             WHERE tin.re_math==tout.re_math
-                AND method==?
-            GROUP BY length/{0}
-            ORDER BY length ASC;
-        """.format(lengthBucketSize), _rowhandler)
+                AND (
+                    tin.n_evalA==-1
+                    OR tin.n_evalR==-1
+                    OR tout.t_pre==1000000.0
+                );
+        """):
+            re_math = re_math.decode("utf-8")
+            self.db.execute("""
+                DELETE FROM out_tests
+                WHERE re_math==?;
+            """, [re_math])
+            self.db.execute("""
+                UPDATE in_tests
+                SET itersleft=?, n_evalA=-1, n_evalR=-1
+                WHERE re_math=?;
+            """, [self.itersRequired(re_math), re_math])
 
-        plot.title("Expression Length vs. Average Time to Eval. Membership on a Word")
-        plot.xlabel("re_math length (# chars)")
-        plot.ylabel("t_avg to construct x{0}, + t_avg word evaluate x{1}".format(nConstructions, nEvals))
-        plot.show()
-
-    def _displayInteractivePlot(self, query, rowhandler):
+    def displayResults(self, lengthBucketSize, nConstructions, nEvals):
         fig, ax = plt.subplots()
         line2d = dict()
         for method, colour in self.db.selectall("SELECT method, colour from methods;"):
             x = []
             y = []
-            for row in self.db.selectall(query, [method]):
-                rowhandler(x, y, row)
+            for row in self.db.selectall("""
+                SELECT tin.length,
+                    sum(tout.t_pre)/100.0 as avgpre,
+                    sum(tout.t_evalA) as t_evalA,
+                    sum(tin.n_evalA) as n_evalA,
+                    sum(tout.t_evalR) as t_evalR,
+                    sum(tin.n_evalR) as n_evalR
+                FROM in_tests as tin, out_tests as tout
+                WHERE tin.re_math==tout.re_math
+                    AND tout.method==?
+                GROUP BY length/?
+                ORDER BY length ASC;
+            """, [method, lengthBucketSize]):
+                length, avgpre, t_evalA, n_evalA, t_evalR, n_evalR = row
+                x.append(length)
+                if n_evalA == 0: n_evalA = float("inf")
+                if n_evalR == 0: n_evalR = float("inf")
+                h = (nConstructions * avgpre) + (t_evalA/n_evalA + t_evalR/n_evalR)*nEvals
+                y.append(h)
             line2d[method] = ax.plot(x, y, label=method, linewidth=1, color=colour)[0]
         legend_to_line = dict()
         legend = plt.legend(loc="best")
@@ -349,7 +361,10 @@ class Benchmarker():
             line.set_visible(not line.get_visible())
             fig.canvas.draw()
         plt.connect("pick_event", _on_pick)
-        return plt
+        plt.title("Expression Length vs. Average Time to Eval. Membership on a Word")
+        plt.xlabel("re_math length (# chars)")
+        plt.ylabel("t_avg to construct x{0}, + t_avg word evaluate x{1}".format(nConstructions, nEvals))
+        plt.show()
 
 
 def gbFree():
@@ -425,6 +440,7 @@ if __name__ == "__main__":
     # Hence 12,000 is taken as a somewhat conservative value.
     sys.setrecursionlimit(12000)
     benchmarker = Benchmarker()
+    benchmarker.cleanup()
 
     choice = "1"
     while choice != "Q":
