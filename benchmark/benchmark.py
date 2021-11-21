@@ -420,10 +420,6 @@ def catchup(method):
         pass
 
 if __name__ == "__main__":
-    catchup("nfaPDDAG")
-    exit(0)
-
-
     # Default recursion limit is 1,000. Backtracking algorithm would then only accept words of length < 1,000.
     # a^i in L(a*) can be answered for i upto ~17,000 before Python interpreter crashes.
     # Hence 12,000 is taken as a somewhat conservative value.
