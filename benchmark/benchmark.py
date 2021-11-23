@@ -330,7 +330,7 @@ class Benchmarker():
             x = []
             y = []
             for row in self.db.selectall("""
-                SELECT tin.length,
+                SELECT avg(tin.length),
                     sum(tout.t_pre)/100.0 as avgpre,
                     sum(tout.t_evalA) as t_evalA,
                     sum(tin.n_evalA) as n_evalA,
