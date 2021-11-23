@@ -31,11 +31,11 @@ class uregexp(reex.regexp):
 
     def toInvariantNFA(self, method):
         """Convert self into an InvariantNFA using a construction method
-        methods include: nfaPD, nfaPDO, nfaPDK, nfaPDDAG, nfaPosition, nfaFollow, nfaGlushkov, nfaThompson
+        methods include: nfaPD, nfaPDO, nfaPDRPN, nfaPDDAG, nfaPosition, nfaFollow, nfaGlushkov, nfaThompson
         :raises exceptions.UnknownREtoNFAMethod: if the provided method is not recognized
         """
         if method not in set(["nfaPD", "nfaPDO", "nfaPosition", "nfaFollow", "nfaGlushkov", \
-                "nfaThompson", "nfaPDK", "nfaPDDAG"]):
+                "nfaThompson", "nfaPDRPN", "nfaPDDAG"]):
             raise errors.UnknownREtoNFAMethod(method)
 
         nfa = self.toNFA(method)
@@ -58,11 +58,13 @@ class uregexp(reex.regexp):
 
     # TODO: nfaThompson is defined without the use of other methods, must be treated differently
 
-    def nfaPDK(self):
-        """Constructs the partial derivative automaton using the algorithm from:
-        S. Konstantinidis, et al. "Partial Derivative Automaton by Compressing Regular Expressions"
+    def nfaPDRPN(self):
+        """Constructs the partial derivative automaton by saving rpn representations of
+        partial derivatives and subtrees, and identifying the states in the NFA according
+        to these representations.
 
-        ..Note: states in the nfa are named according to their rpn representation
+        Inspired by:
+        S. Konstantinidis, et al. "Partial Derivative Automaton by Compressing Regular Expressions"
         """
         compressed = self.compress()
         todo = Deque([compressed])

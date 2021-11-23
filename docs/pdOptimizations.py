@@ -257,7 +257,7 @@ def construct(method):
     return f
 
 # SETUP the methods to evaluate and randomly sample some valid mathematized expressions to test
-methods = [construct("nfaPDK"), construct("nfaPDDAG"), construct("nfaPDO")]
+methods = [construct("nfaPDRPN"), construct("nfaPDDAG"), construct("nfaPDO")]
 expressions = map(lambda row: row[0].decode("utf-8"), \
     DBWrapper().selectall("SELECT re_math FROM in_tests ORDER BY random() LIMIT ?;", [NUM_EXPRESSIONS]))
 

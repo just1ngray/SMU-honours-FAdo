@@ -44,7 +44,7 @@ class Benchmarker():
             INSERT OR IGNORE INTO methods (method, colour) VALUES ('pd', '#4363d8');
             -- INSERT OR IGNORE INTO methods (method, colour) VALUES ('derivative', '#a9a9a9');
             INSERT OR IGNORE INTO methods (method, colour) VALUES ('backtrack', '#000000');
-            INSERT OR IGNORE INTO methods (method, colour) VALUES ('nfaPDK', '#42d4f4');
+            INSERT OR IGNORE INTO methods (method, colour) VALUES ('nfaPDRPN', '#42d4f4');
             INSERT OR IGNORE INTO methods (method, colour) VALUES ('nfaPDO', '#469990');
             INSERT OR IGNORE INTO methods (method, colour) VALUES ('nfaPDDAG', '#a9a9a9');
             INSERT OR IGNORE INTO methods (method, colour) VALUES ('nfaPosition', '#e6194B');
@@ -109,7 +109,7 @@ class Benchmarker():
     def generateWords(self, re_math):
         re = self.convert.math(re_math)
         pmre = re.partialMatch()
-        nfa = pmre.toInvariantNFA("nfaPDK")
+        nfa = pmre.toInvariantNFA("nfaPDRPN")
         enum = nfa.enumNFA()
         accepted = list()
         rejected = set()
