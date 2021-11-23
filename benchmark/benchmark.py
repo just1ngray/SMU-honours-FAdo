@@ -271,6 +271,7 @@ class Benchmarker():
                 WHERE re_math=?;
             """, [str(error), self.itersRequired(re_math), re_math])
             _rollback()
+            print(error)
         finally:
             self.write("running gc")
             gc.collect()
