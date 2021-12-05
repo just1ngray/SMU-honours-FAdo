@@ -261,6 +261,7 @@ class Benchmarker():
                 SET itersleft=itersleft-1, n_evalA=?, n_evalR=?
                 WHERE re_math=?;
             """, [len(w_accepted), len(w_rejected), re_math])
+            print("\tSuccess", re_math[:50])
         except KeyboardInterrupt:
             _rollback()
             raise
