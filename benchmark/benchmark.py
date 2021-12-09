@@ -216,7 +216,7 @@ class Benchmarker():
             # run between 10 and 100 constructions, then scale to 100 constructions
             self.write(re_math[:50], "str to partial matching regular expression tree")
             pmre = self.convert.math(re_math, partialMatch=True)
-            repetitions = math.ceil(max(MIN_CONSTRUCTION_REPETITIONS, -(len(re_math)/250.0)**2 + MAX_CONSTRUCTION_REPETITIONS))
+            repetitions = int(math.ceil(max(MIN_CONSTRUCTION_REPETITIONS, -(len(re_math)/250.0)**2 + MAX_CONSTRUCTION_REPETITIONS)))
             t_str2pmre = (repetitions / 100.0) * timeit.timeit( \
                 lambda: self.convert.math(re_math, partialMatch=True), number=repetitions)
 
