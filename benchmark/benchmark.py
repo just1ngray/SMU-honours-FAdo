@@ -7,6 +7,7 @@ import time
 import timeit
 import random
 import gc
+import math
 
 from util import DBWrapper, Deque, parseIntSafe # ConsoleOverwrite
 from convert import Converter
@@ -205,9 +206,12 @@ class Benchmarker():
                         WHERE in_tests.re_math=?;
                 """, [re_math])
 
+            # run between 10 and 100 constructions, then scale to 100 constructions
             self.write(re_math[:50], "str to partial matching regular expression tree")
             pmre = self.convert.math(re_math, partialMatch=True)
-            t_str2pmre = timeit.timeit(lambda: self.convert.math(re_math, partialMatch=True), number=100)
+            repetitions_t_str2pmre = math.ceil(max(10, -(len(re_math)/250.0)**2 + 100))
+            t_str2pmre = (repetitions_t_str2pmre / 100.0) * timeit.timeit( \
+                lambda: self.convert.math(re_math, partialMatch=True), number=repetitions_t_str2pmre)
 
             for method in self.methods:
                 try: # catch max. recursion errors and handle gracefully for the specific method
@@ -225,6 +229,10 @@ class Benchmarker():
                     t_evalA = 0.0
                     ndone = 0
                     for i in xrange(0, len(w_accepted), GROUP_SIZE):
+                        if ndone > 100 and t_evalA/ndone > 5.0: # if slower than 5s per word move on
+                            t_evalA = 5.0 * len(w_accepted)
+                            break
+
                         self.write(re_math[:50], method, "accepting {0}%".format(format(ndone*100.0/len(w_accepted), "00.3f")))
                         words = w_accepted[i:i+GROUP_SIZE]
                         t_evalA += timeit.timeit(lambda: self.evalMany(evalWord, words, True, method), number=1)
@@ -238,6 +246,10 @@ class Benchmarker():
                     t_evalR = 0.0
                     ndone = 0
                     for i in xrange(0, len(w_rejected), GROUP_SIZE):
+                        if ndone > 100 and t_evalR/ndone > 5.0: # if slower than 5s per word move on
+                            t_evalR = 5.0 * len(w_rejected)
+                            break
+
                         self.write(re_math[:50], method, "rejecting {0}%".format(format(ndone*100.0/len(w_rejected), "00.3f")))
                         words = w_rejected[i:i+GROUP_SIZE]
                         t_evalR += timeit.timeit(lambda: self.evalMany(evalWord, words, False, method), number=1)
