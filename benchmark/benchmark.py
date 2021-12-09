@@ -12,6 +12,13 @@ import math
 from util import DBWrapper, Deque, parseIntSafe # ConsoleOverwrite
 from convert import Converter
 
+MIN_TEST_ITERS_PER_EXPR = 2         # minimum number of times an expression is fully tested
+MAX_TEST_ITERS_PER_EXPR = 5         # maximum number of times an expression is fully tested
+WORD_SAMPLE_SIZE = 10000            # minimum number words in the accepting or rejecting word sets
+MIN_CONSTRUCTION_REPETITIONS = 10   # minimum number of times a str->obj construction is repeated
+MAX_CONSTRUCTION_REPETITIONS = 100  # maximum number of times a str->obj construction is repeated
+MAX_EVAL_PER_WORD_TIME = 1.0        # maximum allowable time per word evaluation before the total time is estimated
+
 class Benchmarker():
     def __init__(self):
         self.db = DBWrapper()
@@ -91,7 +98,7 @@ class Benchmarker():
 
         self.write("Filling calculated information for in_tests")
         for length in reByLength:
-            itersreq = max(2, 6 - len(reByLength[length]))
+            itersreq = max(MIN_TEST_ITERS_PER_EXPR, MAX_TEST_ITERS_PER_EXPR + 1 - len(reByLength[length]))
             for re_math in reByLength[length]:
                 self.db.execute("""
                     UPDATE in_tests
@@ -105,7 +112,7 @@ class Benchmarker():
             FROM in_tests
             WHERE length==?;
         """, [len(re_math)])[0][0]
-        return max(2, 6 - count)
+        return max(MIN_TEST_ITERS_PER_EXPR, MAX_TEST_ITERS_PER_EXPR + 1 - count)
 
     def generateWords(self, re_math):
         re = self.convert.math(re_math)
@@ -162,10 +169,10 @@ class Benchmarker():
         rejected = list(w for w in rejected if not nfa.evalWordP(w))
 
         # choose a pseudo-random sample of up to 10,000 words
-        self.write(re_math[:50], "choosing pseudo-random sample up to size 10,000 for A and R")
+        self.write(re_math[:50], "choosing pseudo-random sample up to size WORD_SAMPLE_SIZE for A and R")
         r = random.Random(1)
-        accepted = r.sample(accepted, min(len(accepted), 10000))
-        rejected = r.sample(rejected, min(len(rejected), 10000))
+        accepted = r.sample(accepted, min(len(accepted), WORD_SAMPLE_SIZE))
+        rejected = r.sample(rejected, min(len(rejected), WORD_SAMPLE_SIZE))
         return (accepted, rejected)
 
     def benchmark(self, re_math):
@@ -209,9 +216,9 @@ class Benchmarker():
             # run between 10 and 100 constructions, then scale to 100 constructions
             self.write(re_math[:50], "str to partial matching regular expression tree")
             pmre = self.convert.math(re_math, partialMatch=True)
-            repetitions_t_str2pmre = math.ceil(max(10, -(len(re_math)/250.0)**2 + 100))
-            t_str2pmre = (repetitions_t_str2pmre / 100.0) * timeit.timeit( \
-                lambda: self.convert.math(re_math, partialMatch=True), number=repetitions_t_str2pmre)
+            repetitions = math.ceil(max(MIN_CONSTRUCTION_REPETITIONS, -(len(re_math)/250.0)**2 + MAX_CONSTRUCTION_REPETITIONS))
+            t_str2pmre = (repetitions / 100.0) * timeit.timeit( \
+                lambda: self.convert.math(re_math, partialMatch=True), number=repetitions)
 
             for method in self.methods:
                 try: # catch max. recursion errors and handle gracefully for the specific method
@@ -219,7 +226,7 @@ class Benchmarker():
                     evalWord = self.getEvalMethod(pmre, method)
                     t_pmre2final = 0.0
                     if "nfa" in method:
-                        t_pmre2final = timeit.timeit(lambda: pmre.toInvariantNFA(method), number=100)
+                        t_pmre2final = (repetitions / 100.0) * timeit.timeit(lambda: pmre.toInvariantNFA(method), number=repetitions)
                     self.db.execute("""
                         UPDATE out_tests
                         SET t_pre=?
@@ -229,8 +236,8 @@ class Benchmarker():
                     t_evalA = 0.0
                     ndone = 0
                     for i in xrange(0, len(w_accepted), GROUP_SIZE):
-                        if ndone > 100 and t_evalA/ndone > 5.0: # if slower than 5s per word move on
-                            t_evalA = 5.0 * len(w_accepted)
+                        if ndone >= 200 and t_evalA/ndone > MAX_EVAL_PER_WORD_TIME: # if slower than X seconds per word move on
+                            t_evalA = t_evalA / ndone * len(w_accepted)
                             break
 
                         self.write(re_math[:50], method, "accepting {0}%".format(format(ndone*100.0/len(w_accepted), "00.3f")))
@@ -246,8 +253,8 @@ class Benchmarker():
                     t_evalR = 0.0
                     ndone = 0
                     for i in xrange(0, len(w_rejected), GROUP_SIZE):
-                        if ndone > 100 and t_evalR/ndone > 5.0: # if slower than 5s per word move on
-                            t_evalR = 5.0 * len(w_rejected)
+                        if ndone >= 200 and t_evalR/ndone > MAX_EVAL_PER_WORD_TIME: # if slower than X seconds per word move on
+                            t_evalR = t_evalR / ndone * len(w_rejected)
                             break
 
                         self.write(re_math[:50], method, "rejecting {0}%".format(format(ndone*100.0/len(w_rejected), "00.3f")))
