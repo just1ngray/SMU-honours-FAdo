@@ -17,7 +17,7 @@ MAX_TEST_ITERS_PER_EXPR = 5         # maximum number of times an expression is f
 WORD_SAMPLE_SIZE = 10000            # minimum number words in the accepting or rejecting word sets
 MIN_CONSTRUCTION_REPETITIONS = 10   # minimum number of times a str->obj construction is repeated
 MAX_CONSTRUCTION_REPETITIONS = 100  # maximum number of times a str->obj construction is repeated
-MAX_EVAL_PER_WORD_TIME = 2.5        # maximum allowable time per word evaluation before the total time is estimated
+MAX_EVAL_PER_WORD_TIME = .25        # maximum allowable time per word evaluation before the total time is estimated
 
 class Benchmarker():
     def __init__(self):
