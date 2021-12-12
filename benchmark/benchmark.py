@@ -237,7 +237,7 @@ class Benchmarker():
                     ndone = 0
                     for i in xrange(0, len(w_accepted), GROUP_SIZE):
                         if ndone >= 200 and t_evalA/ndone > MAX_EVAL_PER_WORD_TIME: # if slower than X seconds per word move on
-                            t_evalA = t_evalA / ndone * len(w_accepted)
+                            t_evalA = t_evalA * (len(w_accepted) * 1.0 / ndone)
                             break
 
                         self.write(re_math[:50], method, "accepting {0}%".format(format(ndone*100.0/len(w_accepted), "00.3f")))
@@ -254,7 +254,7 @@ class Benchmarker():
                     ndone = 0
                     for i in xrange(0, len(w_rejected), GROUP_SIZE):
                         if ndone >= 200 and t_evalR/ndone > MAX_EVAL_PER_WORD_TIME: # if slower than X seconds per word move on
-                            t_evalR = t_evalR / ndone * len(w_rejected)
+                            t_evalR = t_evalR * (len(w_rejected) * 1.0 / ndone)
                             break
 
                         self.write(re_math[:50], method, "rejecting {0}%".format(format(ndone*100.0/len(w_rejected), "00.3f")))
