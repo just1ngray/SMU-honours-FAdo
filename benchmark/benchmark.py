@@ -344,6 +344,7 @@ class Benchmarker():
             """, [self.itersRequired(re_math), re_math])
 
     def displayResults(self, lengthBucketSize, nConstructions, nEvals):
+        time_distribution = list()
         fig, ax = plt.subplots()
         line2d = dict()
         for method, colour in self.db.selectall("SELECT method, colour from methods;"):
@@ -351,7 +352,7 @@ class Benchmarker():
             y = []
             for row in self.db.selectall("""
                 SELECT avg(tin.length),
-                    sum(tout.t_pre)/100.0 as avgpre,
+                    avg(tout.t_pre/100.0) as avgpre,
                     sum(tout.t_evalA) as t_evalA,
                     sum(tin.n_evalA) as n_evalA,
                     sum(tout.t_evalR) as t_evalR,
@@ -368,6 +369,7 @@ class Benchmarker():
                 if n_evalR == 0: n_evalR = float("inf")
                 h = (nConstructions * avgpre) + (t_evalA/n_evalA + t_evalR/n_evalR)*nEvals
                 y.append(h)
+                time_distribution.append(h)
             line2d[method] = ax.plot(x, y, label=method, linewidth=1, color=colour)[0]
         legend_to_line = dict()
         legend = plt.legend(loc="best")
@@ -381,10 +383,13 @@ class Benchmarker():
             legend_to_line[line].set_visible(not line.get_visible())
             line.set_visible(not line.get_visible())
             fig.canvas.draw()
+        time_distribution.sort()
+        plt.ylim(ymin=0, ymax=time_distribution[int(len(time_distribution)*0.9)]) # scale to show 0.XX% of data
         plt.connect("pick_event", _on_pick)
-        plt.title("Expression Length vs. Average Time to Eval. Membership on a Word")
-        plt.xlabel("re_math length (# chars)")
-        plt.ylabel("t_avg to construct x{0}, + t_avg word evaluate x{1}".format(nConstructions, nEvals))
+        plt.title("Membership Algorithm Comparison on {} Regular Expressions".format(
+            self.db.selectall("SELECT count(re_math) FROM in_tests WHERE n_evalA>-1 AND error==''")[0][0]))
+        plt.xlabel("Regular Expression String Length (# chars)")
+        plt.ylabel("x{0} Construction(s), x{1} Word Evaluation(s)\n(seconds)".format(nConstructions, nEvals))
         plt.show()
 
 
@@ -540,7 +545,7 @@ if __name__ == "__main__":
                 print("Aborted. Did not reset.")
             raw_input("Press Enter to continue ... ")
         elif choice == "D":
-            lengthBucketSize = 2
+            lengthBucketSize = 50
             nConstructions = 1
             nEvals = 1
 
