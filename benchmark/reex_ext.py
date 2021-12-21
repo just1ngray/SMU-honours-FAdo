@@ -66,7 +66,7 @@ class uregexp(reex.regexp):
         Inspired by:
         S. Konstantinidis, et al. "Partial Derivative Automaton by Compressing Regular Expressions"
         """
-        self._memoLF()
+        self._memoRPN()
         compressed = self.compress()
         todo = Deque([compressed])
         nfa = fa_ext.InvariantNFA()
@@ -91,6 +91,7 @@ class uregexp(reex.regexp):
                     except common.DuplicateName:
                         index = nfa.stateIndex(pd._rpn)
                     nfa.addTransition(nfa.stateIndex(re._rpn), transition, index)
+        self._delAttr("_rpn")
         return nfa
 
     def evalWordP_Backtrack(self, word):
