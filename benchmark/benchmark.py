@@ -402,7 +402,7 @@ class Benchmarker():
         plt.connect("pick_event", _on_pick)
         plt.title("Algorithm Comparison on {} Practical/Non-Uniform\nRegular Expressions".format(
             self.db.selectall("SELECT count(re_math) FROM in_tests WHERE n_evalA>-1 AND error==''")[0][0]))
-        plt.xlabel("Regular Expression String Length (# chars)")
+        plt.xlabel("Regular Expression String Length (# chars)\nGrouped in bins of size {}".format(lengthBucketSize))
         plt.ylabel("x{0} Construction(s), x{1} Word Evaluation(s)\n(seconds)".format(nConstructions, nEvals))
         plt.show()
 
