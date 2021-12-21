@@ -66,6 +66,7 @@ class uregexp(reex.regexp):
         Inspired by:
         S. Konstantinidis, et al. "Partial Derivative Automaton by Compressing Regular Expressions"
         """
+        self._memoLF()
         compressed = self.compress()
         todo = Deque([compressed])
         nfa = fa_ext.InvariantNFA()
@@ -399,6 +400,7 @@ class uconcat(reex.concat, uregexp):
         return self.arg1._containsT(T) or self.arg2._containsT(T)
 
     def compress(self, uniqueSubtrees=dict()):
+        buildsMemoRPN = not hasattr(self, "_rpn")
         self._memoRPN()
         arg1 = None
         arg2 = None
@@ -413,7 +415,8 @@ class uconcat(reex.concat, uregexp):
             uniqueSubtrees[rpn2] = self.arg2.compress(uniqueSubtrees)
         arg2 = uniqueSubtrees[rpn2]
 
-        self._delAttr("_rpn")
+        if buildsMemoRPN:
+            self._delAttr("_rpn")
         return uconcat(arg1, arg2)
 
     def _delAttr(self, attr):
@@ -481,6 +484,7 @@ class udisj(reex.disj, uregexp):
         return self.arg1._containsT(T) or self.arg2._containsT(T)
 
     def compress(self, uniqueSubtrees=dict()):
+        buildsMemoRPN = not hasattr(self, "_rpn")
         self._memoRPN()
         arg1 = None
         arg2 = None
@@ -499,7 +503,8 @@ class udisj(reex.disj, uregexp):
             arg2 = self.arg2.compress(uniqueSubtrees)
             uniqueSubtrees[rpn2] = arg2
 
-        self._delAttr("_rpn")
+        if buildsMemoRPN:
+            self._delAttr("_rpn")
         return udisj(arg1, arg2)
 
     def _delAttr(self, attr):
@@ -640,6 +645,7 @@ class ustar(reex.star, uregexp):
         return self.arg._containsT(T)
 
     def compress(self, uniqueSubtrees=dict()):
+        buildsMemoRPN = not hasattr(self, "_rpn")
         self._memoRPN()
         arg = None
         rpn = self.arg._rpn
@@ -650,7 +656,8 @@ class ustar(reex.star, uregexp):
             arg = self.arg.compress(uniqueSubtrees)
             uniqueSubtrees[rpn] = arg
 
-        self._delAttr("_rpn")
+        if buildsMemoRPN:
+            self._delAttr("_rpn")
         return ustar(arg)
 
     def _delAttr(self, attr):
@@ -717,6 +724,7 @@ class uoption(reex.option, uregexp):
         return self.arg._containsT(T)
 
     def compress(self, uniqueSubtrees=dict()):
+        buildsMemoRPN = not hasattr(self, "_rpn")
         self._memoRPN()
         arg = None
         rpn = self.arg._rpn
@@ -727,7 +735,8 @@ class uoption(reex.option, uregexp):
             arg = self.arg.compress(uniqueSubtrees)
             uniqueSubtrees[rpn] = arg
 
-        self._delAttr("_rpn")
+        if buildsMemoRPN:
+            self._delAttr("_rpn")
         return uoption(arg)
 
     def _delAttr(self, attr):
