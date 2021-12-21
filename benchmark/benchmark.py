@@ -372,6 +372,7 @@ class Benchmarker():
                 y.append(h)
                 time_distribution.append(h)
             line2d[method] = ax.plot(x, y, label=method, linewidth=1, color=colour)[0]
+        time_distribution.sort()
 
         legend_to_line = dict()
         legend = plt.legend(loc="best")
@@ -386,9 +387,6 @@ class Benchmarker():
             line.set_visible(not line.get_visible())
             fig.canvas.draw()
 
-        time_distribution.sort()
-        ymax = time_distribution[int(len(time_distribution)*0.9)]
-
         for count, minlen in self.db.selectall("""
                 SELECT count(*), min(length)
                 FROM in_tests
@@ -397,11 +395,10 @@ class Benchmarker():
                 ORDER BY length ASC;
             """, [lengthBucketSize]):
             xpos = minlen/lengthBucketSize * lengthBucketSize # the bottom left corner
-            # height = ymax * count / 20
-            # plt.bar(xpos, height, width=lengthBucketSize, alpha=0.04, align="edge")
+            plt.bar(xpos, time_distribution[-1], width=lengthBucketSize, alpha=0.04, align="edge")
             plt.text(xpos + lengthBucketSize/2, 0, str(count), ha="center", va="top", rotation="vertical", clip_on=True)
 
-        plt.ylim(ymin=0, ymax=ymax) # scale to show 0.XX% of data
+        plt.ylim(ymin=0, ymax=time_distribution[int(len(time_distribution)*0.9)]) # scale to show 0.XX% of data
         plt.connect("pick_event", _on_pick)
         plt.title("Algorithm Comparison on {} Practical/Non-Uniform\nRegular Expressions".format(
             self.db.selectall("SELECT count(re_math) FROM in_tests WHERE n_evalA>-1 AND error==''")[0][0]))
