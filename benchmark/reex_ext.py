@@ -228,6 +228,10 @@ class uregexp(reex.regexp):
         if hasattr(self, "_partialMatch") and not force:
             raise errors.AnchorError(self, "partialMatching already enabled, pass force=True to override")
 
+        # future improvement: add anchors around partial matched atoms for idempotency without hasattr _partialMatch check
+        # i.e., "a + bc" => "<ASTART> @any* (a + bc) @any* <AEND>" instead of "@any* (a + bc) @any*"
+        # improvement not implemented since benchmarking tests are well underway and this may change the speed of the
+        # partial match conversion
         re = self._pmBoth()
         re._partialMatch = 0
         return re
