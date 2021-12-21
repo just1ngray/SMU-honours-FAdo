@@ -347,6 +347,7 @@ class Benchmarker():
         time_distribution = list()
         fig, ax = plt.subplots()
         line2d = dict()
+
         for method, colour in self.db.selectall("SELECT method, colour from methods;"):
             x = []
             y = []
@@ -371,6 +372,7 @@ class Benchmarker():
                 y.append(h)
                 time_distribution.append(h)
             line2d[method] = ax.plot(x, y, label=method, linewidth=1, color=colour)[0]
+
         legend_to_line = dict()
         legend = plt.legend(loc="best")
         legendLines = legend.get_lines()
@@ -383,10 +385,25 @@ class Benchmarker():
             legend_to_line[line].set_visible(not line.get_visible())
             line.set_visible(not line.get_visible())
             fig.canvas.draw()
+
         time_distribution.sort()
-        plt.ylim(ymin=0, ymax=time_distribution[int(len(time_distribution)*0.9)]) # scale to show 0.XX% of data
+        ymax = time_distribution[int(len(time_distribution)*0.9)]
+
+        for count, minlen in self.db.selectall("""
+                SELECT count(*), min(length)
+                FROM in_tests
+                WHERE n_evalA>-1
+                GROUP BY length/?
+                ORDER BY length ASC;
+            """, [lengthBucketSize]):
+            xpos = minlen/lengthBucketSize * lengthBucketSize # the bottom left corner
+            # height = ymax * count / 20
+            # plt.bar(xpos, height, width=lengthBucketSize, alpha=0.04, align="edge")
+            plt.text(xpos + lengthBucketSize/2, 0, str(count), ha="center", va="top", rotation="vertical", clip_on=True)
+
+        plt.ylim(ymin=0, ymax=ymax) # scale to show 0.XX% of data
         plt.connect("pick_event", _on_pick)
-        plt.title("Membership Algorithm Comparison on {} Regular Expressions".format(
+        plt.title("Algorithm Comparison on {} Practical/Non-Uniform\nRegular Expressions".format(
             self.db.selectall("SELECT count(re_math) FROM in_tests WHERE n_evalA>-1 AND error==''")[0][0]))
         plt.xlabel("Regular Expression String Length (# chars)")
         plt.ylabel("x{0} Construction(s), x{1} Word Evaluation(s)\n(seconds)".format(nConstructions, nEvals))
