@@ -34,6 +34,18 @@ class UniUtil():
             c = s.decode("unicode-escape")
             return c.encode("utf-8")
 
+    @staticmethod
+    def randChr(min=" ", max="\uffff", disallowed=set("\t\r\n()[^-]+*?\\")):
+        """Returns a random unicode string of character length 1"""
+        if type(min) is not int:
+            min = UniUtil.ord(min)
+        if type(max) is not int:
+            max = UniUtil.ord(max)
+        trial = UniUtil.chr(randint(min, max))
+        while trial in disallowed:
+            trial = UniUtil.chr(randint(min, max))
+        return trial
+
 class ConsoleOverwrite():
     """Print to console and overwrite the last printed item."""
     def __init__(self, prefix=""):

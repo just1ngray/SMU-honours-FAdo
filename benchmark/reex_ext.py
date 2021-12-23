@@ -1185,7 +1185,7 @@ class dotany(uatom):
         return None if type(other) is uepsilon else other
 
     def random(self):
-        return UniUtil.chr(random.randint(32, 2**16 - 1))
+        return UniUtil.randChr()
 
     def _backtrackMatch(self, word):
         if len(word) > 0:
