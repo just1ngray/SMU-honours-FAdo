@@ -2,7 +2,6 @@ from __future__ import print_function
 import urllib
 import json
 import regex
-from lark.exceptions import LarkError
 
 import errors
 import util
