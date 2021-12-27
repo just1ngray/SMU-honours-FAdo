@@ -343,7 +343,7 @@ class Benchmarker():
                 WHERE re_math=?;
             """, [self.itersRequired(re_math), re_math])
 
-    def displayResults(self, lengthBucketSize, nConstructions, nEvals):
+    def displayResults(self, lengthBucketSize=50, nConstructions=1, nEvals=1, showBins=True):
         time_distribution = list()
         fig, ax = plt.subplots()
         line2d = dict()
@@ -387,16 +387,17 @@ class Benchmarker():
             line.set_visible(not line.get_visible())
             fig.canvas.draw()
 
-        for count, minlen in self.db.selectall("""
-                SELECT count(*), min(length)
-                FROM in_tests
-                WHERE n_evalA>-1
-                GROUP BY length/?
-                ORDER BY length ASC;
-            """, [lengthBucketSize]):
-            xpos = minlen/lengthBucketSize * lengthBucketSize # the bottom left corner
-            plt.bar(xpos, time_distribution[-1], width=lengthBucketSize, alpha=0.04, align="edge")
-            plt.text(xpos + lengthBucketSize/2, 0, str(count), ha="center", va="top", rotation="vertical", clip_on=True)
+        if showBins:
+            for count, minlen in self.db.selectall("""
+                    SELECT count(*), min(length)
+                    FROM in_tests
+                    WHERE n_evalA>-1
+                    GROUP BY length/?
+                    ORDER BY length ASC;
+                """, [lengthBucketSize]):
+                xpos = minlen/lengthBucketSize * lengthBucketSize # the bottom left corner
+                plt.bar(xpos, time_distribution[-1], width=lengthBucketSize, alpha=0.04, align="edge")
+                plt.text(xpos + lengthBucketSize/2, 0, str(count), ha="center", va="top", rotation="vertical", clip_on=True)
 
         plt.ylim(ymin=0, ymax=time_distribution[int(len(time_distribution)*0.9)]) # scale to show 0.XX% of data
         plt.connect("pick_event", _on_pick)
@@ -559,17 +560,14 @@ if __name__ == "__main__":
                 print("Aborted. Did not reset.")
             raw_input("Press Enter to continue ... ")
         elif choice == "D":
-            lengthBucketSize = 50
-            nConstructions = 1
-            nEvals = 1
-
-            if raw_input("Do you want to configure the plot specification? y/(n): ").lower().lstrip() == "y":
-                lengthBucketSize = parseIntSafe(raw_input("\tExpression length bucket width: "), lengthBucketSize)
-                nConstructions = parseIntSafe(raw_input("\tNumber of constructions: "), nConstructions)
-                nEvals = parseIntSafe(raw_input("\tNumber of average word evaluations: "), nEvals)
+            lengthBucketSize = parseIntSafe(raw_input("\tExpression length bin width (50): "), 50)
+            showBins = not raw_input("\tDisplay bin bars (y)/n: ") == "n"
+            nConstructions = parseIntSafe(raw_input("\tNumber of constructions (1): "), 1)
+            nEvals = parseIntSafe(raw_input("\tNumber of average word evaluations (1): "), 1)
             print("lengthBucketSize =", lengthBucketSize)
             print("nConstructions =", nConstructions)
             print("nEvals =", nEvals)
-            benchmarker.displayResults(lengthBucketSize, nConstructions, nEvals)
+            print("showBins = ", showBins)
+            benchmarker.displayResults(lengthBucketSize, nConstructions, nEvals, showBins)
 
     print("\nBye!")
