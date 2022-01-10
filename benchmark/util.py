@@ -1,3 +1,4 @@
+from __future__ import print_function
 import sqlite3
 import sys
 from random import randint
@@ -54,7 +55,7 @@ class ConsoleOverwrite():
         self._width = self._terminal_size()[0] - 5
 
     def overwrite(self, *items):
-        print "\r" + " "*self._lastlen + "\r",
+        print("\r" + " "*self._lastlen + "\r",)
 
         def _concat(prev, curr):
             if curr in set("\r\t\n"):
@@ -69,7 +70,7 @@ class ConsoleOverwrite():
             content = content[:self._width - 3] + "..."
         self._lastlen = len(content)
 
-        print content,
+        print(content,)
         sys.stdout.flush()
 
     def _terminal_size(self):
@@ -584,3 +585,130 @@ def parseIntSafe(val, default):
         return int(val)
     except ValueError:
         return default
+
+
+def saveNFAs():
+    """This saves all relevant NFA's sourced from practical regexps passed through
+    all supported constructions. To create this one-table database, execute:
+        $ python2
+        >>> from benchmark import util
+        >>> util.saveNFAs()
+    The resulting database should be approximately 600 mb.
+
+    Example:
+    >>> import sqlite3
+    >>> import dill
+    >>> db = sqlite3.connect("nfa_constructions.db")
+    >>> db.text_factory = str
+    >>> cursor = db.cursor()
+    >>> cursor.execute(\"""
+    ...     SELECT nfa
+    ...     FROM nfas
+    ...     WHERE re_math==? AND method==?;
+    >>> \""", ["((@any* [A-Za-z]) @any*)", "nfaGlushkov"])
+    >>> blob = cursor.fetchone()[0]
+    >>> nfa = dill.loads(blob)
+    >>> nfa.display()
+
+    Note: this file is also available as a "release" on this project's GitHub:
+        https://github.com/just1ngray/SMUHon-Practical-RE-Membership-Algs/releases/tag/v0.1.0
+
+    M.M. McKerns, L. Strand, T. Sullivan, A. Fang, M.A.G. Aivazis,
+    "Building a framework for predictive science", Proceedings of
+    the 10th Python in Science Conference, 2011;
+    http://arxiv.org/pdf/1202.1056
+
+    Michael McKerns and Michael Aivazis,
+    "pathos: a framework for heterogeneous computing", 2010- ;
+    https://uqfoundation.github.io/project/pathos
+    """
+    db = DBWrapper()
+    expressions = [(x[0], x[0].decode("utf-8")) for x in db.selectall("""
+        SELECT DISTINCT re_math
+        FROM expressions
+        WHERE re_math NOT LIKE '%Error%';
+    """)]
+    methods = [x[0] for x in db.selectall("""
+        SELECT method
+        FROM methods
+        WHERE method LIKE 'nfa%';
+    """)]
+
+    import time
+    import dill
+    import multiprocessing
+    import sys
+    sys.setrecursionlimit(12000)
+    from convert import Converter
+    convert = Converter()
+
+    import sqlite3
+    with sqlite3.connect("nfa_constructions.db") as db:
+        db.text_factory = str
+        cursor = db.cursor()
+        cursor.executescript("""
+            CREATE TABLE IF NOT EXISTS nfas (
+                re_math TEXT,
+                method  TEXT,
+                nfa     BLOB,
+                time    REAL,
+                PRIMARY KEY (re_math, method)
+            );
+        """)
+
+    def f(re_math_encoded, method):
+        with sqlite3.connect("nfa_constructions.db") as db:
+            db.text_factory = str
+            cursor = db.cursor()
+            cursor.execute("SELECT count(*) from nfas WHERE re_math==? AND method==?;",
+                [re_math_encoded, method])
+            if cursor.fetchone()[0] == 0:
+                t = time.time()
+                nfa = re.toInvariantNFA(method)
+                t = time.time() - t
+                cursor.execute("""
+                    INSERT INTO nfas(re_math, method, nfa, time)
+                    VALUES(?, ?, ?, ?);
+                """, [re_math_encoded, method, dill.dumps(nfa), t])
+
+            pm = re.partialMatch()
+            pmstr = str(pm).decode("utf-8")
+            cursor.execute("SELECT count(*) from nfas WHERE re_math==? AND method==?;",
+                [pmstr, method])
+            if cursor.fetchone()[0] == 0:
+                t = time.time()
+                nfa = pm.toInvariantNFA(method)
+                t = time.time() - t
+                cursor.execute("""
+                    INSERT INTO nfas(re_math, method, nfa, time)
+                    VALUES(?, ?, ?, ?);
+                """, [pmstr, method, dill.dumps(nfa), t])
+            db.commit()
+
+    for re_math_encoded, re_math_parsable in expressions:
+        print("RE:", re_math_encoded[:100])
+        re = convert.math(re_math_parsable)
+        for method in methods:
+            try:
+                proc = multiprocessing.Process(target=lambda: f(re_math_encoded, method))
+                proc.start()
+                t = time.time()
+                while proc.is_alive():
+                    if time.time() - t > 120:
+                        proc.terminate()
+                        raise Exception(re_math_encoded + " took too long to calculate " + method)
+
+            except KeyboardInterrupt:
+                if proc is not None and proc.is_alive():
+                    proc.terminate()
+                exit(0)
+            except:
+                import traceback
+                print("-"*80)
+                traceback.print_exc()
+                print("-"*80)
+                raw_input("Enter to continue ...")
+                if proc is not None and proc.is_alive():
+                    proc.terminate()
+
+    print("\n\nDone!")

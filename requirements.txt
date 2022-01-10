@@ -3,3 +3,4 @@ lark-parser==0.11.3
 regex
 matplotlib
 psutil
+dill
