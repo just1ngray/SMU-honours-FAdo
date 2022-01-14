@@ -5,6 +5,11 @@ init:
 	@echo "\nEXPECTING node>14 and its corresponding npm installation"
 	npm install
 
+sizes:
+	@make break
+	python2 benchmark/nfa_sizes.py
+	@make clean
+
 bench:
 	@make break
 	@echo Run in privileged mode for priority scheduling
