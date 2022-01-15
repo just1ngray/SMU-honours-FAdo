@@ -29,13 +29,14 @@ class Benchmarker():
         self.methods = list(x[0] for x in self.db.selectall("SELECT method FROM methods;"))
 
     def isDone(self):
-        return self.db.selectall("SELECT sum(itersleft) FROM in_tests WHERE error='';")[0][0] == 0
+        return self.db.selectall("SELECT sum(itersleft) FROM in_tests WHERE error='' AND length<1600;")[0][0] == 0
 
     def __iter__(self):
         for re_math, in self.db.selectall("""
             SELECT re_math
             FROM in_tests
-            WHERE itersleft>0
+            WHERE length<1600
+                AND itersleft>0
                 AND error=='';
         """):
             yield re_math.decode("utf-8")
@@ -315,7 +316,7 @@ class Benchmarker():
         return self.db.selectall("""
             SELECT length, sum(itersleft)
             FROM in_tests
-            WHERE error==''
+            WHERE length<1600 AND error==''
             GROUP BY length
             ORDER BY length ASC;
         """)
@@ -361,6 +362,7 @@ class Benchmarker():
                 FROM in_tests as tin, out_tests as tout
                 WHERE tin.re_math==tout.re_math
                     AND tout.method==?
+                    AND tin.length<1600
                 GROUP BY length/?
                 ORDER BY length ASC;
             """, [method, lengthBucketSize]):
@@ -392,6 +394,7 @@ class Benchmarker():
                     SELECT count(*), min(length)
                     FROM in_tests
                     WHERE n_evalA>-1
+                        AND length<1600
                     GROUP BY length/?
                     ORDER BY length ASC;
                 """, [lengthBucketSize]):
@@ -402,7 +405,7 @@ class Benchmarker():
         plt.ylim(ymin=0, ymax=time_distribution[int(len(time_distribution)*0.9)]) # scale to show 0.XX% of data
         plt.connect("pick_event", _on_pick)
         plt.title("Algorithm Comparison on {} Practical/Non-Uniform\nRegular Expressions".format(
-            self.db.selectall("SELECT count(re_math) FROM in_tests WHERE n_evalA>-1 AND error==''")[0][0]))
+            self.db.selectall("SELECT count(re_math) FROM in_tests WHERE length<1600 AND n_evalA>-1 AND error==''")[0][0]))
         plt.xlabel("Regular Expression String Length (# chars)\nGrouped in bins of size {}".format(lengthBucketSize))
         plt.ylabel("x{0} Construction(s), x{1} Word Evaluation(s)\n(seconds)".format(nConstructions, nEvals))
         plt.show()
