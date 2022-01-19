@@ -1,4 +1,5 @@
 from __future__ import print_function
+import matplotlib.pyplot as plt
 import time
 import multiprocessing
 import sys
@@ -140,8 +141,115 @@ class NFASizes():
         else:
             return dill.loads(result[0])
 
+    def print_completeness(self):
+        def f(cursor):
+            cursor.execute("""
+                SELECT method, count(re_math) as n, sum(time)
+                FROM nfas
+                GROUP BY method
+                ORDER BY n DESC;
+            """)
+            for method, count, sum_time in cursor.fetchall():
+                print(method[len("nfa"):].ljust(12), str(count).ljust(6), sum_time)
+        print("construction count  sum(time)")
+        print("-----------------------------")
+        self._db_exec(f)
+
+    def build_common_regexps(self):
+        """Creates the common_re table if it does not exist. This table contains a set
+        of regular expressions that could be converted into NFA's using every algorithm
+        in less than 120 seconds.
+        """
+        def f(cursor):
+            cursor.execute("SELECT DISTINCT method FROM nfas;")
+            constructions = [x[0] for x in cursor.fetchall()]
+            queries = list()
+            for method in constructions:
+                queries.append("SELECT DISTINCT re_math FROM nfas WHERE method=='{}'".format(method))
+            query = "\nINTERSECT\n".join(queries) + ";"
+
+            cursor.execute("CREATE TABLE IF NOT EXISTS common_re AS " + query)
+        self._db_exec(f)
+
+    def display(self, resolution=10):
+        """Display NFA sizes for regular expression lengths by construction algorithm.
+
+        Note: Since some construction times took too long, some RE->NFA's couldn't be done
+            for some algorithms. Use `#print_completeness()` to see for yourself.
+            Therefore the graph will only display construction data for regular expressions
+            that could be converted using every NFA construction algorithm.
+        """
+        db = util.DBWrapper()
+        methods = dict() # nfaMETHOD -> Color String
+        for method, color in db.selectall("SELECT method, colour FROM methods WHERE method LIKE 'nfa%';"):
+            methods[method] = color
+
+        fig, ax = plt.subplots()
+        line2d = dict()
+
+        self.build_common_regexps()
+        def _add_plots(cursor):
+            for method, color in methods.items():
+                x = []
+                y = []
+                cursor.execute("""
+                    SELECT avg(length(re_math)) as length, avg(nstates+ntrans) as size
+                    FROM nfas
+                    WHERE method==?
+                        AND length(re_math)<1600
+                        AND re_math IN (SELECT re_math FROM common_re)
+                    GROUP BY length(re_math)/?
+                    ORDER BY length(re_math) ASC;
+                """, [method, resolution])
+                for length, size in cursor.fetchall():
+                    x.append(length)
+                    y.append(size)
+                method = method[len("nfa"):] # remove prefix nfa
+                line2d[method] = ax.plot(x, y, label=method, linewidth=1, color=color)[0]
+        self._db_exec(_add_plots)
+
+        legend_to_line = dict()
+        legend = plt.legend(loc="best")
+        legendLines = legend.get_lines()
+        for l in legendLines:
+            l.set_picker(True)
+            l.set_pickradius(10)
+            legend_to_line[l] = line2d[l.get_label()]
+        def _on_pick(event):
+            line = event.artist
+            legend_to_line[line].set_visible(not line.get_visible())
+            line.set_visible(not line.get_visible())
+            fig.canvas.draw()
+
+        plt.ylim(ymin=0)
+        plt.connect("pick_event", _on_pick)
+        plt.title("RE to NFA Size by Construction Algorithm")
+        plt.xlabel("Regular Expression String Length (# chars)\nGrouped in bins of size {}".format(resolution))
+        plt.ylabel("NFA Size (#states + #transitions)")
+        plt.show()
+
 if __name__ == "__main__":
     sizes = NFASizes()
-    if raw_input("Generate/review... this might take a while y/(n)?: ") == "y":
-        sizes.generate_db()
-    # todo more
+
+    choice = "1"
+    while choice != "Q":
+        print("\n")
+        print("C. Construct NFA's for yourself (rather than quick download)")
+        print("P. Print completeness of each algorithm")
+        print("D. Display graph")
+        print("Q. Quit")
+        choice = raw_input("Choose menu option: ").upper().lstrip()
+
+        if choice == "C":
+            print("This might take a while... Ctrl+C to interrupt")
+            sizes.generate_db()
+            raw_input("\nPress Enter to continue... ")
+        elif choice == "P":
+            sizes.print_completeness()
+            raw_input("\nPress Enter to continue... ")
+        elif choice == "D":
+            print("\nDrawing NFA size graph by construction algorithm...")
+            res = util.parseIntSafe(raw_input("How detailed should the graph be (higher=less detailed): "), 10)
+            sizes.display(res)
+
+    print("\nBye!")
