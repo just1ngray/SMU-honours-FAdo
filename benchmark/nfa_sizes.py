@@ -19,7 +19,7 @@ import convert
 
 class NFASizes():
     def __init__(self):
-        self.convert = convert.Converter()
+        pass
 
     def get_expressions_and_methods(self):
         """Retrieves all distinct non-error FAdoized regular expressions and all nfa construction
@@ -98,9 +98,10 @@ class NFASizes():
 
         n = 0
         total = len(expressions) * len(methods)
+        converter = convert.Converter()
         for re_math_encoded, re_math_parsable in expressions:
             print("\r{}\r{}/{}: {}".format(" "*120, n, total, re_math_encoded[:100]), end="")
-            re = self.convert.math(re_math_parsable)
+            re = converter.math(re_math_parsable)
             for method in methods:
                 try:
                     proc = multiprocessing.Process(target=lambda: self._generate_one(re, re_math_encoded, method))
