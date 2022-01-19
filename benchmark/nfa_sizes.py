@@ -19,6 +19,10 @@ import util
 import convert
 
 class NFASizes():
+    """Use as a command-line utility using `make sizes` unless extracting from the
+    resulting database. If extracting, instantiate the object and call `#extract()`
+    as needed.
+    """
     def __init__(self):
         pass
 
@@ -128,9 +132,15 @@ class NFASizes():
                 finally:
                     n += 1
 
-        print("\n\nDone!")
-
     def extract(self, expression, method):
+        """Retrieve a NFA from the database given a regular expression and construction method.
+        If no such NFA exists for that method, this returns None.
+
+        Completion notes: (see `#print_completeness()`)
+        - to get partial derivative NFA, use nfaPDDAG as your method (not nfaPDO or nfaRPN)
+        - the Thompson construction is likely to be incomplete as well (since this construction has a
+          lot of 'wasted' work when creating @epsilon transitions)
+        """
         def f(cursor):
             cursor.execute("SELECT nfa FROM nfas WHERE re_math==? AND method==?;", [expression, method])
             return cursor.fetchone()
@@ -142,6 +152,10 @@ class NFASizes():
             return dill.loads(result[0])
 
     def print_completeness(self):
+        """Prints to stdout the number of NFAs for each construction type and the time it took to make them.
+        This is useful since some construction methods may have been too slow to add the resulting NFA to
+        this database.
+        """
         def f(cursor):
             cursor.execute("""
                 SELECT method, count(re_math) as n, sum(time)
