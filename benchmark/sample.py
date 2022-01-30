@@ -2,6 +2,11 @@ from __future__ import print_function
 import urllib
 import json
 import regex
+import random
+
+from FAdo.cfg import *
+import FAdo.reex as reex
+from reex_ext import *
 
 import errors
 import util
@@ -295,6 +300,79 @@ class PerlSampler(CodeSampler):
         expression = expression.group(0).decode("utf-8")[:-1] # remove the `/` from end
 
         return expression.replace("\\/", "/")
+
+
+class RandomSampler():
+    def __init__(self, alphabet):
+        self.random = random.Random()
+        self.converter = convert.Converter()
+
+        self.DOTANY = "W"
+        self.CHARS = "X"
+        if self.DOTANY in alphabet or self.CHARS in alphabet:
+            raise Exception("Alphabet cannot contain that character")
+        self.alphabet = sorted(alphabet)
+        self._char_classes = self._enumerate_char_classes()
+
+        alphabet += self.CHARS + self.DOTANY
+        self.grammar = reStringRGenerator(alphabet, size=20, cfgr=reGrammar['g_rpn_snf_option'])
+
+    def _enumerate_char_classes(self):
+        from FAdo.fa import NFA
+        nfa = NFA()
+        init = nfa.addState("init")
+        nfa.addInitial(init)
+
+        for i in reversed(range(0, len(self.alphabet))):
+            state = nfa.addState(self.alphabet[i]) # "last seen"
+            nfa.addFinal(state)
+
+            toState1 = nfa.addState("[]-" + self.alphabet[i])
+            toState2 = nfa.addState("-" + self.alphabet[i])
+            nfa.addTransition(toState1, "-", toState2)
+            nfa.addTransition(toState2, self.alphabet[i], state)
+            for j in range(0, i+1): # from initial state
+                nfa.addTransition(init, self.alphabet[j], toState1)
+
+            for j in range(i, len(self.alphabet)): # state, alphabet[k(k>i)], all following states >=k
+                for k in range(i+1, j+1):
+                    nfa.addTransition(state, self.alphabet[k], nfa.stateIndex("[]-" + self.alphabet[j]))
+
+        char_classes = list()
+        for word in nfa.enumNFA(len(self.alphabet) * 3):
+            char_classes.append("[{}]".format(word))
+            char_classes.append("[^{}]".format(word))
+        return char_classes
+
+    def _rand_chars(self):
+        return self.converter.math(self.random.choice(self._char_classes))
+
+    def transform(self, re):
+        if type(re) is reex.concat:
+            return uconcat(self.transform(re.arg1), self.transform(re.arg2))
+        elif type(re) is reex.disj:
+            return udisj(self.transform(re.arg1), self.transform(re.arg2))
+        elif type(re) is reex.star:
+            return ustar(self.transform(re.arg))
+        elif type(re) is reex.option:
+            return uoption(self.transform(re.arg))
+        elif type(re) is reex.epsilon:
+            return uepsilon()
+        elif type(re) is reex.atom:
+            if re.val == self.DOTANY:
+                return dotany()
+            elif re.val == self.CHARS:
+                return self._rand_chars()
+            else:
+                return uatom(unicode(re.val))
+        else:
+            raise TypeError("Unknown type " + str(type(re)))
+
+    def random_re(self):
+        re = reex.str2regexp(self.grammar.generate(), parser=reex.ParserRPN)
+        return self.transform(re)
+
+
 
 if __name__ == "__main__":
     SAMPLE_SIZE = 500
