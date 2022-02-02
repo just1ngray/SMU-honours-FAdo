@@ -303,6 +303,11 @@ class PerlSampler(CodeSampler):
 
 
 class RandomSampler():
+    """Randomly sample regular expressions
+    1. Generate all character class inner strings on initialization for easy later choices
+    2. Use "marker" symbols DOTANY and CHARS to know which atoms to replace with the respective classes
+    """
+
     def __init__(self, alphabet):
         self.random = random.Random()
         self.converter = convert.Converter()
@@ -318,6 +323,14 @@ class RandomSampler():
         self.grammar = reStringRGenerator(alphabet, size=20, cfgr=reGrammar['g_rpn_snf_option'])
 
     def _enumerate_char_classes(self):
+        """Returns a list of all character classes (as strings) given the alphabet of this instance.
+        1. Generation of these character classes is performed through enumeration of a NFA, then by
+            considering both the "positive" and "negative" cases.
+        2. Some negative character classes accept nothing from the listed alphabet.
+        3. The language is defined as a sequence of pairs (a, b), (c, d), ..., (y, z) where:
+            - For each pair (a, b): a <= b
+            - For each neighbouring pair (a,b), (c,d): b < c
+        """
         from FAdo.fa import NFA
         nfa = NFA()
         init = nfa.addState("init")
@@ -338,14 +351,13 @@ class RandomSampler():
                 for k in range(i+1, j+1):
                     nfa.addTransition(state, self.alphabet[k], nfa.stateIndex("[]-" + self.alphabet[j]))
 
-        char_classes = list()
-        for word in nfa.enumNFA(len(self.alphabet) * 3):
-            char_classes.append("[{}]".format(word))
-            char_classes.append("[^{}]".format(word))
-        return char_classes
+        return [x for x in nfa.enumNFA(len(self.alphabet)*3)]
 
     def _rand_chars(self):
-        return self.converter.math(self.random.choice(self._char_classes))
+        """Uniformly select a character class using the provided alphabet."""
+        chars_string = "[{}{}]".format("" if self.random.choice([True, False]) else "^",
+                self.random.choice(self._char_classes))
+        return self.converter.math(chars_string)
 
     def transform(self, re):
         if type(re) is reex.concat:
@@ -369,6 +381,7 @@ class RandomSampler():
             raise TypeError("Unknown type " + str(type(re)))
 
     def random_re(self):
+        """Uniformly generate a random regular expression"""
         re = reex.str2regexp(self.grammar.generate(), parser=reex.ParserRPN)
         return self.transform(re)
 
