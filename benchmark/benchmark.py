@@ -7,23 +7,18 @@ import time
 import timeit
 import random
 import gc
-import math
 
 from util import DBWrapper, Deque, parseIntSafe # ConsoleOverwrite
 from convert import Converter
 
-MIN_TEST_ITERS_PER_EXPR = 2         # minimum number of times an expression is fully tested
-MAX_TEST_ITERS_PER_EXPR = 5         # maximum number of times an expression is fully tested
-WORD_SAMPLE_SIZE = 10000            # minimum number words in the accepting or rejecting word sets
-MIN_CONSTRUCTION_REPETITIONS = 10   # minimum number of times a str->obj construction is repeated
-MAX_CONSTRUCTION_REPETITIONS = 100  # maximum number of times a str->obj construction is repeated
+WORD_SAMPLE_SIZE = 10000            # maximum number words in the accepting or rejecting word sets
 MAX_EVAL_PER_WORD_TIME = .25        # maximum allowable time per word evaluation before the total time is estimated
 
 class Benchmarker():
     def __init__(self):
         self.db = DBWrapper()
         # console = ConsoleOverwrite()
-        self.write = lambda *x: 0 # console.overwrite
+        self.write = lambda *x: print(x)
         self.convert = Converter()
         self.code_lines = Deque(open("./example_code_file.txt", "r").read().splitlines())
         self.methods = list(x[0] for x in self.db.selectall("SELECT method FROM methods;"))
@@ -67,7 +62,7 @@ class Benchmarker():
                     -1 as n_evalA,
                     -1 as n_evalR,
                     -1 as length,
-                    0 as itersleft,
+                    1 as itersleft,
                     '' as error
                 FROM expressions as e
                 WHERE e.re_math NOT LIKE '%Error%'
@@ -90,31 +85,13 @@ class Benchmarker():
                 FOREIGN KEY (re_math) REFERENCES in_tests (re_math)
             );
         """)
-        self.write("Collecting re_math by length")
-        reByLength = dict()
+        self.write("Setting in_tests length")
         for re_math, in self.db.selectall("SELECT re_math FROM in_tests;"):
-            exprs = reByLength.get(len(re_math), Deque())
-            exprs.insert_right(re_math)
-            reByLength[len(re_math)] = exprs
-
-        self.write("Filling calculated information for in_tests")
-        for length in reByLength:
-            # itersreq = max(MIN_TEST_ITERS_PER_EXPR, MAX_TEST_ITERS_PER_EXPR + 1 - len(reByLength[length]))
-            for re_math in reByLength[length]:
-                self.db.execute("""
-                    UPDATE in_tests
-                    SET length=?, itersleft=?
-                    WHERE re_math=?;
-                """, [length, 1, re_math])
-
-    def itersRequired(self, re_math):
-        # count = self.db.selectall("""
-        #     SELECT count(*)
-        #     FROM in_tests
-        #     WHERE length==?;
-        # """, [len(re_math)])[0][0]
-        # return max(MIN_TEST_ITERS_PER_EXPR, MAX_TEST_ITERS_PER_EXPR + 1 - count)
-        return 1
+            self.db.execute("""
+                UPDATE in_tests
+                SET length=?
+                WHERE re_math==?;
+            """, [len(re_math), re_math])
 
     def generateWords(self, re_math):
         re = self.convert.math(re_math)
@@ -203,7 +180,7 @@ class Benchmarker():
             """, [re_math])[0]
             if len(w_accepted) != n_evalA or len(w_rejected) != n_evalR: # different word generating scheme... reset
                 self.db.execute("DELETE FROM out_tests WHERE re_math==?;", [re_math])
-                self.db.execute("UPDATE in_tests SET itersleft=? WHERE re_math==?;", [self.itersRequired(re_math), re_math])
+                self.db.execute("UPDATE in_tests SET itersleft=1 WHERE re_math==?;", [re_math])
 
             self.db.execute("""
                     INSERT OR IGNORE INTO out_tests (re_math, method, t_pre, t_evalA, t_evalR)
@@ -215,20 +192,18 @@ class Benchmarker():
                         WHERE in_tests.re_math=?;
                 """, [re_math])
 
-            # run between 10 and 100 constructions, then scale to 100 constructions
+            # run 1 constructions
             self.write(re_math[:50], "str to partial matching regular expression tree")
             pmre = self.convert.math(re_math, partialMatch=True)
-            repetitions = int(math.ceil(max(MIN_CONSTRUCTION_REPETITIONS, -(len(re_math)/250.0)**2 + MAX_CONSTRUCTION_REPETITIONS)))
-            t_str2pmre = (repetitions / 100.0) * timeit.timeit( \
-                lambda: self.convert.math(re_math, partialMatch=True), number=repetitions)
+            t_str2pmre = timeit.timeit(lambda: self.convert.math(re_math, partialMatch=True), number=1)
 
             for method in self.methods:
                 try: # catch max. recursion errors and handle gracefully for the specific method
                     self.write(re_math[:50], method, "partial matching regular expression tree to final")
                     evalWord = self.getEvalMethod(pmre, method)
                     t_pmre2final = 0.0
-                    if "nfa" in method:
-                        t_pmre2final = (repetitions / 100.0) * timeit.timeit(lambda: pmre.toInvariantNFA(method), number=repetitions)
+                    if "nfa" in method: # finish the construction
+                        t_pmre2final = timeit.timeit(lambda: pmre.toInvariantNFA(method), number=1)
                     self.db.execute("""
                         UPDATE out_tests
                         SET t_pre=?
@@ -237,12 +212,12 @@ class Benchmarker():
 
                     t_evalA = 0.0
                     ndone = 0
+                    self.write(re_math[:50], method, "accepting", len(w_accepted), "words...")
                     for i in xrange(0, len(w_accepted), GROUP_SIZE):
-                        if ndone >= 200 and t_evalA/ndone > MAX_EVAL_PER_WORD_TIME: # if slower than X seconds per word move on
+                        if ndone >= 200 and t_evalA/ndone > MAX_EVAL_PER_WORD_TIME: # if slower than X seconds per word estimate & move on
                             t_evalA = t_evalA * (len(w_accepted) * 1.0 / ndone)
                             break
 
-                        self.write(re_math[:50], method, "accepting {0}%".format(format(ndone*100.0/len(w_accepted), "00.3f")))
                         words = w_accepted[i:i+GROUP_SIZE]
                         t_evalA += timeit.timeit(lambda: self.evalMany(evalWord, words, True, method), number=1)
                         ndone += GROUP_SIZE
@@ -254,12 +229,12 @@ class Benchmarker():
 
                     t_evalR = 0.0
                     ndone = 0
+                    self.write(re_math[:50], method, "rejecting", len(w_rejected), "words...")
                     for i in xrange(0, len(w_rejected), GROUP_SIZE):
-                        if ndone >= 200 and t_evalR/ndone > MAX_EVAL_PER_WORD_TIME: # if slower than X seconds per word move on
+                        if ndone >= 200 and t_evalR/ndone > MAX_EVAL_PER_WORD_TIME: # if slower than X seconds per word estimate & move on
                             t_evalR = t_evalR * (len(w_rejected) * 1.0 / ndone)
                             break
 
-                        self.write(re_math[:50], method, "rejecting {0}%".format(format(ndone*100.0/len(w_rejected), "00.3f")))
                         words = w_rejected[i:i+GROUP_SIZE]
                         t_evalR += timeit.timeit(lambda: self.evalMany(evalWord, words, False, method), number=1)
                         ndone += GROUP_SIZE
@@ -289,9 +264,9 @@ class Benchmarker():
         except Exception as error:
             self.db.execute("""
                 UPDATE in_tests
-                SET error=?, itersleft=?
+                SET error=?, itersleft=1
                 WHERE re_math=?;
-            """, [str(error), self.itersRequired(re_math), re_math])
+            """, [str(error), re_math])
             _rollback()
             print(error)
         finally:
@@ -341,9 +316,9 @@ class Benchmarker():
             """, [re_math])
             self.db.execute("""
                 UPDATE in_tests
-                SET itersleft=?, n_evalA=-1, n_evalR=-1
+                SET itersleft=1, n_evalA=-1, n_evalR=-1
                 WHERE re_math=?;
-            """, [self.itersRequired(re_math), re_math])
+            """, [re_math])
 
     def displayResults(self, lengthBucketSize=50, nConstructions=1, nEvals=1, showBins=True):
         time_distribution = list()
@@ -355,7 +330,7 @@ class Benchmarker():
             y = []
             for row in self.db.selectall("""
                 SELECT avg(tin.length),
-                    avg(tout.t_pre/100.0) as avgpre,
+                    avg(tout.t_pre) as avgpre,
                     sum(tout.t_evalA) as t_evalA,
                     sum(tin.n_evalA) as n_evalA,
                     sum(tout.t_evalR) as t_evalR,
@@ -435,7 +410,7 @@ def catchup(method):
         ORDER BY random();
     """, [method]):
         re_math = re_math.decode("utf-8")
-        itersTodo = benchmarker.itersRequired(re_math) - itersleft
+        itersTodo = 1 - itersleft
         if itersTodo > 0:
             todo.insert_right((re_math, itersTodo, itersleft))
 
