@@ -318,9 +318,7 @@ class RandomSampler():
             raise Exception("Alphabet cannot contain that character")
         self.alphabet = sorted(alphabet)
         self._char_classes = self._enumerate_char_classes()
-
-        alphabet += self.CHARS + self.DOTANY
-        self.grammar = reStringRGenerator(alphabet, size=20, cfgr=reGrammar['g_rpn_snf_option'])
+        self.alphabet += self.CHARS + self.DOTANY # must be done AFTER generating character classes
 
     def _enumerate_char_classes(self):
         """Returns a list of all character classes (as strings) given the alphabet of this instance.
@@ -359,15 +357,16 @@ class RandomSampler():
                 self.random.choice(self._char_classes))
         return self.converter.math(chars_string)
 
-    def transform(self, re):
+    def _transform(self, re):
+        """Transforms a FAdoly generated regular expression into one with the proper extensions"""
         if type(re) is reex.concat:
-            return uconcat(self.transform(re.arg1), self.transform(re.arg2))
+            return uconcat(self._transform(re.arg1), self._transform(re.arg2))
         elif type(re) is reex.disj:
-            return udisj(self.transform(re.arg1), self.transform(re.arg2))
+            return udisj(self._transform(re.arg1), self._transform(re.arg2))
         elif type(re) is reex.star:
-            return ustar(self.transform(re.arg))
+            return ustar(self._transform(re.arg))
         elif type(re) is reex.option:
-            return uoption(self.transform(re.arg))
+            return uoption(self._transform(re.arg))
         elif type(re) is reex.epsilon:
             return uepsilon()
         elif type(re) is reex.atom:
@@ -380,10 +379,45 @@ class RandomSampler():
         else:
             raise TypeError("Unknown type " + str(type(re)))
 
-    def random_re(self):
-        """Uniformly generate a random regular expression"""
-        re = reex.str2regexp(self.grammar.generate(), parser=reex.ParserRPN)
-        return self.transform(re)
+    def get_random_sample(self, tree_length):
+        """Yields randomly sampled words from the grammar; no duplicates allowed"""
+        grammar = reStringRGenerator(self.alphabet, size=tree_length, cfgr=reGrammar["g_rpn_snf_option"])
+        sample = set()
+        while True:
+            re = reex.str2regexp(grammar.generate(), parser=reex.ParserRPN)
+            re = self._transform(re)
+            l = len(sample)
+            sample.add(re)
+            if len(sample) > l:
+                yield re
+
+    def populate_db(self):
+        """Samples regular expressions with specific tree lengths and inserts them into
+        the expressions table. The values are assigned as:
+            re_math     randomly generated regular expression
+            re_prog     N/A
+            line        the string length of the regular expression
+            url         the ID of the regexp to satisfy the table's constraints
+            lineNum     the tree_length of the regular expression
+            lang        RandomlyGenerated
+
+        The samples are sufficient to generate a 95% confidence interval with 3.5% error.
+        """
+        db = util.DBWrapper()
+        re_id = -1
+        for tree_length in [25, 50, 100, 150, 200, 300, 400, 500]:
+            regexps = self.get_random_sample(tree_length)
+            for i in xrange(0, 784):
+                print("\r" + " "*40, "\rtree_length = {}: \t{}/784".format(tree_length, i+1), end="")
+                re = str(next(regexps))
+                re_id += 1
+
+                db.execute("""
+                    INSERT INTO expressions (re_math, re_prog, line, url, lineNum, lang)
+                    VALUES (?, 'N/A', ?, ?, ?, 'RandomlyGenerated');
+                """, [re, len(re), re_id, tree_length])
+            print()
+        print("\nDone!")
 
 
 
