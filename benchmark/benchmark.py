@@ -297,6 +297,29 @@ class Benchmarker():
             ORDER BY length ASC;
         """)
 
+    def re_construct_times(self):
+        """Manually re-compute the construction times for all items in the out_tests table"""
+        n = 1
+        for re_math, method in self.db.selectall("SELECT re_math, method FROM out_tests"):
+            re_math = re_math.decode("utf-8")
+            print(n, re_math[:50], method)
+
+            t_str2pmre = timeit.timeit(lambda: self.convert.math(re_math, partialMatch=True), number=1)
+            pmre = self.convert.math(re_math, partialMatch=True)
+
+            t_pmre2final = 0.0
+            if "nfa" in method:
+                t_pmre2final = timeit.timeit(lambda: pmre.toInvariantNFA(method), number=1)
+
+            self.db.execute("""
+                UPDATE out_tests
+                SET t_pre=?
+                WHERE re_math==? AND method==?;
+            """, [t_str2pmre+t_pmre2final, re_math, method])
+            n += 1
+
+        print("\n\nDone!")
+
     def cleanup(self):
         """Cleans up invalid tests!"""
         for re_math, in self.db.selectall("""
