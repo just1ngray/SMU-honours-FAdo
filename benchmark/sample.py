@@ -382,14 +382,9 @@ class RandomSampler():
     def get_random_sample(self, tree_length):
         """Yields randomly sampled words from the grammar; no duplicates allowed"""
         grammar = reStringRGenerator(self.alphabet, size=tree_length, cfgr=reGrammar["g_rpn_snf_option"])
-        sample = set()
         while True:
             re = reex.str2regexp(grammar.generate(), parser=reex.ParserRPN)
-            re = self._transform(re)
-            l = len(sample)
-            sample.add(re)
-            if len(sample) > l:
-                yield re
+            yield self._transform(re)
 
     def populate_db(self):
         """Samples regular expressions with specific tree lengths and inserts them into
