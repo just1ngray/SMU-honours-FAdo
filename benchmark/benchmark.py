@@ -99,21 +99,22 @@ class Benchmarker():
 
         self.write("Filling calculated information for in_tests")
         for length in reByLength:
-            itersreq = max(MIN_TEST_ITERS_PER_EXPR, MAX_TEST_ITERS_PER_EXPR + 1 - len(reByLength[length]))
+            # itersreq = max(MIN_TEST_ITERS_PER_EXPR, MAX_TEST_ITERS_PER_EXPR + 1 - len(reByLength[length]))
             for re_math in reByLength[length]:
                 self.db.execute("""
                     UPDATE in_tests
                     SET length=?, itersleft=?
                     WHERE re_math=?;
-                """, [length, itersreq, re_math])
+                """, [length, 1, re_math])
 
     def itersRequired(self, re_math):
-        count = self.db.selectall("""
-            SELECT count(*)
-            FROM in_tests
-            WHERE length==?;
-        """, [len(re_math)])[0][0]
-        return max(MIN_TEST_ITERS_PER_EXPR, MAX_TEST_ITERS_PER_EXPR + 1 - count)
+        # count = self.db.selectall("""
+        #     SELECT count(*)
+        #     FROM in_tests
+        #     WHERE length==?;
+        # """, [len(re_math)])[0][0]
+        # return max(MIN_TEST_ITERS_PER_EXPR, MAX_TEST_ITERS_PER_EXPR + 1 - count)
+        return 1
 
     def generateWords(self, re_math):
         re = self.convert.math(re_math)
