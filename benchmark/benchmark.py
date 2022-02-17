@@ -511,7 +511,7 @@ if __name__ == "__main__":
                     if benchmarker is None:
                         benchmarker = Benchmarker()
                     re_maths = [x for x in benchmarker]
-                    re_maths.sort(key=lambda re: len(re)) # random.shuffle(re_maths)
+                    random.shuffle(re_maths)
                     benchmarker = None
                     if len(re_maths) == 0:
                         print("Done benchmarking!")
