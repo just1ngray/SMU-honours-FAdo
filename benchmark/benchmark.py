@@ -168,7 +168,7 @@ class Benchmarker():
             """, [prev_itersleft, re_math])
 
         try: # catch errors and delete the results of the test
-            GROUP_SIZE = 100
+            GROUP_SIZE = 25
             w_accepted, w_rejected = self.generateWords(re_math)
             self.write("running gc")
             gc.collect() # remove unused words from memory... especially the potentially rejected ones
@@ -214,8 +214,10 @@ class Benchmarker():
                     ndone = 0
                     self.write(re_math[:50], method, "accepting", len(w_accepted), "words...")
                     for i in xrange(0, len(w_accepted), GROUP_SIZE):
-                        if ndone >= 200 and t_evalA/ndone > MAX_EVAL_PER_WORD_TIME: # if slower than X seconds per word estimate & move on
-                            t_evalA = t_evalA * (len(w_accepted) * 1.0 / ndone)
+                        tperword = -1 if ndone == 0 else t_evalA/ndone
+                        if ndone >= GROUP_SIZE and tperword > MAX_EVAL_PER_WORD_TIME: # if slower than X seconds per word estimate & move on
+                            t_evalA = tperword * len(w_accepted)
+                            self.write(re_math[:50], method, "too slow, estimating accepting time as", tperword, "per word")
                             break
 
                         words = w_accepted[i:i+GROUP_SIZE]
@@ -231,8 +233,10 @@ class Benchmarker():
                     ndone = 0
                     self.write(re_math[:50], method, "rejecting", len(w_rejected), "words...")
                     for i in xrange(0, len(w_rejected), GROUP_SIZE):
-                        if ndone >= 200 and t_evalR/ndone > MAX_EVAL_PER_WORD_TIME: # if slower than X seconds per word estimate & move on
-                            t_evalR = t_evalR * (len(w_rejected) * 1.0 / ndone)
+                        tperword = -1 if ndone == 0 else t_evalR/ndone
+                        if ndone >= GROUP_SIZE and tperword > MAX_EVAL_PER_WORD_TIME: # if slower than X seconds per word estimate & move on
+                            t_evalR = tperword * len(w_rejected)
+                            self.write(re_math[:50], method, "too slow, estimating rejecting time as", tperword, "per word")
                             break
 
                         words = w_rejected[i:i+GROUP_SIZE]
