@@ -123,7 +123,7 @@ class Benchmarker():
             addAccepting(next(line))
 
         # ACCEPTING: language enumeration
-        self.write(re_math[:50], "generating accepting enumerated words")
+        self.write(re_math[:50], "generating enumerated words")
         minlen = enum.shortestWordLength()
         maxlen = min(minlen + 50, enum.longestWordLength())
         for l in xrange(minlen, maxlen + 1):
