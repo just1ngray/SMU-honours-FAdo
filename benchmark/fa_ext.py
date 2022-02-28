@@ -149,11 +149,14 @@ class InvariantNFA(fa.NFA):
 
                     destinations = set((s, o) for s in s_states for o in o_states)
                     for dest in destinations:
-                        index = new.stateIndex(dest, autoCreate=True)
-                        new.addTransition(so_index, so_trans, index)
-                        notDone.add((dest[0], dest[1], index))
+                        index = None
+                        try:
+                            index = new.stateIndex(dest)
+                        except:
+                            index = new.addState(dest)
+                            notDone.add((dest[0], dest[1], index))
 
-                        # check if final
+                        new.addTransition(so_index, so_trans, index)
                         if seq_self.finalP(dest[0]) and seq_other.finalP(dest[1]):
                             new.addFinal(index)
         return new
