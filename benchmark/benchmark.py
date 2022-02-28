@@ -96,7 +96,7 @@ class Benchmarker():
     def generateWords(self, re_math):
         re = self.convert.math(re_math)
         pmre = re.partialMatch()
-        nfa = pmre.toInvariantNFA("nfaPDRPN")
+        nfa = pmre.toInvariantNFA("nfaPDDAG")
         enum = nfa.enumNFA()
         accepted = list()
         rejected = set()
