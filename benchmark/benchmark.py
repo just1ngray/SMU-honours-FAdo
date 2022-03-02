@@ -7,6 +7,7 @@ import time
 import timeit
 import random
 import gc
+import datetime
 
 from util import DBWrapper, Deque, parseIntSafe # ConsoleOverwrite
 from convert import Converter
@@ -18,7 +19,7 @@ class Benchmarker():
     def __init__(self):
         self.db = DBWrapper()
         # console = ConsoleOverwrite()
-        self.write = lambda *x: print(x)
+        self.write = lambda *x: print(datetime.datetime.now().strftime("%H:%M:%S"), *x)
         self.convert = Converter()
         self.code_lines = Deque(open("./example_code_file.txt", "r").read().splitlines())
         self.methods = list(x[0] for x in self.db.selectall("SELECT method FROM methods;"))
@@ -47,7 +48,7 @@ class Benchmarker():
             );
             INSERT OR IGNORE INTO methods (method, colour) VALUES ('pd', '#4363d8');
             -- INSERT OR IGNORE INTO methods (method, colour) VALUES ('derivative', '#a9a9a9');
-            INSERT OR IGNORE INTO methods (method, colour) VALUES ('backtrack', '#000000');
+            INSERT OR IGNORE INTO methods (method, colour) VALUES ('backtrack', '#000000'); -- NOTE: backtracking is almost always catastrophic for randomized regular expressions... delete manually if it is an issue
             INSERT OR IGNORE INTO methods (method, colour) VALUES ('nfaPDRPN', '#42d4f4');
             INSERT OR IGNORE INTO methods (method, colour) VALUES ('nfaPDO', '#469990');
             INSERT OR IGNORE INTO methods (method, colour) VALUES ('nfaPDDAG', '#a9a9a9');
