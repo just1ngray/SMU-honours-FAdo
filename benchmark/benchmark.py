@@ -1,4 +1,6 @@
 from __future__ import print_function
+import matplotlib
+matplotlib.use('WebAgg') # TkAgg work well for native display
 import matplotlib.pyplot as plt
 import sys
 import os
