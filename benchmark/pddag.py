@@ -31,27 +31,37 @@ import reex_ext
 from fa_ext import InvariantNFA
 
 
-ID_EPSILON = 0
-ID_STAR = 1
-ID_OPTION = 2
-ID_CONC = 3
-ID_DISJ = 4
-ID_SYMB = 5
+# essentially an enum to easily identify node types
+ID_EPSILON = 0  #               @epsilon
+ID_STAR = 1     # star          a*
+ID_OPTION = 2   # option        a?
+ID_CONC = 3     # concatenation (a b)
+ID_DISJ = 4     # disjunction   (a + b)
+ID_SYMB = 5     # atomic symbol a
 
 class dnode(object):
     def __init__(self, op, arg1=None, arg2=None):
         self.dotl = set([])
         self.dotr = set([])
-        self.star = None
-        self.option = None
+        self.star = None    # the id of the star version of this node
+        self.option = None  # the id of the option version of this node
         self.plus = set([])
-        self.op = op
-        self.arg1 = arg1
-        self.arg2 = arg2
-        self.diff = dict()
+
+        # given an operation and 0, 1, or 2 children...
+        self.op = op        # node type (ID_[...] from globals)
+        self.arg1 = arg1    # id in table of first  child id when: star, option, concat, or disj
+        self.arg2 = arg2    # id in table of second child id when: concat, or disj
+
+        self.diff = dict()  # partial derivative defined transitions<directed edge label, destination node id>
+
+        # recall that partial derivative NFA has final state for any state "named" {@epsilon, a*, a?}
         if op in [ID_OPTION, ID_STAR, ID_EPSILON]:
             self.ewp = True
         elif op in (ID_CONC, ID_DISJ):
+            # computed later in concat/disj cases
+            # ewp (a b)   = ewp a AND ewp b
+            # ewp (a + b) = ewp a OR  ewp b
+            # either way: a and b need to be known
             pass
         else:
             self.ewp = False
@@ -66,17 +76,18 @@ class dag(object):
 
     def __init__(self, reg):
         """:var reex reg: regular expression"""
-        self.table = dict()
+        self.table = dict() # <id, dnode>
+
+        # index 0 is reserved for empty
         self.table[0] = dnode(ID_EPSILON)
         self.count = 1
+
         self.leafs = dict()
         self.diff2do = set()
-        self.root = self.getIdx(reg)
-
-    def __len__(self):
-        return self.count - 1
+        self.root = self.getIdx(reg) # recursively computes self.table
 
     def getIdx(self, reg):
+        """Recursively gets the id of the regular expression while building self.table"""
         if isinstance(reg, reex_ext.uatom):
             return self.getAtomIdx(reg)
         elif isinstance(reg, reex_ext.udisj):
@@ -97,6 +108,9 @@ class dag(object):
             return 0
 
     def getAtomIdx(self, reg):
+        """Gets the id of an atomic regular expression
+        If this is already done, return the id of that instance
+        Otherwise, create a new dnode and assign an increasing id (by count)"""
         if reg.val in self.leafs:
             return self.leafs[reg.val]
         else:
@@ -104,11 +118,15 @@ class dag(object):
             self.count += 1
             self.leafs[reg.val] = id
             new = dnode(ID_SYMB)
-            new.diff[reg] = set([0])
+            new.diff[reg] = set([0]) # pd of reg in resulting NFA: (reg, @epsilon)
             self.table[id] = new
             return id
 
     def getStarIdx(self, argId):
+        """Gets the id of a regular expression of the form `a*`
+        :var argId int: id of `a`
+        If this is already done, return the id of that instance
+        Otherwise, create a new dnode and assign an increasing id (by count)"""
         if self.table[argId].star is not None:
             return self.table[argId].star
         else:
@@ -123,6 +141,10 @@ class dag(object):
             return id
 
     def getOptionIdx(self, argId):
+        """Gets the id of a regular expression of the form `a?`
+        :var argId int: id of `a`
+        If this is already done, return the id of that instance
+        Otherwise, create a new dnode and assign an increasing id (by count)"""
         if self.table[argId].option is not None:
             return self.table[argId].option
         else:
@@ -161,9 +183,6 @@ class dag(object):
                 self.diff2do.add(id)
             return id
 
-    def ewpFixConc(self, obj, arg1Id, arg2Id):
-        obj.ewp = self.table[arg1Id].ewp and self.table[arg2Id].ewp
-
     def getDisjIdx(self, arg1Id, arg2Id):
         if arg1Id == arg2Id:
             return arg1Id
@@ -182,7 +201,14 @@ class dag(object):
             new.diff = self.plusLF(self.table[arg1Id].diff, self.table[arg2Id].diff)
             return id
 
+    def ewpFixConc(self, obj, arg1Id, arg2Id):
+        """Assign ewp for dnode of type concat
+        Both of its children (lookup-able in self.table[by id] => dnode) must have ewp true"""
+        obj.ewp = self.table[arg1Id].ewp and self.table[arg2Id].ewp
+
     def ewpFixDisj(self, obj, arg1Id, arg2Id):
+        """Assign ewp for dnode of type disj
+        One of its children (lookup-able in self.table[by id] => dnode) must have ewp true"""
         obj.ewp = self.table[arg1Id].ewp or self.table[arg2Id].ewp
 
     def catLF(self, idl, idr, delay=False):
@@ -205,20 +231,6 @@ class dag(object):
             nfl[c] = nfl.get(c, set([])).union(diff2[c])
         return nfl
 
-    def doDelayed0(self):
-        if len(self.diff2do):
-            self.beingDone = set(self.diff2do)
-            self.diff2do = set()
-            while self.beingDone:
-                inode = self.beingDone.pop()
-                node = self.table[inode]
-                # assert node.op == ID_CONC
-                if self.table[node.arg1].ewp:
-                    node.diff = self.plusLF(self.catLF(node.arg1, node.arg2), self.table[node.arg2].diff)
-                else:
-                    node.diff = self.catLF(node.arg1, node.arg2)
-            self.doDelayed()
-
     def doDelayed(self):
         while self.diff2do:
             inode = self.diff2do.pop()
@@ -230,18 +242,19 @@ class dag(object):
                 node.diff = self.catLF(node.arg1, node.arg2)
 
     def NFA(self):
+        """Converts the dag of dnodes into a NFA"""
         aut = InvariantNFA()
         todo, done = {self.root}, set()
         id = aut.addState(self.root)
         aut.addInitial(id)
         while len(todo):
-            st = todo.pop() # integer index
+            st = todo.pop() # id of dnode to process
             done.add(st)
             stn = self.table[st] # reference to the dnode
             sti = aut.stateIndex(st)
-            if stn.ewp:
+            if stn.ewp:          # dnode already knows if it accepts empty word
                 aut.addFinal(sti)
-            for c in stn.diff:
+            for c in stn.diff:   # partial derivative defined transitions<directed edge label, destination node id>
                 for dest in stn.diff[c]:
                     if dest not in todo and dest not in done:
                         todo.add(dest)
