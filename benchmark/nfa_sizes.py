@@ -63,9 +63,9 @@ class NFASizes():
                 nfa = re.toInvariantNFA(method)
                 t = time.time() - t
                 cursor.execute("""
-                    INSERT INTO nfas(re_math, method, nfa, nstates, ntrans, time)
-                    VALUES(?, ?, ?, ?, ?, ?);
-                """, [re_math_encoded, method, dill.dumps(nfa), len(nfa.States), nfa.countTransitions(), t])
+                    INSERT INTO nfas(re_math, method, nfa, nstates, ntrans, time, length)
+                    VALUES(?, ?, ?, ?, ?, ?, ?);
+                """, [re_math_encoded, method, dill.dumps(nfa), len(nfa.States), nfa.countTransitions(), t, re.treeLength()])
 
             pm = re.partialMatch()
             pmstr = str(pm).decode("utf-8")
@@ -76,17 +76,16 @@ class NFASizes():
                 nfa = pm.toInvariantNFA(method)
                 t = time.time() - t
                 cursor.execute("""
-                    INSERT INTO nfas(re_math, method, nfa, nstates, ntrans, time)
-                    VALUES(?, ?, ?, ?, ?, ?);
-                """, [pmstr, method, dill.dumps(nfa), len(nfa.States), nfa.countTransitions(), t])
+                    INSERT INTO nfas(re_math, method, nfa, nstates, ntrans, time, length)
+                    VALUES(?, ?, ?, ?, ?, ?, ?);
+                """, [pmstr, method, dill.dumps(nfa), len(nfa.States), nfa.countTransitions(), t, pm.treeLength()])
         self._db_exec(f)
 
     def generate_db(self):
         """This saves all relevant NFA's sourced from practical regexps passed through
         all supported constructions. The resulting database should be approximately 600 mb.
 
-        Note: this file is also available as a "release" on this project's GitHub:
-            https://github.com/just1ngray/SMUHon-Practical-RE-Membership-Algs/releases/tag/v0.2.0
+        Note: this file is also available as a "release" on this project's GitHub
         """
         expressions, methods = self.get_expressions_and_methods()
         sys.setrecursionlimit(12000)
@@ -99,6 +98,7 @@ class NFASizes():
                 nstates INTEGER,
                 ntrans  INTEGER,
                 time    REAL,
+                length  INTEGER,
                 PRIMARY KEY (re_math, method)
             );
         """))
@@ -209,13 +209,12 @@ class NFASizes():
                 x = []
                 y = []
                 cursor.execute("""
-                    SELECT avg(length(re_math)) as length, avg(nstates+ntrans) as size
+                    SELECT avg(length) as len, avg(nstates+ntrans) as size
                     FROM nfas
                     WHERE method==?
-                        AND length(re_math)<1600
                         AND re_math IN (SELECT re_math FROM common_re)
-                    GROUP BY length(re_math)/?
-                    ORDER BY length(re_math) ASC;
+                    GROUP BY length/?
+                    ORDER BY len ASC;
                 """, [method, resolution])
                 for length, size in cursor.fetchall():
                     x.append(length)
@@ -240,7 +239,7 @@ class NFASizes():
         plt.ylim(ymin=0)
         plt.connect("pick_event", _on_pick)
         plt.title("RE to NFA Size by Construction Algorithm")
-        plt.xlabel("Regular Expression String Length (# chars)\nGrouped in bins of size {}".format(resolution))
+        plt.xlabel("Regular Expression Tree Length\nGrouped in bins of size {}".format(resolution))
         plt.ylabel("NFA Size (#states + #transitions)")
         plt.show()
 
