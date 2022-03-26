@@ -378,7 +378,7 @@ class Benchmarker():
                 x.append(length)
                 if n_evalA == 0: n_evalA = float("inf")
                 if n_evalR == 0: n_evalR = float("inf")
-                h = (nConstructions * avgpre) + (t_evalA/n_evalA + t_evalR/n_evalR)*nEvals
+                h = (nConstructions * avgpre) + (t_evalA + t_evalR)/(n_evalA + n_evalR)*nEvals
                 y.append(h)
                 time_distribution.append(h)
             line2d[method] = ax.plot(x, y, label=method, linewidth=1, color=colour)[0]
