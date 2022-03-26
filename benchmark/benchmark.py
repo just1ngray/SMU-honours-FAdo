@@ -30,14 +30,11 @@ class Benchmarker():
         return self.db.selectall("SELECT sum(itersleft) FROM in_tests WHERE error='' AND length<1600;")[0][0] == 0
 
     def __iter__(self):
-        for re_math, in self.db.selectall("""
-            SELECT re_math
-            FROM in_tests
-            WHERE length<1600
-                AND itersleft>0
-                AND error=='';
+        for re_math, itersleft, error in self.db.selectall("""
+            SELECT re_math, itersleft, error
+            FROM in_tests;
         """):
-            yield re_math.decode("utf-8")
+            yield (re_math.decode("utf-8"), itersleft, error)
 
     def initTestTables(self):
         """Overwrites current in_tests and out_tests tables."""
@@ -88,7 +85,7 @@ class Benchmarker():
                 FOREIGN KEY (re_math) REFERENCES in_tests (re_math)
             );
         """)
-        self.write("Setting in_tests length")
+        self.write("Setting in_tests length by python string length; this can be changed later")
         for re_math, in self.db.selectall("SELECT re_math FROM in_tests;"):
             self.db.execute("""
                 UPDATE in_tests
@@ -415,9 +412,9 @@ class Benchmarker():
 
         plt.ylim(ymin=0, ymax=time_distribution[int(len(time_distribution)*0.9)]) # scale to show 0.XX% of data
         plt.connect("pick_event", _on_pick)
-        plt.title("Algorithm Comparison on {} Practical/Non-Uniform\nRegular Expressions".format(
-            self.db.selectall("SELECT count(re_math) FROM in_tests WHERE length<1600 AND n_evalA>-1 AND error==''")[0][0]))
-        plt.xlabel("Regular Expression String Length (# chars)\nGrouped in bins of size {}".format(lengthBucketSize))
+        plt.title("Algorithm Comparison of {} Regular Expressions".format(
+            self.db.selectall("SELECT count(re_math) FROM in_tests WHERE n_evalA>-1 AND error==''")[0][0]))
+        plt.xlabel("Regular Expression Length\nGrouped in bins of size {}".format(lengthBucketSize))
         plt.ylabel("x{0} Construction(s), x{1} Word Evaluation(s)\n(seconds)".format(nConstructions, nEvals))
         plt.show()
 
@@ -501,6 +498,7 @@ if __name__ == "__main__":
     while choice != "Q":
         print("\n")
         print("D. Display summary of test results")
+        print("L. Change how regular expression length is calculated")
         print("P. Print progress (# iterations per length bucket remaining)")
         print("T. Test through in_tests")
         print("R. Reset in_tests and out_tests")
@@ -517,7 +515,7 @@ if __name__ == "__main__":
                 while True:
                     if benchmarker is None:
                         benchmarker = Benchmarker()
-                    re_maths = [x for x in benchmarker]
+                    re_maths = [re_math for re_math, itersleft, error in benchmarker if itersleft > 0 and error == ""]
                     random.shuffle(re_maths)
                     benchmarker = None
                     if len(re_maths) == 0:
@@ -583,5 +581,31 @@ if __name__ == "__main__":
             print("nEvals =", nEvals)
             print("showBins = ", showBins)
             benchmarker.displayResults(lengthBucketSize, nConstructions, nEvals, showBins)
+        elif choice == "L":
+            print("\nHow should the length of the regular expression be evaluated?")
+            print("\t1. Python string length")
+            print("\t2. Tree length")
+            choice = parseIntSafe(raw_input("\tMenu option: "), 1)
+            lengthFtn = None
+            if choice == 1:
+                lengthFtn = lambda re_math: len(re_math)
+            elif choice == 2:
+                c = Converter()
+                lengthFtn = lambda re_math: c.math(re_math).treeLength()
+            else:
+                print("Unknown option")
+                continue
+            i = 1
+            for re_math, itersleft, error in benchmarker:
+                print(i, re_math[:80])
+                benchmarker.db.execute("""
+                    UPDATE in_tests
+                    SET length=?
+                    WHERE re_math=?;
+                """, [lengthFtn(re_math), re_math])
+                i += 1
+            print("\n\nDone!")
+
+
 
     print("\nBye!")
