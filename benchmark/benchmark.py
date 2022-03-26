@@ -294,9 +294,9 @@ class Benchmarker():
 
     def statsToDo(self):
         return self.db.selectall("""
-            SELECT length, sum(itersleft)
+            SELECT length, count(*), sum(itersleft)
             FROM in_tests
-            WHERE length<1600 AND error==''
+            WHERE error==''
             GROUP BY length
             ORDER BY length ASC;
         """)
@@ -499,7 +499,7 @@ if __name__ == "__main__":
         print("\n")
         print("D. Display summary of test results")
         print("L. Change how regular expression length is calculated")
-        print("P. Print progress (# iterations per length bucket remaining)")
+        print("P. Print progress/regular expression length stats")
         print("T. Test through in_tests")
         print("R. Reset in_tests and out_tests")
         print("Q. Quit")
@@ -548,21 +548,14 @@ if __name__ == "__main__":
             finally:
                 benchmarker = Benchmarker()
         elif choice == "P":
-            todostats = [0] * 4
-            for length, count in benchmarker.statsToDo():
-                if length < 20:
-                    todostats[0] += count
-                elif length < 100:
-                    todostats[1] += count
-                elif length < 500:
-                    todostats[2] += count
-                else:
-                    todostats[3] += count
-            print("\n\nNumber of iterations left per expression bucket length:")
-            print("|\xce\xb1|<20       {:,}".format(todostats[0]))
-            print("20<=|\xce\xb1|<100  {:,}".format(todostats[1]))
-            print("100<=|\xce\xb1|<500 {:,}".format(todostats[2]))
-            print("500<=|\xce\xb1|     {:,}".format(todostats[3]))
+            stats = dict()
+            for length, count, itersleft in benchmarker.statsToDo():
+                prev_count, prev_iters = stats.get(length//25, (0, 0))
+                stats[length//25] = (prev_count + count, prev_iters + itersleft)
+
+            for lengthBin in sorted(stats.keys()):
+                count, iters = stats[lengthBin]
+                print(lengthBin*25, (lengthBin+1)*25, iters, "remaining;", count, "total")
             raw_input("Press Enter to continue ... ")
         elif choice == "R":
             if raw_input("Are you sure you want to permanently delete all results? y/(n): ") == "y":
