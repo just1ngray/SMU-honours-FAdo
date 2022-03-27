@@ -352,10 +352,11 @@ class Benchmarker():
                 WHERE re_math=?;
             """, [re_math])
 
-    def displayResults(self, lengthBucketSize=50, nConstructions=1, nEvals=1, showBins=True):
+    def displayResults(self, lengthBucketSize=25, nConstructions=1, nEvals=1, showBins=True, xmax=float("inf")):
         time_distribution = list()
         fig, ax = plt.subplots()
         line2d = dict()
+        xmaxx = -1
 
         for method, colour in self.db.selectall("SELECT method, colour from methods;"):
             x = []
@@ -382,10 +383,11 @@ class Benchmarker():
                 y.append(h)
                 time_distribution.append(h)
             line2d[method] = ax.plot(x, y, label=method, linewidth=1, color=colour)[0]
+            xmaxx = max(xmaxx, x[-1])
         time_distribution.sort()
 
         legend_to_line = dict()
-        legend = plt.legend(loc="best")
+        legend = plt.legend(loc="upper left")
         legendLines = legend.get_lines()
         for l in legendLines:
             l.set_picker(True)
@@ -410,6 +412,7 @@ class Benchmarker():
                 plt.bar(xpos, time_distribution[-1], width=lengthBucketSize, alpha=0.04, align="edge")
                 plt.text(xpos + lengthBucketSize/2, 0, str(count), ha="center", va="top", rotation="vertical", clip_on=True)
 
+        plt.xlim(0, max(xmax, xmaxx))
         plt.ylim(ymin=0, ymax=time_distribution[int(len(time_distribution)*0.9)]) # scale to show 0.XX% of data
         plt.connect("pick_event", _on_pick)
         plt.title("Algorithm Comparison of {} Regular Expressions".format(
@@ -565,15 +568,17 @@ if __name__ == "__main__":
                 print("Aborted. Did not reset.")
             raw_input("Press Enter to continue ... ")
         elif choice == "D":
-            lengthBucketSize = parseIntSafe(raw_input("\tExpression length bin width (50): "), 50)
+            lengthBucketSize = parseIntSafe(raw_input("\tExpression length bin width (25): "), 25)
             showBins = not raw_input("\tDisplay bin bars (y)/n: ") == "n"
             nConstructions = parseIntSafe(raw_input("\tNumber of constructions (1): "), 1)
             nEvals = parseIntSafe(raw_input("\tNumber of average word evaluations (1): "), 1)
+            xmax = parseIntSafe(raw_input("\tMaximum length shown (175): "), 175)
             print("lengthBucketSize =", lengthBucketSize)
             print("nConstructions =", nConstructions)
             print("nEvals =", nEvals)
             print("showBins = ", showBins)
-            benchmarker.displayResults(lengthBucketSize, nConstructions, nEvals, showBins)
+            print("xmax = ", xmax)
+            benchmarker.displayResults(lengthBucketSize, nConstructions, nEvals, showBins, xmax)
         elif choice == "L":
             print("\nHow should the length of the regular expression be evaluated?")
             print("\t1. Python string length")
