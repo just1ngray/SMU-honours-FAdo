@@ -32,7 +32,8 @@ class Benchmarker():
     def __iter__(self):
         for re_math, itersleft, error in self.db.selectall("""
             SELECT re_math, itersleft, error
-            FROM in_tests;
+            FROM in_tests
+            ORDER BY random();
         """):
             yield (re_math.decode("utf-8"), itersleft, error)
 
