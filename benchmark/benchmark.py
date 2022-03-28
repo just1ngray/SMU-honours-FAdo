@@ -176,7 +176,7 @@ class Benchmarker():
 
             # if less than 256 MB RAM is available, return before doing any DB work
             if psutil.virtual_memory().available < 256 * 1024 * 1024:  # 256 MB
-                print("Ran out of memory!")
+                print("\nRan out of memory!")
                 return
 
             n_evalA, n_evalR = self.db.selectall("""
@@ -549,8 +549,8 @@ if __name__ == "__main__":
                             finally:
                                 exit(0)
                         else: # parent
-                            print("Benchmarking", expr.encode("utf-8").encode("string-escape"), "...")
                             workers.add(pid)
+                            print("\nBenchmarking", expr.encode("utf-8").encode("string-escape"), "...")
             except KeyboardInterrupt:
                 for pid in workers:
                     os.kill(pid, 2)
