@@ -174,6 +174,11 @@ class Benchmarker():
             self.write("running gc")
             gc.collect() # remove unused words from memory... especially the potentially rejected ones
 
+            # if less than 256 MB RAM is available, return before doing any DB work
+            if psutil.virtual_memory().available < 256 * 1024 * 1024:  # 256 MB
+                print("Ran out of memory!")
+                return
+
             n_evalA, n_evalR = self.db.selectall("""
                 SELECT n_evalA, n_evalR
                 FROM in_tests
