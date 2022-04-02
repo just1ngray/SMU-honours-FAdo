@@ -452,7 +452,8 @@ def catchup():
                 FROM out_tests
                 WHERE in_tests.re_math==out_tests.re_math
                     AND methods.method==out_tests.method
-            );
+            )
+        ORDER BY in_tests.length ASC;
     """, ):
         re_math = re_math.decode("utf-8")
         methods = todo.get(re_math, set())
