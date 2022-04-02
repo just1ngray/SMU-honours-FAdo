@@ -146,6 +146,9 @@ class TestEvalWordP(unittest.TestCase):
     def test_evalWordP_PD(self):
         self.run_tests("evalWordP_PD")
 
+    def test_evalWordP_PD_Optimized(self):
+        self.run_tests("evalWordP_PD_Optimized")
+
     def test_evalWordP_Backtrack(self):
         self.run_tests("evalWordP_Backtrack")
 

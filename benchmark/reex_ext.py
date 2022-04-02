@@ -146,6 +146,27 @@ class uregexp(reex.regexp):
                 return True
         return False
 
+    def evalWordP_PD_Optimized(self, word):
+        """Evaluates word membership using partial derivatives."""
+        compressed = self.compress()
+        compressed._memoRPN()
+
+        memo = dict() # re.rpn(): {str.sigma: dict(pd.rpn(), pd)}
+        current = dict([(compressed._rpn, compressed)])
+        for sigma in word:
+            nxt = dict()
+            for pdstr, pd in current.items():
+                if not memo.has_key(pdstr):
+                    memo[pdstr] = dict([(sigma, dict([(x._rpn, x) for x in pd.partialDerivativesRPN(sigma).values()]))])
+                elif not memo[pdstr].has_key(sigma):
+                    memo[pdstr][sigma] = dict([(x._rpn, x) for x in pd.partialDerivativesRPN(sigma).values()])
+                nxt.update(memo[pdstr][sigma])
+            current = nxt
+        for pd in current.values():
+            if pd.ewp():
+                return True
+        return False
+
     def __iter__(self):
         stack = Deque([self])
         while not stack.isEmpty():
@@ -168,6 +189,10 @@ class uregexp(reex.regexp):
         :return: set of regular expressions
 
         .. seealso:: Antimirov, 95"""
+        raise NotImplementedError()
+
+    def partialDerivativesRPN(self, sigma):
+        """Dict<rpn string, regexp tree> of partial derivatives"""
         raise NotImplementedError()
 
     def display(self, fileName=None):
@@ -325,6 +350,22 @@ class uconcat(reex.concat, uregexp):
             pds.update(self.arg2.partialDerivatives(sigma))
         return pds
 
+    def partialDerivativesRPN(self, sigma):
+        pds = dict()
+        for rpn, pd in self.arg1.partialDerivativesRPN(sigma).items():
+            if pd.emptysetP():
+                pass # pds.add(emptyset(self.Sigma))
+            elif pd.epsilonP():
+                pds[self.arg2._rpn] = self.arg2
+            else:
+                newrpn = ".%s%s" % (rpn, self.arg2._rpn)
+                newpd = uconcat(pd, self.arg2)
+                newpd._rpn = newrpn
+                pds[newrpn] = newpd
+        if self.arg1.ewp():
+            pds.update(self.arg2.partialDerivativesRPN(sigma))
+        return pds
+
     def simpleRepr(self):
         return "."
 
@@ -445,6 +486,11 @@ class udisj(reex.disj, uregexp):
     def __str__(self):
         return "({0} + {1})".format(str(self.arg1), str(self.arg2))
 
+    def partialDerivativesRPN(self, sigma):
+        pds = self.arg1.partialDerivativesRPN(sigma)
+        pds.update(self.arg2.partialDerivativesRPN(sigma))
+        return pds
+
     def _pairGen(self, sample):
         return self.arg1._pairGen(sample).union(self.arg2._pairGen(sample))
 
@@ -557,6 +603,20 @@ class ustar(reex.star, uregexp):
                 pds.add(self)
             else:
                 pds.add(uconcat(pd, self))
+        return pds
+
+    def partialDerivativesRPN(self, sigma):
+        pds = dict()
+        for rpn, pd in self.arg.partialDerivativesRPN(sigma).items():
+            if pd.emptysetP():
+                pass # pds.add(uemptyset())
+            elif pd.epsilonP():
+                pds[self.rpn()] = self
+            else:
+                newrpn = ".%s%s" % (rpn, self._rpn)
+                newpd = uconcat(pd, self)
+                newpd._rpn = newrpn
+                pds[newrpn] = newpd
         return pds
 
     def simpleRepr(self):
@@ -684,6 +744,9 @@ class uoption(reex.option, uregexp):
     def __str__(self):
         return "{0}?".format(str(self.arg))
 
+    def partialDerivativesRPN(self, sigma):
+        return self.arg.partialDerivativesRPN(sigma)
+
     def __repr__(self):
         return "u" + super(uoption, self).__repr__()
 
@@ -762,6 +825,9 @@ class uepsilon(reex.epsilon, uregexp):
 
     def _pairGen(self, sample):
         return set([u""])
+
+    def partialDerivativesRPN(self, _):
+        return dict()
 
     def _backtrackMatch(self, word):
         yield word
@@ -853,6 +919,13 @@ class uatom(reex.atom, uregexp):
         if type(self.derivative(sigma)) == uepsilon:
             return set([uepsilon()])
         return set()
+
+    def partialDerivativesRPN(self, sigma):
+        if type(self.derivative(sigma)) == uepsilon:
+            pd = uepsilon()
+            pd._memoRPN()
+            return dict([(pd._rpn, pd)])
+        return dict()
 
     def simpleRepr(self):
         return str(self)
