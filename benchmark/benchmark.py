@@ -46,9 +46,10 @@ class Benchmarker():
                 method TEXT PRIMARY KEY,
                 colour TEXT
             );
-            INSERT OR IGNORE INTO methods (method, colour) VALUES ('pd', '#4363d8');
-            -- INSERT OR IGNORE INTO methods (method, colour) VALUES ('derivative', '#a9a9a9');
-            INSERT OR IGNORE INTO methods (method, colour) VALUES ('backtrack', '#000000'); -- NOTE: backtracking is almost always catastrophic for randomized regular expressions... delete manually if it is an issue
+            -- INSERT OR IGNORE INTO methods (method, colour) VALUES ('pd', '#4363d8');             -- straight downgrade to pdo
+            INSERT OR IGNORE INTO methods (method, colour) VALUES ('pdo', '#4363d8');               -- straight upgrade from pd
+            -- INSERT OR IGNORE INTO methods (method, colour) VALUES ('derivative', '#a9a9a9');     -- exponential regexp growth
+            INSERT OR IGNORE INTO methods (method, colour) VALUES ('backtrack', '#000000');         -- almost always catastrophic for randomized regular expressions... delete manually if it is an issue
             INSERT OR IGNORE INTO methods (method, colour) VALUES ('nfaPDRPN', '#42d4f4');
             INSERT OR IGNORE INTO methods (method, colour) VALUES ('nfaPDO', '#469990');
             INSERT OR IGNORE INTO methods (method, colour) VALUES ('nfaPDDAG', '#a9a9a9');
@@ -295,6 +296,8 @@ class Benchmarker():
             return pmre.evalWordP_Derivative
         elif method == "pd":
             return pmre.evalWordP_PD
+        elif method == "pdo":
+            return pmre.evalWordP_PD_Optimized
         elif method == "backtrack":
             return pmre.evalWordP_Backtrack
 
@@ -432,28 +435,29 @@ def gbFree():
     """Returns an integer number of GB free on system"""
     return psutil.virtual_memory().available / 1000 / 1000 / 1000
 
-def catchup(method):
-    """Benchmark a new method while saving previous results.
-    Important: Make sure the method exists in methods table!!
+def catchup():
+    """Benchmark missing re_math/methods while saving previous results.
+    Helpful if a new method is added later
     """
+    sys.setrecursionlimit(12000)
     benchmarker = Benchmarker()
-    todo = Deque()
+    todo = dict()
 
-    for re_math, itersleft in benchmarker.db.selectall("""
-        SELECT re_math, itersleft
-        FROM in_tests
-        WHERE n_evalA>-1
-            AND ? NOT IN (
-                SELECT method
+    for re_math, method in benchmarker.db.selectall("""
+        SELECT in_tests.re_math, methods.method
+        FROM in_tests, methods
+        WHERE in_tests.n_evalA>-1
+            AND NOT EXISTS (
+                SELECT *
                 FROM out_tests
-                WHERE out_tests.re_math==in_tests.re_math
-            )
-        ORDER BY random();
-    """, [method]):
+                WHERE in_tests.re_math==out_tests.re_math
+                    AND methods.method==out_tests.method
+            );
+    """, ):
         re_math = re_math.decode("utf-8")
-        itersTodo = 1 - itersleft
-        if itersTodo > 0:
-            todo.insert_right((re_math, itersTodo, itersleft))
+        methods = todo.get(re_math, set())
+        methods.add(method)
+        todo[re_math] = methods
 
     benchmarker = None
     nworkers = parseIntSafe(raw_input("How many worker processes? (1): "), 1)
@@ -469,29 +473,24 @@ def catchup(method):
                         workers.discard(pid)
                 time.sleep(0.25)
 
-            re_math, itersTodo, itersDone = todo.pop_left()
+            re_math, methods = todo.popitem()
             printable = re_math.encode("utf-8").encode("string-escape")
             pid = os.fork()
             if pid == 0: # child
+                gc.disable()
+                benchmarker = Benchmarker()
+                itersleft = benchmarker.db.selectall("SELECT itersleft FROM in_tests WHERE re_math=?;", [re_math])[0][0]
+                benchmarker.methods = methods
                 try:
-                    gc.disable()
-                    benchmarker = Benchmarker()
-                    benchmarker.methods = set([method])
-                    for i in range(itersTodo):
-                        print("\t", "iteration", i+1, "of:", printable)
-                        benchmarker.benchmark(re_math)
+                    benchmarker.benchmark(re_math)
                 except:
                     pass
                 finally:
-                    benchmarker.db.execute("""
-                        UPDATE in_tests
-                        SET itersleft=?
-                        WHERE re_math==?;
-                    """, [itersDone, re_math])
+                    benchmarker.db.execute("UPDATE in_tests SET itersleft=? WHERE re_math=?;", [itersleft, re_math])
                     exit(0)
             else: # parent
-                print("Catching up", printable, "...")
                 workers.add(pid)
+                print("Catching up", printable, "for methods", methods)
     except KeyboardInterrupt:
         pass
 
