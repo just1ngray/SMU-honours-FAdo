@@ -47,7 +47,7 @@ class Benchmarker():
                 colour TEXT
             );
             -- INSERT OR IGNORE INTO methods (method, colour) VALUES ('pd', '#4363d8');             -- straight downgrade to pdo
-            INSERT OR IGNORE INTO methods (method, colour) VALUES ('pdo', '#4363d8');               -- straight upgrade from pd
+            INSERT OR IGNORE INTO methods (method, colour) VALUES ('pdo', '#9400d3');               -- straight upgrade from pd
             -- INSERT OR IGNORE INTO methods (method, colour) VALUES ('derivative', '#a9a9a9');     -- exponential regexp growth
             INSERT OR IGNORE INTO methods (method, colour) VALUES ('backtrack', '#000000');         -- almost always catastrophic for randomized regular expressions... delete manually if it is an issue
             INSERT OR IGNORE INTO methods (method, colour) VALUES ('nfaPDRPN', '#42d4f4');
