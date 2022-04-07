@@ -348,6 +348,8 @@ class Benchmarker():
                     tin.n_evalA==-1
                     OR tin.n_evalR==-1
                     OR tout.t_pre==1000000.0
+                    OR tout.t_evalA==1000000.0
+                    OR tout.t_evalR==1000000.0
                 );
         """):
             re_math = re_math.decode("utf-8")
@@ -361,11 +363,17 @@ class Benchmarker():
                 WHERE re_math=?;
             """, [re_math])
 
-    def displayResults(self, lengthBucketSize=25, nConstructions=1, nEvals=1, showBins=True, xmax=float("inf")):
+    def displayResults(self, lengthBucketSize=25, nConstructions=1, nEvals=1, xmax=None, ymax=None):
+        print("\nDisplay parameters:")
+        print("\tlengthBucketSize =", lengthBucketSize)
+        print("\tnConstructions =", nConstructions)
+        print("\tnEvals =", nEvals)
+        print("\txmax =", xmax)
+        print("\tymax =", ymax)
+
         time_distribution = list()
         fig, ax = plt.subplots()
         line2d = dict()
-        xmaxx = -1
 
         for method, colour in self.db.selectall("SELECT method, colour from methods;"):
             x = []
@@ -373,26 +381,19 @@ class Benchmarker():
             for row in self.db.selectall("""
                 SELECT avg(tin.length),
                     avg(tout.t_pre) as avgpre,
-                    sum(tout.t_evalA) as t_evalA,
-                    sum(tin.n_evalA) as n_evalA,
-                    sum(tout.t_evalR) as t_evalR,
-                    sum(tin.n_evalR) as n_evalR
+                    avg((tout.t_evalA + tout.t_evalR) / (tin.n_evalA + tin.n_evalR)) as avgeval
                 FROM in_tests as tin, out_tests as tout
                 WHERE tin.re_math==tout.re_math
                     AND tout.method==?
-                    AND tin.length<1600
                 GROUP BY length/?
                 ORDER BY length ASC;
             """, [method, lengthBucketSize]):
-                length, avgpre, t_evalA, n_evalA, t_evalR, n_evalR = row
+                length, avgpre, avgeval = row
+                h = nConstructions*avgpre + nEvals*avgeval
                 x.append(length)
-                if n_evalA == 0: n_evalA = float("inf")
-                if n_evalR == 0: n_evalR = float("inf")
-                h = (nConstructions * avgpre) + (t_evalA + t_evalR)/(n_evalA + n_evalR)*nEvals
                 y.append(h)
                 time_distribution.append(h)
             line2d[method] = ax.plot(x, y, label=method, linewidth=1, color=colour)[0]
-            xmaxx = max(xmaxx, x[-1])
         time_distribution.sort()
 
         legend_to_line = dict()
@@ -408,21 +409,13 @@ class Benchmarker():
             line.set_visible(not line.get_visible())
             fig.canvas.draw()
 
-        if showBins:
-            for count, minlen in self.db.selectall("""
-                    SELECT count(*), min(length)
-                    FROM in_tests
-                    WHERE n_evalA>-1
-                        AND length<1600
-                    GROUP BY length/?
-                    ORDER BY length ASC;
-                """, [lengthBucketSize]):
-                xpos = minlen/lengthBucketSize * lengthBucketSize # the bottom left corner
-                plt.bar(xpos, time_distribution[-1], width=lengthBucketSize, alpha=0.04, align="edge")
-                plt.text(xpos + lengthBucketSize/2, 0, str(count), ha="center", va="top", rotation="vertical", clip_on=True)
+        plt.xlim(xmin=0)
+        if xmax: plt.xlim(xmax=xmax)
+        if ymax:
+            plt.ylim(ymin=0, ymax=ymax)
+        else:
+            plt.ylim(ymin=0, ymax=time_distribution[int(len(time_distribution)*0.9)]) # scale to show 0.XX% of data
 
-        plt.xlim(0, max(xmax, xmaxx))
-        plt.ylim(ymin=0, ymax=time_distribution[int(len(time_distribution)*0.9)]) # scale to show 0.XX% of data
         plt.connect("pick_event", _on_pick)
         plt.title("Algorithm Comparison of {} Regular Expressions".format(
             self.db.selectall("SELECT count(re_math) FROM in_tests WHERE n_evalA>-1 AND error==''")[0][0]))
@@ -575,16 +568,16 @@ if __name__ == "__main__":
             raw_input("Press Enter to continue ... ")
         elif choice == "D":
             lengthBucketSize = parseIntSafe(raw_input("\tExpression length bin width (25): "), 25)
-            showBins = not raw_input("\tDisplay bin bars (y)/n: ") == "n"
             nConstructions = parseIntSafe(raw_input("\tNumber of constructions (1): "), 1)
             nEvals = parseIntSafe(raw_input("\tNumber of average word evaluations (1): "), 1)
             xmax = parseIntSafe(raw_input("\tMaximum length shown (175): "), 175)
-            print("lengthBucketSize =", lengthBucketSize)
-            print("nConstructions =", nConstructions)
-            print("nEvals =", nEvals)
-            print("showBins = ", showBins)
-            print("xmax = ", xmax)
-            benchmarker.displayResults(lengthBucketSize, nConstructions, nEvals, showBins, xmax)
+            ymax = None
+            try:
+                ymax = float(raw_input("\tMaximum time (1.0): "))
+            except ValueError:
+                ymax = 1.0
+
+            benchmarker.displayResults(lengthBucketSize, nConstructions, nEvals, xmax, ymax)
         elif choice == "L":
             print("\nHow should the length of the regular expression be evaluated?")
             print("\t1. Python string length")
