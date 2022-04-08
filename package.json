@@ -1,18 +1,18 @@
 {
   "name": "smu-honours-fado",
   "version": "1.0.0",
-  "description": "",
-  "main": "none.js",
+  "description": "Convert a programmer's regular expression into mathematical FAdo syntax",
+  "main": "benchmark/parse.js",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/just1ngray/SMU-honours-FAdo.git"
+    "url": "git+https://github.com/just1ngray/SMUHon-Practical-RE-Membership-Algs.git"
   },
   "author": "Justin Gray",
   "license": "ISC",
   "bugs": {
-    "url": "https://github.com/just1ngray/SMU-honours-FAdo/issues"
+    "url": "https://github.com/just1ngray/SMUHon-Practical-RE-Membership-Algs/issues"
   },
-  "homepage": "https://github.com/just1ngray/SMU-honours-FAdo#readme",
+  "homepage": "https://github.com/just1ngray/SMUHon-Practical-RE-Membership-Algs",
   "dependencies": {
     "regexp-tree": "^0.1.24"
   }
