@@ -363,7 +363,7 @@ class Benchmarker():
                 WHERE re_math=?;
             """, [re_math])
 
-    def displayResults(self, lengthBucketSize=25, nConstructions=1, nEvals=1, xmax=None, ymax=None):
+    def displayResults(self, lengthBucketSize=1, nConstructions=1, nEvals=1, xmax=None, ymax=None):
         print("\nDisplay parameters:")
         print("\tlengthBucketSize =", lengthBucketSize)
         print("\tnConstructions =", nConstructions)
@@ -375,7 +375,11 @@ class Benchmarker():
         fig, ax = plt.subplots()
         line2d = dict()
 
-        for method, colour in self.db.selectall("SELECT method, colour from methods;"):
+        for method, colour in self.db.selectall("""
+            SELECT method, colour
+            FROM methods
+            ORDER BY method LIKE 'nfa%', length(method);
+        """):
             x = []
             y = []
             for row in self.db.selectall("""
@@ -417,8 +421,16 @@ class Benchmarker():
             plt.ylim(ymin=0, ymax=time_distribution[int(len(time_distribution)*0.9)]) # scale to show 0.XX% of data
 
         plt.connect("pick_event", _on_pick)
-        plt.title("Algorithm Comparison of {} Regular Expressions".format(
-            self.db.selectall("SELECT count(re_math) FROM in_tests WHERE n_evalA>-1 AND error==''")[0][0]))
+        plt.title("Algorithm Comparison for {:,} Regular Expressions".format(
+            # find the number of regular expressions displayed on this plot (horizontal axis cut off at xmax)
+            self.db.selectall("""
+                SELECT count(re_math)
+                FROM in_tests
+                WHERE n_evalA>-1
+                    AND error==''
+                    AND length<=?;
+            """, [plt.xlim()[1]])[0][0])
+        )
         plt.xlabel("Regular Expression Length\nGrouped in bins of size {}".format(lengthBucketSize))
         plt.ylabel("x{0} Construction(s), x{1} Word Evaluation(s)\n(seconds)".format(nConstructions, nEvals))
         plt.show()
@@ -567,7 +579,7 @@ if __name__ == "__main__":
                 print("Aborted. Did not reset.")
             raw_input("Press Enter to continue ... ")
         elif choice == "D":
-            lengthBucketSize = parseIntSafe(raw_input("\tExpression length bin width (25): "), 25)
+            lengthBucketSize = parseIntSafe(raw_input("\tExpression length bin width (1): "), 1)
             nConstructions = parseIntSafe(raw_input("\tNumber of constructions (1): "), 1)
             nEvals = parseIntSafe(raw_input("\tNumber of average word evaluations (1): "), 1)
             xmax = parseIntSafe(raw_input("\tMaximum length shown (175): "), 175)
