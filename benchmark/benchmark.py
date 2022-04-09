@@ -421,16 +421,7 @@ class Benchmarker():
             plt.ylim(ymin=0, ymax=time_distribution[int(len(time_distribution)*0.9)]) # scale to show 0.XX% of data
 
         plt.connect("pick_event", _on_pick)
-        plt.title("Algorithm Comparison for {:,} Regular Expressions".format(
-            # find the number of regular expressions displayed on this plot (horizontal axis cut off at xmax)
-            self.db.selectall("""
-                SELECT count(re_math)
-                FROM in_tests
-                WHERE itersleft==0
-                    AND error==''
-                    AND length<=?;
-            """, [plt.xlim()[1]])[0][0])
-        )
+        plt.title("Regular Expression Membership Algorithm Efficiency")
         plt.xlabel("Regular Expression Length\nGrouped in bins of size {}".format(lengthBucketSize))
         plt.ylabel("x{0} Construction(s), x{1} Word Evaluation(s)\n(seconds)".format(nConstructions, nEvals))
         plt.show()
@@ -567,9 +558,30 @@ if __name__ == "__main__":
                 prev_count, prev_iters = stats.get(length//25, (0, 0))
                 stats[length//25] = (prev_count + count, prev_iters + itersleft)
 
+            totexprs = 0
+            tottodo = 0
+            totdone = 0
+            print("\nLength           #Exprs       #Todo        #Done")
+            print("------------------------------------------------")
             for lengthBin in sorted(stats.keys()):
                 count, iters = stats[lengthBin]
-                print(lengthBin*25, (lengthBin+1)*25, iters, "remaining;", count, "total")
+                done = count - iters
+                print(
+                    ("["+str(lengthBin*25)+", "+str((lengthBin+1)*25)+")").ljust(16),
+                    str(count).ljust(12),
+                    str(iters).ljust(12),
+                    str(done).ljust(12)
+                )
+                totexprs += count
+                tottodo += iters
+                totdone += done
+            print()
+            print(
+                "Total".ljust(16),
+                str(totexprs).ljust(12),
+                str(tottodo).ljust(12),
+                str(totdone).ljust(12)
+            )
             raw_input("Press Enter to continue ... ")
         elif choice == "R":
             if raw_input("Are you sure you want to permanently delete all results? y/(n): ") == "y":
