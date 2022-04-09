@@ -426,7 +426,7 @@ class Benchmarker():
             self.db.selectall("""
                 SELECT count(re_math)
                 FROM in_tests
-                WHERE n_evalA>-1
+                WHERE itersleft==0
                     AND error==''
                     AND length<=?;
             """, [plt.xlim()[1]])[0][0])
@@ -582,12 +582,12 @@ if __name__ == "__main__":
             lengthBucketSize = parseIntSafe(raw_input("\tExpression length bin width (1): "), 1)
             nConstructions = parseIntSafe(raw_input("\tNumber of constructions (1): "), 1)
             nEvals = parseIntSafe(raw_input("\tNumber of average word evaluations (1): "), 1)
-            xmax = parseIntSafe(raw_input("\tMaximum length shown (175): "), 175)
+            xmax = parseIntSafe(raw_input("\tMaximum length shown (180): "), 180)
             ymax = None
             try:
-                ymax = float(raw_input("\tMaximum time (1.0): "))
+                ymax = float(raw_input("\tMaximum time (fitted): "))
             except ValueError:
-                ymax = 1.0
+                ymax = None
 
             benchmarker.displayResults(lengthBucketSize, nConstructions, nEvals, xmax, ymax)
         elif choice == "L":
