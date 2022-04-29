@@ -1,0 +1,44 @@
+Python 2.7 was selected as the main language for the experiments and implementations of this thesis because it is the most recent Python version supported by FAdo as of May 2021. Lark-parser was chosen to parse regular expression strings into Python 2.7 classes. And finally RegExp Tree was found to help convert programmer's regular expressions into mathematical regular expressions.
+
+\section{FAdo}
+\label{sec:FAdo}
+FAdo is an open-source Python library developed as an academic tool to study and manipulate formal languages. It includes functionality to work with regular expressions, DFAs, NFAs, transducers, and context-free grammars; as well as converting between these different language representations \cite{fado}. Only the regular expression and NFA modules are relevant for the purposes of this research, as these are the two modules that best decide the membership problem for regular languages in practical applications.
+
+Regular expressions are saved in memory as a tree of Python class objects. FAdo's built-in regular expression classes support concatenation, disjunction, star, and option as the inner-nodes of the tree; and empty word, empty set, and atomic character as its leaves. A regular expression tree can be converted into an NFA using several construction algorithms covered in the Literature Review \cite{fado}.
+
+NFAs are implemented using their standard 5-tuple definition. The transition function uses a Python dictionary to find the mapping of single-character string labels to their corresponding set of successor state indices. FAdo's NFAs are also equipped with algorithms to enumerate the accepted language \cite{fado}.
+
+
+
+
+\section{Lark Parser} 
+\label{sec:Lark Parser}
+Lark is an open-source Python library to parse context-free grammars \cite{lark}. A Lark grammar is used to convert a mathematical regular expression string into a FAdo regular expression tree. 
+
+It recommends defining and using a LALR-compatible grammar whenever possible, since this is the fastest algorithm available in this library \cite{lark-docs}. Mathematical regular expressions follow the restricted protocol and can benefit from the speed of LALR parsing. Secondly, since the raw abstract syntax tree itself is irrelevant, each tree node is immediately transformed in-place to the corresponding FAdo Python class. This builds the regular expression tree from a mathematical regular expression string as directly as possible.
+
+
+
+
+
+\section{RegExp Tree}
+\label{sec:RegExp Tree}
+RegExp Tree is a very popular open-source NodeJS library to process programmer's regular expressions \cite{regexp-tree}. It is able to parse a regular expression string into a recursively defined JSON object. Because programmer's regular expressions form a complex language, RegExp Tree was chosen to parse each programmer's regular expression into its non-ambiguous mathematical version; writing such a grammar from scratch would require too much time and would be error-prone. This library receives well over one million downloads per week on npm (node's package manager). Common errors should be found quickly and patched with so many users.
+
+Despite the vast quantity of users, a small bug was discovered while writing this thesis. Previously, a unicode programmer's regular expression of the form ``[a\textbackslash-z]'' would throw an error when parsed into RegExp Tree. With a simple fix the same string can be parsed properly as a character class matching the single characters ``a'', ``-'', or ``z''. This contribution is now live to all RegExp Tree users.
+
+Most practically found regular expressions can be passed into RegExp Tree to get a traversable JSON object. This object is then converted into a non-ambiguous string recognized by our Lark grammar.
+
+
+
+
+
+
+
+
+
+
+
+
+
+

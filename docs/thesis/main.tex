@@ -1,0 +1,125 @@
+% https://www.smu.ca/academics/archives/honours-thesis.html#d.en.48587
+% https://www.smu.ca/webfiles/th027_honours_format_procedures.pdf
+
+
+
+
+\documentclass[11pt]{report}
+\author{Justin Gray}
+\title{The Practical Efficiency of Regular Expression Membership Algorithms}
+
+% set the margins to 1"
+\usepackage{geometry}
+\geometry{margin=1in}
+
+% multiple columns (ie, figure comparisons)
+\usepackage{multicol}
+\setlength{\columnsep}{1cm}
+
+% double space everything by default
+\usepackage{setspace}
+\doublespacing
+\setlength{\parskip}{12pt}
+
+% code segments
+\usepackage{listings}
+\lstset{
+  numbers=left, 
+  frame=single, 
+  basicstyle=\singlespacing\ttfamily, 
+  mathescape=true
+}
+\renewcommand{\lstlistingname}{Algorithm}
+\renewcommand{\lstlistlistingname}{List of \lstlistingname s}
+
+% math stuff
+\usepackage{amsfonts} % mathbb{N} etc
+\usepackage{amsmath}
+\usepackage{mathtools}
+
+% graphs
+\usepackage{tikz-qtree}
+\usetikzlibrary{automata}
+\usetikzlibrary{fit}
+
+% subfigure environment
+\usepackage{subcaption}
+\captionsetup{compatibility=false}
+
+% bibliography
+\usepackage[
+    backend=bibtex, 
+    sorting=none, 
+    citestyle=numeric-comp,
+    maxbibnames=100
+  ]{biblatex}
+\bibliography{refs}
+
+% misc imports
+\usepackage[                  % to bring \todo into scope
+    backgroundcolor=lightgray, 
+    textsize=tiny
+  ]{todonotes}
+\usepackage{indentfirst}      % to indent the first paragraph after a chapter/section
+\usepackage{float}            % so figures can be positioned [H]ere
+\usepackage{hyperref}         % clickable citations and sections
+\usepackage[utf8]{inputenc}   % allows 2-byte characters like ï
+
+\begin{document}
+
+  \input{misc/signature}
+  \input{misc/abstract}
+  
+  {\singlespacing \tableofcontents}
+
+  \chapter{Introduction}
+  \label{ch:Introduction}
+  \input{ch/introduction}
+  
+  \chapter{Background}
+  \label{ch:Background}
+  \input{ch/background}
+
+  \chapter{Literature Review}
+  \label{ch:Literature Review}
+  \input{ch/literature_review}
+  
+  \chapter{Programming Tools}
+  \label{ch:Programming Tools}
+  \input{ch/programming_tools}
+  
+  \chapter{Methodology}
+  \label{ch:Methodology}
+  \input{ch/methodology}
+  
+  \chapter{Results}
+  \label{ch:Results}
+  \input{ch/results}
+  
+  \chapter{Conclusions}
+  \label{ch:Conclusions}
+  \input{ch/conclusions}
+  
+  \printbibliography[title=References]
+  
+\end{document}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

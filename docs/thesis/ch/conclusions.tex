@@ -1,0 +1,22 @@
+Both theoretically and through experimentation we have shown the benefits and pitfalls of the common backtracking algorithm for word membership. This algorithm is suitable for applications that absolutely require non-regular language operations such as backreferences, or when developers create regular expressions that are robust against excessive backtracking. However, this method occasionally takes extreme membership time (e.g., randomly generated regular expressions, or pathologically chosen expressions designed to hog system resources). Any regular expression library using the backtracking algorithm should do so cautiously, and warn their users to avoid writing regular expressions vulnerable to a lot of backtracking.
+
+Library and language developers cannot guarantee their users will write robust regular expressions, and many programmers consider regular expressions a ``black box'' of abstraction. If non-regular language operations are non-essential, or a regular expression contains only regular operations, then a more traditional theoretical algorithm is warranted. These algorithms provide polynomial worst case membership matching on any regular expression or input word combination, and therefore is safer for developers who use regular expressions without understanding their underlying implementation. Algorithms that first compute an NFA, and then run membership on that NFA should avoid NFA constructions involving empty transitions (like the Thompson construction) since they delay word matching. Instead, these sequential NFA constructions should be considered by increasing construction cost: follow, position, Glushkov, and PDDAG. The PDDAG NFA is slower to construct than the follow NFA, but is smaller on average and therefore results in faster membership times than any other considered NFA. Finally, non-NFA partial derivative membership could be fast if tree identification is done efficiently, and when binary concatenations grow right instead of left. Further research should compare these results when expanding concatenation trees right instead of left (Figure \ref{fig:left vs right expansion}), or potentially when building more complete trees. The trade-offs between parsing speed in Lark \cite{lark} and various regular expression/NFA algorithms would be an interesting investigation. Predominantly, evaluating membership using pure partial derivatives is expected to be much faster when expanding repetitions right.
+
+Additionally, the speed of these tests proved to be a significant issue. They were executed over the span of months, and we still did not have time to finish all benchmarks. Using smaller test-sets of input words would speed up the overall time, and the pairwise generation algorithm \cite{pairgen} would have greatly benefited from a non-binary concatenation. However, the pairwise generation algorithm would still create long accepting words for deeply nested stars, and this needs to be addressed. Running these experiments in C++, Java, Rust, or even JavaScript would decrease execution time by up to hundreds of times; Python makes code quick to write, but \emph{ridiculously} slow to run.
+
+If finding a database of perfectly accurate practical regular expressions was important to future researchers, they may approach the problem using grep.app to find relevant GitHub source files. But a significant improvement would be to parse the entire source file, and then traverse the parse tree to find regular expressions directly.
+
+The source files and database results of this research are publicly available on GitHub, at \url{https://github.com/just1ngray/SMUHon-Practical-RE-Membership-Algs}.
+
+
+
+
+
+
+
+
+
+
+
+
+

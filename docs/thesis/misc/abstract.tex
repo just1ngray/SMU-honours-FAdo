@@ -1,0 +1,18 @@
+\begin{center}
+  {\Large The Practical Efficiency of Regular Expression\\
+  Membership Algorithms}
+  
+  By Justin Gray
+  
+  \vspace{1cm}
+  
+  {\bf Abstract}\\
+\end{center}
+
+\begin{onehalfspace}
+  Regular expressions encode text patterns and define languages of symbolic words. The membership problem decides if a given word is an element of the language described by a given regular expression. This problem has various well-studied algorithms, but current research only shows asymptotic complexity and performance with respect to samples of randomly generated regular expressions. Our research aims to answer how the algorithms perform when using practical regular expressions used in the real-world on a representative test set of words. A set of compatible regular expressions have been collected from public GitHub repositories. Each compatible expression (i.e., no backreferences or improper formatting) is then converted into an equivalent unambiguous mathematical representation. For each distinct expression, we have tested Thompson, Glushkov, position, follow, and partial derivative NFA constructions, as well as partial derivatives and exponential backtracking directly on the regular expression tree. These algorithms have been implemented into a modified version of the Python’s FAdo library and include UNIX-inspired extensions such as character classes, the wild dot, and UTF-8 support. We find that efficiently constructing a small NFA is the best approach to this problem; using follow and PDDAG algorithms are experimentally shown as the best.
+\end{onehalfspace}
+  
+\vfill
+  
+{\flushright \today \\}

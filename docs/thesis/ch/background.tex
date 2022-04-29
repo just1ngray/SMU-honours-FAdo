@@ -1,0 +1,485 @@
+To ensure anyone with a moderate mathematical background can understand the contents of this paper, relevant introductory concepts are explained in this chapter. It is recommended that special attention be given to Sections \ref{sec:Regular Expressions} - \ref{sec:Finite Automata}, as the concepts therein will be critical throughout the paper. Advanced readers who are familiar with formal language theory should at least glance through these highlighted sections to understand the important difference between a \emph{programmer's regular expression} and a \emph{mathematical regular expression}, as well as our state notation for NFA constructions.
+
+
+
+
+
+\section{Formal Languages}
+\label{sec:Formal Languages}
+Formal languages study \emph{words} created by \emph{alphabets} in \emph{languages}. Many real-world problems can be encoded in terms of languages: is a given word an element of a specified language, or how large is the defined language?
+\begin{enumerate}
+  \item {\bf Alphabet:} a non-empty set of symbols (characters) typically denoted by $\Sigma$. Some alphabets are used frequently enough to be given a name: the binary alphabet is represented by $\Sigma_2 = \{0, 1\}$.
+  \item {\bf Word:} an ordered sequence of concatenated (joined) symbols from an alphabet. For example, $0110$ and $10011$ are words over the binary alphabet. When no symbols are chosen we refer to the empty word as $\epsilon$. The empty word has the special concatenation property: $w \equiv w\epsilon \equiv \epsilon w$.
+  \item {\bf Language:} a set of words on an alphabet. The language $\Sigma^*$ represents the set of all possible words of any length on a given alphabet. Every language is a subset of $\Sigma^*$.
+\end{enumerate}
+Since languages are simply sets, the following important set operations on languages $K$ and $L$ exist:
+\begin{enumerate}
+  \item Union: $K \cup L = \{w : w \in K $ or $ w \in L\}$
+  \item Concatenation: $K \odot L \equiv KL = \{uv : u \in K, v \in L\}$
+  \item Power: $K^n = \{u_1 u_2 ... u_n : u_i \in K\}$. Note that $K^0 = \{\epsilon\}$
+  \item Kleene Star: $K^* = K^0 \cup K^1 \cup K^2 \cup K^3 \cup K^4 ...$
+  \item Difference: $K \backslash L = \{w : w \in K, w \notin L\}$
+  \item Complement: $K^c = \Sigma^* \backslash K$
+\end{enumerate}
+
+
+
+
+
+\section{Regular Expressions}
+\label{sec:Regular Expressions}
+Non-trivial language problems involve large languages. It becomes unmanageable to explicitly enumerate every word in the language, and impossible for infinitely large languages. Regular expressions aim to solve this problem by encoding many languages in a relatively small sequence of alphabet symbols and meta-character operations. We distinguish two types of regular expressions in this paper: mathematical regular expressions and programmer's regular expressions. In each case, the function $L(\alpha)$ represents the language encoded by the regular expression $\alpha$. A regular expression $\alpha$ \emph{matches} or \emph{accepts} a word $w$ if and only if $w \in L(\alpha)$.
+
+Mathematical regular expressions represent the most simple specification. Any language that can be encoded using a mathematical regular expression is classified as a \emph{regular language}. These expressions are defined inductively over the alphabet $\Sigma \cup \{(, ), *, +, \oslash\}$. 
+
+{\bf Definition of Mathematical Regular Expressions}
+\begin{enumerate}
+  \item Atomic regular expressions $\oslash$ and $\sigma \in \Sigma$ such that $L(\oslash) = \emptyset = \{\}$ and $L(\sigma) = \{\sigma\}$
+  \item Composite regular expressions from given regular expressions $\alpha$ and $\beta$:
+    \begin{enumerate}
+      \item Disjunction: $(\alpha + \beta)$ accepts $L(\alpha) \cup L(\beta)$
+      \item Kleene Star: $\alpha^*$ accepts $L(\alpha)^*$
+      \item Concatenation: $(\alpha \odot \beta) \equiv (\alpha \beta)$ accepts $L(\alpha) L(\beta)$ \\
+            If $\alpha$ and/or $\beta$ are $\oslash$, then it accepts $\emptyset$
+    \end{enumerate}
+\end{enumerate}
+In this thesis we extend this definition with compatible structures that maintain regularity:
+
+\begin{enumerate}
+  \item Option: $\alpha?$ accepts $L(\alpha) \cup \{\epsilon\}$
+  \item Empty Word: $\epsilon$ accepts $\{\epsilon\}$
+  \item Wild Dot: $.$ accepts $\Sigma$
+  \item Character Classes: a non-empty sequence of symbols $\sigma$ and inclusive symbol ranges $\sigma_1-\sigma_2$ ($\sigma_1 \leq \sigma_2$) enclosed within [ ] for positive matches or [$^\wedge$ ] when looking for any symbol not contained within the character class. Some examples below:
+    \subitem $L([abc]) = \{a, b, c\}$ 
+    \subitem $L([^\wedge abc]) = \Sigma \backslash \{a, b, c\}$
+    \subitem $L([0-9abcx-z]) = \{0, 1, ..., 9, a, b, c, x, y, z\}$
+\end{enumerate}
+
+Mathematical regular expressions form regular expression trees. The tree length of a regular expression is defined as the number of nodes in its tree. Figure \ref{fig:regexp_tree} shows a regular expression tree of tree length 9 using most of the features noted above: concatenation (explicit $\odot$), disjunction (+), Kleene star (*), simple atoms (a, b), wild dot (.), and the character class ($[012c-z]$).
+
+\begin{figure}[H]
+  \centering
+  \Tree 
+  [
+    .$\odot$ 
+    [
+      .$+$ 
+      a 
+      [
+        .$^*$ 
+        b 
+      ]
+    ]
+    [
+      .$\odot$ 
+      [
+        .? 
+        $.$ 
+      ]
+      $[012c-z]$ 
+    ]
+  ]
+  \caption{A regular expression tree for the mathematical regular expression $((a + b^*) (.? [012c-z]))$}
+  \label{fig:regexp_tree}
+\end{figure}
+
+{\bf Programmer's Regular Expressions}
+
+Programmer's regular expressions are used in practical software applications \cite{formal-regexps}. Their typical implementations further extend the definition of mathematical regular expressions from above. Because of certain non-regular operations such as backreferences, only a subset of programmer's regular expressions can be converted into mathematical regular expressions. And from a theoretical point of view, programmer's regular expressions do not define regular languages, but instead a higher subclass of recursively enumerable languages. Converting programmer's regular expressions into mathematical regular expressions is explored in Section \ref{sec:Sampling Practical Regular Expressions}. Among other features, programmer's regular expressions:
+
+\begin{enumerate}
+  \item Change the disjunction operator from plus ($+$) to pipe ($|$).
+  \item Remove the explicit representation of the empty word in favour of using the option operation.
+  \item Allow for implicit operations defined by precedence rules.
+  \item Add anchors: typical implementations of programmer's regular expressions consider a given word to be in the language if any substring of the word is in the language. This substring rule can be disabled by anchoring the expression. Placing a $^\wedge$ at the start of the regular expression asserts the match begins at the start of the string, and placing a $\$$ at the end ensures nothing can be matched afterward. In Section \ref{subsec:Partial Matching} we define a mapping from anchored expressions into mathematical expressions.
+  \item Add ranged repetitions: the syntax $r\{n,m\}$ encodes the power operation on $r$, between $n$ to $m$ times (inclusive). If $n$ is missing it defaults to 0, and if $m$ is missing it defaults to $\infty$. Section \ref{subsec:Converting into FAdo Compatible Syntax} shows how a ranged repetition can be equivalently expressed using concatenations, disjunctions, and $\epsilon$'s.
+  \item Add backreferences: this non-regular language operation allows matching the same substring multiple times. Regular expressions cannot represent the language $\{ww : w \in \Sigma^*\}$, but we can using the backreferencing expression $^\wedge (.^*)\backslash 1 \$$. Unless the initial match encodes a finite sub-language, we are unable to convert any expression with a backreference into the above mathematical definition. In general this is not the case, and we therefore do not consider any programmer's regular expression containing backreferences.
+\end{enumerate}
+
+A regular expression $r$ matches/accepts a word $w$ if and only if $w \in L(r)$. Determining the practical efficiency of this membership problem is the focus of this research, and has several different approaches. Throughout this paper, mathematical regular expressions may not be fully parenthesized and will instead rely on implicit precedence rules to improve conciseness. These precedence rules are given in descending order: star, optional, concatenation, and disjunction. Mathematical regular expressions may briefly contain anchors before being removed; in such a case the anchors are treated as $\epsilon$.
+
+Typically regular expressions are seen as presented above, where binary operators like concatenation and disjunction are placed in the middle of two sub-expressions, or where the star and optional are placed immediately after a sub-expression. However, it can occasionally be useful to use an alternative string syntax called reverse polish notation (RPN) where operators are never implicit and always come before their sub-expressions. Given regular expressions $\alpha, \beta$ in the appropriate form, the following equivalencies exist:
+
+\begin{center}
+  \begin{tabular}{c|c|c}
+    Infix             & Operation     & RPN \\
+    \hline
+    $(\alpha \beta)$  & Concatenation & $\odot \alpha \beta$ \\
+    $(\alpha + \beta)$ & Disjunction  & $+ \alpha \beta$ \\
+    $\alpha^*$        & Star          & $^* \alpha$ \\
+    $\alpha?$         & Optional      & $? \alpha$ \\
+    $\sigma$          & Atom          & $\sigma$ \\
+    $\epsilon$        & Empty word    & $\epsilon$
+  \end{tabular}
+\end{center}
+
+The RPN syntax is equivalent to the typically-used infix syntax, but hurts human readability in favour of removing parentheses and being more compact. For example, the mathematical regular expression $(a + (b^*)) \odot ((.?) \odot [012c-z])$ from Figure \ref{fig:regexp_tree} becomes $\odot + a ^*b \odot ? . [012c-z]$ when expressed using RPN.
+
+
+
+
+
+
+\section{Derivatives}
+\label{sec:Derivatives}
+Derivatives can be applied both to languages and regular expressions. The high-level idea is to remove the first symbol from each word and see what remains. The derivative of a language $L$ relative to a symbol $a$ is the language defined as $a^{-1} L = \{y : ay \in L\}$. An arbitrary word $w = a_1a_2...a_n$ is an element of $L$ if and only if $\epsilon \in a_n^{-1}...a_2^{-1}a_1^{-1} L$. That is, removing the first letter $a_1$ from the words of $L$, then the first letter $a_2$ from the resulting words and so on will result in a language. If this language contains the empty word $\epsilon$, then $w = a_1a_2...a_n$ is in $L$. Derivatives for regular expressions are defined inductively \cite{brzozowski1964}. 
+
+\begin{enumerate}
+  \item $D_\sigma(\alpha \beta) = \begin{cases}
+      D_\sigma(\alpha) \beta,              & \epsilon \notin L(\alpha) \\
+      D_\sigma(\alpha) \beta + D_\sigma(\beta), & \epsilon \in L(\alpha)
+    \end{cases}$
+  \item $D_\sigma(\alpha + \beta) = D_\sigma(\alpha) + D_\sigma(\beta)$
+  \item $D_\sigma(\alpha^*) = D_\sigma(\alpha) \alpha^*$
+  \item $D_\sigma(\sigma) = D_\sigma(.) = D_\sigma([...\sigma...]) = \epsilon$
+  \item $D_\sigma(a) = D_\sigma(\oslash) = \oslash$, for $a \neq \sigma$
+\end{enumerate}
+The derivative of a regular expression is a regular expression. For example,
+\begin{center}
+  $D_a((a + b*) (a (ba)^*)) = ((a (ba)^*) + (ba)^*)$  
+\end{center}
+An arbitrary word $w = a_1a_2...a_n$ is accepted by regular expression $r$ if and only if $\epsilon \in L(D_{a_n}...D_{a_2}D_{a_1}(r))$. Although derivatives can solve membership of infinite languages, the returned expressions suffer from exponential growth \cite{Antimirov}.
+
+Mirkin and Antimirov introduced partial derivatives as an improvement to Brzozowski's word derivatives \cite{Antimirov, mirkin66}. Partial derivatives use sets of regular expressions instead of a single regular expression to maintain the derivative's value.
+\begin{enumerate}
+  \item $\delta_\sigma(\alpha \beta) = \begin{cases}
+      \delta_\sigma(\alpha) \{\beta\},                        & \epsilon \notin L(\alpha) \\
+      \delta_\sigma(\alpha) \{\beta \} \cup \delta_\sigma(\beta), & \epsilon \in L(\alpha)
+    \end{cases}$
+  \item $\delta_\sigma(\alpha + \beta) = \delta_\sigma(\alpha) \cup \delta_\sigma(\beta)$
+  \item $\delta_\sigma(\alpha^*) = \delta_\sigma(\alpha) \{\alpha^*\}$
+  \item $\delta_\sigma(\sigma) = \delta_\sigma(.) = \delta_\sigma([...\sigma...]) = \{\epsilon\}$
+  \item $\delta_\sigma(a) = \delta_\sigma(\oslash) = \emptyset$, for $a \neq \sigma$
+\end{enumerate}
+
+The derivative example is redone using partial derivative rules, and we get a set of regular expressions rather than a single regular expression:
+\begin{center}
+  $\delta_a((a + b*) (a (ba)^*)) = \{a (ba)^*, \{(ba)^*\}$  
+\end{center}
+
+Let the $pd(r)$ function represent the set of all regular expressions derivable by repeatedly applying the partial derivative algorithm on every element with respect to each character of the alphabet $\Sigma$. This set of regular expressions can be no larger than the alphabet length of the regular expression. That is, $|pd(r)| \leq |r|_\Sigma$ \cite{Antimirov}. This theorem makes testing if a regular expression $r$ accepts $w = a_1a_2...a_n$ easy and efficient:
+
+\begin{lstlisting}[label=alg:pd-match, caption={Partial derivative membership}]
+Algorithm PD Match($r$, $w$):
+    current := $\{r\}$
+    for each $a_i$ in $w$:
+        next := $\emptyset$
+        for each $\beta$ in current:
+            next := next $\cup$ $\delta_{a_i}(\beta)$
+        current = next
+    for each $\beta$ in current:
+        if $\epsilon \in L(\beta)$ return Yes
+    return No
+\end{lstlisting}
+
+As identified by Antimirov, one of the most expensive parts of this algorithm is testing equality of regular expressions to maintain sets of unique elements, current and next. Significantly reducing or entirely eliminating this cost without using automata remains an open problem, but can be mitigated by assigning each regular expression subtree with a directly comparable string or number.
+
+
+
+
+
+\section{Finite Automata}
+\label{sec:Finite Automata}
+A finite automaton is an alternative way to express a regular language. Formally, a finite automaton is a 5-tuple $(Q, \Sigma, q_0, \delta, F)$. Where $Q$ is a set of states (labelled graph nodes), $\Sigma$ is the alphabet of the language, $q_0$ is the initial state, $\delta \subseteq (Q, \Sigma, Q)$ is the transition function of atomic structures between states (directed labelled edges), and $F$ is the set of final states. The transition function $\delta$ maps a state $p$ and a symbol $\sigma$ to the set $\delta(p, \sigma)$ of possible next states. We also view $\delta$ as the set of transitions (edges); that is, $(p, \sigma, q) \in \delta$ means that $q \in \delta(p, \sigma)$. For an automaton $A$, the language $L(A)$ consists of all input words leading from the state $q_0$ to any final state in $F$ through zero or more transitions defined by $\delta$. In general the transition function is non-deterministic; meaning there can be multiple successors of a state given a single label. Deterministic transition functions also exist, but could require an exponentially larger automaton than their non-deterministic counterparts. Due to the exponential nature of deterministic finite automata (DFAs), non-deterministic finite automata (NFAs) are almost always preferred in practice. The \emph{size} of an automaton is measured as the number of states plus the number of transitions.
+
+Let a finite automaton \emph{configuration} be a 2-tuple consisting of the set of current states and a suffix of a given input word. A configuration yields another configuration by taking transitions from all current states given the first symbol in the suffix.
+\begin{center}
+  $(S, aw) \vdash (\{p : (s, a, p) \in \delta, s \in S\}, w)$, for $S \subseteq Q$
+\end{center}
+A word $w$ is accepted/member/matched of the automaton $A$ if $w \in L(A)$. Equivalently, this asks if there is a valid sequence of configurations such that $(\{q_0\}, w) \vdash^* (S, \epsilon)$ where $S$ contains at least one final state ($|S \cap F| > 0$).
+
+Figure \ref{fig:nfa_a+b+a*c} is an example of an NFA that accepts the language $\{a, b, c\} \cup \{a\}\{a\}^*\{c\}$. This automaton is formally described as 
+\begin{align*}
+  (
+    \{q_0, q_1, q_2\}, 
+    \{a, b, c\}, 
+    q_0,
+    \{
+      (q_0, a, q_1), (q_0, a, q_2), (q_0, b, q_2), (q_0, c, q_2), (q_1, a, q_1), (q_1, c, q_2)
+    \}, 
+    \{q_2\}
+  )
+\end{align*} 
+
+\begin{figure}[H]
+  \centering
+  \begin{tikzpicture}[initial text={}, >={latex}]
+    \node[state, initial]     (q_0)                         {$q_0$};
+    \node[state]              (q_1)   [below right=of q_0]  {$q_1$};
+    \node[state, accepting]   (q_2)   [above right=of q_1]  {$q_2$};
+    \path[->] (q_0) edge              node [below left]   {a} (q_1)
+              (q_1) edge [loop below] node [below]        {a} (q_1)
+              (q_1) edge              node [below right]  {c} (q_2)
+              (q_0) edge              node [above]  {a, b, c} (q_2);
+  \end{tikzpicture}
+  
+  \caption{an NFA accepting the language $\{a, b, c\} \cup \{a\}\{a\}^*\{c\}$}
+  \label{fig:nfa_a+b+a*c}
+\end{figure}
+
+Is the word $aaac$ accepted by this automaton?
+\begin{align*}
+  (\{q_0\}, aaac) & \vdash (\{q_1, q_2\}, aac) \\
+  & \vdash (\{q_1\}, ac) \\
+  & \vdash (\{q_1\}, c) \\
+  & \vdash (\{q_2\}, \epsilon)
+\end{align*}
+Since the state $q_2$ is final, and the configuration ends with $\epsilon$, the word $aaac$ is accepted. It is important to note that there are infinitely many NFAs representing the same language. We will therefore focus our attention on efficient ways to construct NFAs that avoid needlessly large machines.
+
+The definition of an NFA can be extended to allow empty transitions of the form $(p, \epsilon, q)$ for some states $p, q$. Allowing $\epsilon$-transitions simplifies some algorithms considered in this paper, but does not result in a more powerful language describing method. That is, NFAs without $\epsilon$-transitions (called \emph{$\epsilon$-free} or \emph{sequential}) can express exactly the same languages as NFAs with $\epsilon$-transitions. In Section \ref{sec:Empty Removal Construction} we define a construction that removes $\epsilon$-transitions from an NFA, and leaves a sequential NFA. Any NFA with an empty transition $(p, \epsilon, q)$ at state $p$ may move to state $q$ without consuming any symbols from the input word.
+
+For any regular expression, we can construct an NFA using the structural induction method - also known as the Thompson construction. This construction is illustrated in Figure \ref{fig:thompson construction}. There is always one initial and one final state, and previous subtree computations are joined together using $\epsilon$-transitions going into the initial state(s), and out of final state(s). 
+
+The rest of this paper will use a consistent notation when illustrating various NFA construction methods. New states will be left unnamed, previously computed subtree NFAs will be drawn in an appropriate box, and any modifications to previously computed NFAs will be in bold. We define the following meanings for the names of states for all constructions illustrated in this paper:
+\begin{center}
+  \begin{tabular}{r|l}
+    State Name & Meaning \\
+    \hline
+    $i_\alpha$  & The initial state of NFA($\alpha$) \\
+    $f_\alpha$  & The \emph{only} final state of NFA($\alpha$) \\
+    $f^i_\alpha$ & The $i^{th}$ final state of NFA($\alpha$) \\
+    $x, y$      & States $x$ and $y$ are merged
+  \end{tabular}
+\end{center}
+
+\begin{figure}[H]
+  \centering
+  \begin{subfigure}[b]{0.4\linewidth}
+    \centering
+    \begin{tikzpicture}[initial text={}, >={latex}]
+      \node[state, initial]   (q_0)                {};
+      \node[state, accepting] (q_1) [right=of q_0] {};
+      \path[->] (q_0) edge node [above] {$\epsilon$} (q_1);
+    \end{tikzpicture}
+    \caption{Empty word}
+  \end{subfigure}
+  %
+  \begin{subfigure}[b]{0.4\linewidth}
+    \centering
+    \begin{tikzpicture}[initial text={}, >={latex}]
+      \node[state, initial]   (q_0)                {};
+      \node[state, accepting] (q_1) [right=of q_0] {};
+      \path[->] (q_0) edge node [above] {$\sigma$} (q_1);
+    \end{tikzpicture}
+    \caption{Atom $\sigma$}
+  \end{subfigure}
+  
+  \vspace{1cm}
+  
+  \begin{subfigure}[b]{0.5\linewidth}
+    \centering
+    \begin{tikzpicture}[initial text={}, >={latex}]
+      \node[state, initial]   (q_0)                 {$i_\alpha$};
+      \node[state]            (q_1) [right=of q_0]  {$f_\alpha$};
+      \node[state]            (q_2) [right=of q_1]  {$i_\beta$};
+      \node[state, accepting] (q_3) [right=of q_2]  {$f_\beta$};
+      \node[draw, fit={(q_0)(q_1)}]                 {...};
+      \node[draw, fit={(q_2)(q_3)}]                 {...};
+      \path[->] (q_1) edge [very thick] node [above] {$\epsilon$} (q_2);
+    \end{tikzpicture}
+    \caption{Concatenation $(\alpha \beta)$}
+  \end{subfigure}
+  
+  \vspace{1cm}
+  
+  \begin{subfigure}[b]{0.4\linewidth}
+    \centering
+    \begin{tikzpicture}[initial text={}, >={latex}]
+      \node[state, initial]   (q_0)                       {};
+      \node[state]            (q_1) [above right=of q_0]  {$i_\alpha$};
+      \node[state]            (q_2) [right=of q_1]        {$f_\alpha$};
+      \node[state]            (q_3) [below right=of q_0]  {$i_\beta$};
+      \node[state]            (q_4) [right=of q_3]        {$f_\beta$};
+      \node[state, accepting] (q_5) [below right=of q_2]  {};
+      \node[draw, fit={(q_1)(q_2)}] {...};
+      \node[draw, fit={(q_3)(q_4)}] {...};
+      \path[->] (q_0) edge [very thick] node [above left]  {$\epsilon$}  (q_1)
+                (q_0) edge [very thick] node [below left]  {$\epsilon$}  (q_3)
+                (q_2) edge [very thick] node [above right] {$\epsilon$}  (q_5)
+                (q_4) edge [very thick] node [below right] {$\epsilon$}  (q_5);
+    \end{tikzpicture}
+    \caption{Disjunction $(\alpha + \beta)$}
+  \end{subfigure}
+  %
+  \begin{subfigure}[b]{0.5\linewidth}
+    \centering
+    \begin{tikzpicture}[initial text={}, >={latex}]
+      \node[state, initial]   (q_0)                       {};
+      \node[state]            (q_1) [above right=of q_0]  {$i_\alpha$};
+      \node[state]            (q_2) [right=of q_1]        {$f_\alpha$};
+      \node[state, accepting] (q_3) [below right=of q_2]  {};
+      \node[draw, fit={(q_1)(q_2)}] {...};
+      \path[->] (q_0) edge [very thick] node [above left]            {$\epsilon$} (q_1)
+                (q_2) edge [very thick] node [above right]           {$\epsilon$} (q_3)
+                (q_0) [bend left=20, very thick] edge node [below]  {$\epsilon$} (q_3)
+                (q_3) [bend left=20, very thick] edge node [above]  {$\epsilon$} (q_0);
+    \end{tikzpicture}
+    \caption{Star $\alpha^*$}
+  \end{subfigure}
+  \caption{Thompson construction}
+  \label{fig:thompson construction}
+\end{figure}
+The optional operation case $\alpha?$ is omitted in this construction (and all others in this paper) because it is directly equivalent to $(\alpha + \epsilon)$ and can easily be handled as such. This construction shows that every mathematical regular expression can be converted into an NFA accepting the same language. The converse is also true using the state-removal construction, but the resulting regular expression is exponentially long, and the process is generally not useful in practice since developers typically write regular expressions and not NFAs.
+
+
+
+
+
+
+\section{Empty Removal Construction}
+\label{sec:Empty Removal Construction}
+In general, NFAs are permitted to include $\epsilon$-transitions. But for some algorithms (see Section \ref{sec:Product Construction}) we require an NFA to have no $\epsilon$-transitions. Such an NFA is classified as \emph{sequential} or \emph{$\epsilon$-free}. Clearly, every sequential NFA is an NFA, but below we show an algorithm proving every NFA is also a sequential NFA.
+
+To construct a sequential NFA $M'$ from NFA $M$, first copy all states and non-empty transitions. Define the function:
+\begin{center}
+  $E_M(q) = \{p : p \in Q, p \ne q$, and $p$ is reachable from $q$ using only $\epsilon$-transitions\}
+\end{center}
+Then for every state $q$ with outgoing transition $(q, a, p) \in \delta$, add transitions $\forall r \in E_M(p): (q, a, r)$ to $M'$. The initial state of $M'$ is the initial state of $M$, and the final states of $M'$ are $\forall f \in F: E_M(f)$.
+
+
+
+
+
+\section{Product Construction}
+\label{sec:Product Construction}
+The algorithms available to NFAs are more well developed than algorithms for regular expressions. The product construction takes the intersection of two regular languages by taking sequential NFAs $A_1$ and $A_2$ and returning the NFA $M$ such that $L(M) = L(A_1) \cap L(A_2)$. The idea is to label each state in $M$ as a pair of states $(p, q)$ where $p \in A_1.Q$ and $q \in A_2.Q$. The initial state of $M$ is the pair of states where both elements are the initial state in their respective automaton - $(p_0, q_0)$. Any state in $M$ labelled $(p, q)$ is final if and only if $p \in A_1.F$ and $q \in A_2.F$.
+
+Begin this algorithm by creating state in $M$ $(p_0, q_0)$ where $p_0$ is the initial state in $A_1$, and $q_0$ is the initial state in $A_2$. While there is some state not marked done $(p_i, q_n) \in M.Q$, take the intersection of every transition $(p_i, \alpha, p_j) \in A_1.\delta$ with every transition $(q_n, \beta, q_m) \in A_2.\delta$: if $\alpha = \beta$, add state $(p_j, q_m)$ to $M$ if it does not exist, and add transition $((p_i, q_n), \alpha, (p_j, q_m))$ to $M$. Once every outgoing transition pair from state $(p_i, q_n)$ is fully explored, mark the state as done. Finally, make each state $(p, q)$ final in $M$ if and only if both $p \in A_1.F$ and $q \in A_2.F$.
+
+For example, suppose there were two NFAs $P$ and $Q$ from Figure \ref{fig:product construction example}. Using the product construction, a new NFA is created that accepts exactly the language $L(P) \cap L(Q)$.
+
+\begin{figure}[H]
+  \begin{subfigure}[b]{0.5\linewidth}
+    \centering
+    \begin{tikzpicture}[initial text={}, >={latex}]
+      \node[state, initial]   (p0)               {$p_0$};
+      \node[state]            (p1) [right=of p0] {$p_1$};
+      \node[state, accepting] (p2) [right=of p1] {$p_2$};
+      \path[->] (p0) edge [loop above] node [above] {a, b}  (p0)
+                (p2) edge [loop above] node [above] {a, b}  (p2)
+                (p0) edge              node [above] {a}     (p1)
+                (p1) edge              node [above] {a}     (p2);
+    \end{tikzpicture}
+    \caption{NFA $P$ accepting all words with the substring $aa$}
+  \end{subfigure}
+  %
+  \begin{subfigure}[b]{0.5\linewidth}
+    \centering
+    \begin{tikzpicture}[initial text={}, >={latex}]
+      \node[state, initial]   (q0)               {$q_0$};
+      \node[state, accepting] (q1) [right=of q0] {$q_1$};
+      \path[->] (q0) edge [loop above] node [above] {a} (q0)
+                (q0) edge              node [above] {b} (q1);
+    \end{tikzpicture}
+    \caption{NFA $Q$ accepting all words of the form $(a^*b)$}
+  \end{subfigure}
+  
+  \vspace{1cm}
+  
+  \begin{subfigure}[b]{\linewidth}
+    \centering
+    \begin{tikzpicture}[initial text={}, >={latex}]
+      \node[state, initial]   (00)                      {$p_0,q_0$};
+      \node[state]            (01) [below right=of 00]  {$p_0,q_1$};
+      \node[state]            (10) [above right=of 00]  {$p_1,q_0$};
+      \node[state]            (20) [right=of 10]        {$p_2,q_0$};
+      \node[state, accepting] (21) [right=of 20]        {$p_2,q_1$};
+      \path[->] (00) edge [loop below] node [below]       {a} (00)
+                (00) edge              node [above right] {b} (01)
+                (00) edge              node [below right] {a} (10)
+                (10) edge              node [above]       {a} (20)
+                (20) edge [loop below] node [below]       {a} (20)
+                (20) edge              node [above]       {b} (21);
+    \end{tikzpicture}
+    \caption{Product-constructed NFA accepting exactly $L(P) \cap L(Q)$}
+  \end{subfigure}
+
+  \caption{Product construction example with $\Sigma = \{a, b\}$}
+  \label{fig:product construction example}
+\end{figure}
+
+The product construction becomes extremely useful with respect to the language enumeration problem in Section \ref{sec:Regular Language Enumeration}.
+
+
+
+
+
+\section{Context-Free Grammars}
+\label{sec:Context-Free Grammars}
+Context-free grammars (CFG) are a more powerful encoding of formal languages than mathematical regular expressions and finite automata. Formally, they are defined as a 4-tuple: ($\Gamma$, $\Sigma$, $R$, $S$) where $\Gamma$ is a set of non-terminal symbols, $\Sigma$ is the alphabet (set of terminal symbols), $R$ is a set of production rules of the form $\gamma \in \Gamma \rightarrow (\Gamma \cup \Sigma)^*$, and $S$ is the start symbol $\in \Gamma$. Note that $\Gamma$ and $\Sigma$ are disjoint sets. Any language described by a CFG is considered a \emph{context-free language}. 
+
+Regular languages are a proper subset of context-free languages; any regular language represented by NFA $M$ can be expressed using a CFG $G$ with the following approach: 
+\begin{enumerate}
+  \item The non-terminals of $G$ are the state names of $M$.
+  \item The start symbol of $G$ is the initial state of $M$.
+  \item For every transition $(P, \sigma, Q) \in M.\delta$, add to $G$ the rule $P \rightarrow \sigma Q$.
+  \item For every final state $F \in M.F$, add to $G$ the rule $F \rightarrow \epsilon$.
+\end{enumerate} 
+Using the pumping lemma, we can prove certain languages are context-free but not regular. Take for example the language of balanced parentheses defined by the context-free grammar:
+\begin{center}
+  $(\{S\}, \{(, )\}, \{S \rightarrow SS, S \rightarrow (S), S \rightarrow \epsilon\}, S)$  
+\end{center}
+There is no such representation using mathematical regular expressions or NFAs. Many important languages are also context-free but not regular, such as most source code, regular expression strings, arithmetic expressions, and binary trees. Context-free languages can recurse into themselves; this is a useful property missing from regular languages.
+
+A \emph{derivation} is a sequence of production rule applications yielding a word. Any derivable word is accepted/generated by the CFG. Using the balanced parentheses language defined above, the word ()(()) is shown to be a member of this language through the derivation: 
+\begin{center}
+  $S \Rightarrow SS \Rightarrow (S)S \Rightarrow ()S \Rightarrow ()(S) \Rightarrow ()((S)) \Rightarrow ()(())$  
+\end{center}
+Equivalently, this derivation generates the parse tree shown in Figure \ref{fig:bp_tree}. The \emph{yield} is the concatenation of the leaves from left to right.
+
+\begin{figure}[H]
+  \centering
+  \Tree 
+  [
+    .S
+    [
+      .S 
+      [
+        ( 
+        [
+          .S 
+          $\epsilon$ 
+        ] 
+        ) 
+      ]
+    ]
+    [
+      .S 
+      [
+        ( 
+        [
+          .S 
+          [
+            ( 
+            [
+              .S 
+              $\epsilon$ 
+            ] 
+            ) 
+          ]
+        ] 
+        ) 
+      ]
+    ]
+  ]
+  \caption{Parse tree of ``()(())'' using the balanced parentheses grammar.}
+  \label{fig:bp_tree}
+\end{figure}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

@@ -1,0 +1,404 @@
+In order to test membership algorithms on regular expressions, a set of regular expressions was needed. In this case, we chose to create two distinct sets: practical regular expressions used by developers on GitHub, and randomly generated regular expressions. Creating and evaluating each regular expression set individually is helpful in their analysis. Then, the Python library FAdo was extended to support new operations and algorithms used in this research. Finally, each selected algorithm for evaluating word membership was extensively benchmarked to see how fast it would decide the problem.
+
+
+\section{Sampling Practical Regular Expressions}
+\label{sec:Sampling Practical Regular Expressions}
+In order to understand the \emph{practical} efficiency or regular expression membership algorithms, practically used regular expressions are needed. Previous work \cite{pddag} shows the efficiency of various algorithms on randomly generated regular expressions, but how does the membership algorithm behave, and are there notable differences, when using practical regular expressions?
+
+It was decided that practical regular expressions would be sampled from publicly available GitHub repositories. GitHub is very extensive, and there is insufficient time to search all files, so we use an online API called \url{https://grep.app} \cite{grep.app} to identify files of interest. Once we have a file, it is scanned line-by-line for regular expression syntax according to the language of the file. If any regular expression is found on the line, it is extracted and inserted into a database of traceable regular expressions. That is, we can go back later and find where and how the regular expression is used if we want. Each regular expression must be converted into a FAdo compatible form. And finally we must consider partial matching with anchor placements.
+
+\subsection{Finding Relevant GitHub Files}
+\label{subsec:Finding Relevant GitHub Files}
+On GitHub itself, specific substrings can be searched. And while this is an extremely useful tool for finding exact occurrences of specific function calls (e.g., Python's ``re.compile''), regular expressions involve several functionalities (e.g., searching, matching, splitting, compiling, replacing, etc.), and we would need a distinct GitHub search for each relevant function. If the above Python search is generalized to ``re.'', too many irrelevant results will be found.
+
+Instead, a web application called grep.app (\url{https://grep.app}) is used. It maintains an index for half a million GitHub repositories and their public source code. Both using the web interface and through their API's, we can search a specific language for matches of a regular expression. For example, we search for regular expressions in Python code using the regular expression: 
+\begin{center}
+  \begin{verbatim}
+    re(gex)?\.(search|match|compile|split|sub|find(all|iter|match))\(
+  \end{verbatim}
+\end{center}
+This search yields a substantial set of relevant source code files. At this step we simply choose the first $n$ files and save their URLs.
+
+
+\subsection{Extracting Regular Expressions}
+\label{subsec:Extracting Regular Expressions}
+Each source file is retrieved from GitHub, and searched through line-by-line for regular expressions. We attempt to identify substrings of lines that define a regular expression. At this point the syntax of the regular expression is not guaranteed. At first glance, this task is generally simple since regular expressions are often defined as a string argument in a function call. However, there are many cases to consider: variably created regular expression strings, string concatenation, and multi-line definitions. For simplicity we only extract regular expression strings without variable interpolation, concatenation, or multi-line definitions. The extracted programmer's regular expression is saved alongside enough information to verify its correctness.
+
+This task could be improved if the entire source file is parsed into an abstract syntax tree, and then traversed for regular expression strings. This would greatly improve reliability of the extracted regular expression strings, but would certainly take more computation time. Minor errors of regular expression extraction are allowable since the extracted regular expressions still represent a much more practical sample than randomly generated regular expressions.
+
+
+\subsection{Converting into FAdo Compatible Syntax}
+\label{subsec:Converting into FAdo Compatible Syntax}
+Regular expression syntax in programming languages allows for a great deal of complexity. Along with implicit precedence rules, there are also non-regular operations and slightly different syntaxes across programming languages. As presented in Section \ref{sec:RegExp Tree}, the RegExp Tree NodeJS library is used to convert a programmer's regular expression string into a recursively defined JSON object describing the abstract syntax tree of the expression. Once the JSON object is retrieved, it is recursively converted into an unambiguous mathematical regular expression string. This process is accomplished using a recursive approach on the function $f(node)$, that acts according to the ``type'' property exposed in RegExp Tree's JSON construction.
+
+\begin{enumerate}
+  \item Character Class: convert $\backslash d$ to $[0-9]$ and so on, or use directly
+  \item Character or Symbol: return \texttt{node.symbol}
+  \item Backreference: throw an error
+  \item Disjunction: return \texttt{(f(node.left) + f(node.right))}
+  \item Assertion, throw an error unless node.kind is in $\{^\wedge, \$\}$
+  \item Concatenation $[e_1, e_2, e_3, ..., e_n]$: return \texttt{((((f($e_1$) f($e_2$)) f($e_3$)) ...) f($e_n$))} \\
+    Left recursion is preferred for parsing \cite{lark-docs}.
+  \item $?$ Repetition: return \texttt{f(node.expression)$?$}
+  \item $^*$ Repetition: return \texttt{f(node.expression)$^*$}
+  \item $^+$ Repetition: return \texttt{(f(node.expression) f(node.expression)$^*$)}
+  \item $\{a,b\}$ Repetition: \\
+    Construct an array $A$ using Algorithm \ref{alg:expand ranged repetition}, and pass it to $f$ with node type concatenation. \\
+    \begin{lstlisting}[label={alg:expand ranged repetition}, caption={Efficient expansion of a ranged repetition}]
+e = f(node.expression)
+
+// at least a repetitions of e
+for i in 0:a
+    A[i] = e
+
+// between 0 and b-a more repetitions of e
+i = a
+n = b - a
+while n > 0
+    m = 1
+    while m <= n
+        A[i] = f($e^m$)?
+        i = i + 1
+        n = n - m
+        m = m * 2
+    \end{lstlisting}    
+    Inspired by the binary representation of numbers, this achieves a somewhat compact representation of a ranged repetition. The expression $e$ is repeated at least $a$ times, and then can be repeated between 0 and $b-a$ more times. This representation is generally more space (and therefore time) efficient than other similar approaches: 
+    \begin{align*}
+      \textrm{Approach 1: } & [e^a, (\epsilon + e^1 + e^2 + ... + e^{b-a})] \\
+      \textrm{Approach 2: } & [e^a, \underbrace{e?, e?, ..., e?}_{b-a \textrm{ times}}] \\
+      \textrm{Our Approach: } & [e^a, e^1?, e^2?, ..., e^{2^i}?, ..., e^1?, e^2?, ..., e^{2^j}?] \\
+      \empty & \textrm{Where: } 1+2+...+2^i+...+1+2+...+2^j=b-a
+    \end{align*}
+    For example: $e\{2,100\}$. Approach 1 repeats the expression $4,853$ times. Both approach 2 and our approach optimally repeat the expression $100$ times, but our approach does this in a smaller concatenation array; $|A|=100$ for approach 2, while $|A|=16$ using our approach.
+\end{enumerate}
+
+
+\subsection{Partial Matching}
+\label{subsec:Partial Matching}
+Behind the curtains, theoretical membership algorithms require matching the entire word. However, practical implementations of regular expressions typically search for substring matches unless the expression is anchored. Anchors are used during a match to assert that either nothing has matched or that nothing else matches afterward. The absence of anchors implicitly increases the size of the accepted language; while the mathematical regular expression $(a b)$ accepts the language $\{ab\}$, when interpreted as a programmer's regular expression there are several anchored alternatives:
+
+\begin{enumerate}
+  \item $L(ab) = \{w_1 ab w_2 : w_i \in \Sigma ^*\}$
+  \item $L(^\wedge ab) = \{ab w : w \in \Sigma ^*\}$
+  \item $L(ab \$) = \{w ab : w \in \Sigma ^*\}$
+  \item $L(^\wedge ab \$) = \{ab\}$
+\end{enumerate}
+
+To our knowledge, an anchor elimination construction has not been created in the literature. Clearly, every mathematical regular expression $r$ without anchors is equivalent to the programmer's regular expression $^\wedge r \$$, but the inverse does not follow such a simple rule since the permissive syntax of programmer's regular expressions allows anchors to be used in unexpected ways. For example, $\$^\wedge$ is a valid programmer's regular expression, but only accepts the empty word, and the simple modification to $\$a^\wedge$ means the regular expression accepts nothing. At first, $a^*{}^\wedge b\$$ appears to accept $\{a^ib : i \in \mathbb{N}_0\}$, but the starting anchor guarantees $a$ is repeated zero times. Even $^\wedge{}^\wedge a \$$ is a valid anchored expression. In our anchor elimination construction, we attempt to eliminate anchors in the most commonly used ways, and regrettably throw an error on some unexpected, but otherwise valid expressions.
+
+To convert from a regular expression with anchors into a mathematical regular expression without anchors, the entire tree must be traversed. $.^*$'s must be added to the starting and ending positions of the regular expression where no anchor is found, and anchors cannot appear anywhere else (recall the idea of $first$ and $last$ functions from the position construction in Section \ref{sec:Glushkov/Position NFA}). As we traverse the tree there are four states describing which anchors are valid in this position: both, start, end, and neither. Each state respectively corresponds to allow only these anchors: $\{^\wedge, \$\}$, $\{^\wedge\}$, $\{\$\}$, $\emptyset$. If an invalid anchor is found (for example finding a $\$$ at the neither state), then we throw an error. To enable partial matching in a regular expression, begin with the both state on the root of the tree.
+
+Concatenation of $(\alpha \beta)$ presents a straightforward case. Given a regular expression tree containing only concatenation nodes, a starting anchor is only allowed on the leftmost leaf, and an ending anchor is only allowed on the rightmost leaf. The both state allows starting anchors in $\alpha$ and ending anchors in $\beta$. The start state allows starting anchors in $\alpha$ and neither anchor in $\beta$. The end state allows ending anchors in $\beta$ and neither anchor in $\alpha$. And the neither state does not allow anchors in $\alpha$ or $\beta$.
+
+Disjunction of $(\alpha + \beta)$ simply passes the current state onto each of its children. This allows regular expressions such as ($(^\wedge a)+(b \$))$ which accepts the language $\{aw:w\in\Sigma^*\}\cup\{wb:w\in\Sigma^*\}$. Note that this union has intersecting elements such as $\{awb:w\in\Sigma^*\}$ which may be confusing, but is ultimately fine. We can remove the anchors and represent the language with the mathematical regular expression $((\epsilon a .^*) + (.^* b \epsilon ))$.
+
+The optional operation $\alpha?$ is equivalently represented as $(\alpha + \epsilon)$, and treated as such.
+
+A star operation $\alpha^*$ presents a significant complication for anchor elimination. Any programmer's regular expression of the form $\alpha^*$ is universal (accepts all words), because $\alpha$ can be taken zero times, and the rest of the input is unanchored and therefore implicitly accepted. If $\alpha$ contains some anchor, we naively assume this anchor is non-conditional (not within any optional or disjunction operation). In this simplified case, $\alpha$ can be repeated no more than one time without failing anchor assertions. A disjunctive structure is created $(\alpha'+\epsilon)$ where $\alpha'$ is constructed using the partial matching state of $\alpha^*$. Otherwise when $\alpha$ contains no anchors, $\alpha^*$ is wrapped appropriately with $.^*$ as if it were an atomic structure.
+
+Anchors are converted into $\epsilon$ if they are accepted by the current partial matching state. This maintains the shape of the tree and avoids re-balancing.
+
+All other atomic structures, including $\sigma \in \Sigma$, character classes, wild dot, and $\epsilon$ handle anchor elimination in the same way. Given the atomic structure $a$: it is converted into $.^*a.^*$ in the both state, $.^*a$ in the start state, $a.^*$ in the end state, and left unchanged in the neither state.
+
+\begin{figure}[H]
+  \begin{subfigure}[b]{0.5\linewidth}
+    \centering
+    \Tree
+    [
+      .$\odot$
+      [
+        .$\odot$
+        a
+        a
+      ]
+      [
+        .$+$
+        b
+        \$
+      ]
+    ]
+    \caption{Before anchor elimination construction}
+  \end{subfigure}
+  \begin{subfigure}[b]{0.5\linewidth}
+    \centering
+    \Tree
+    [
+      .$\odot$
+      [
+        .$\odot$
+        [
+          .$\odot$
+          [
+            .$^*$
+            $.$
+          ]
+          a
+        ]
+        a
+      ]
+      [
+        .$+$
+        [
+          .$\odot$
+          b
+          [
+            .$^*$
+            $.$
+          ]
+        ]
+        $\epsilon$
+      ]
+    ]
+    \caption{After anchor elimination construction}
+  \end{subfigure}
+  \caption{Enabling partial matching for $aa(b+\$)$}
+  \label{fig:partial matching}
+\end{figure}
+
+Figure \ref{fig:partial matching}(a) shows the regular expression tree for an anchored expression $aa(b+\$)$. The anchor elimination construction is completed and constructs Figure \ref{fig:partial matching}(b). Through concatenations, the leftmost leaf $a$ becomes $(.^* a)$; the $\$$ anchor is recognized to be valid and becomes $\epsilon$; and through the sequence of states starting at the root, [both, end, end], atomic $b$ becomes $(b .^*)$.
+
+A smaller partial matching tree can be constructed if at each stage of the partial matching algorithm the entire subtree is searched for anchors. If an anchor is found, continue as presented above. If no anchor is found, wrap the current regular expression with anchors as if it were an atomic structure. This alternative construction traverses the tree up to two times: once to search for anchors, and once to insert $.^*$'s at the proper depth according to the current state. Whereas the construction presented above traverses the tree no more than once in all cases except the star operation. Which version is better depends on the use case, as more pre-processing for a smaller tree is not necessarily better.
+
+
+
+
+
+
+\section{Randomly Generating Regular Expressions}
+\label{sec:Randomly Generating Regular Expressions}
+Although the main focus of this thesis is the practical efficiency of regular expression membership algorithms, we are also interested in how the results might differ when using randomly generated regular expressions. Conveniently, FAdo can uniformly generate regular expression trees with a specific tree length on a small fixed alphabet. However we must make an accommodation since the existing FAdo implementation cannot generate wild dots and character classes. This is accomplished by adding marker symbols to the alphabet to indicate the location of the wild dot or character class atoms. 
+
+To generate a random regular expression tree of length $n$ over the alphabet $\Sigma$, pass to FAdo the length $n$ and the alphabet $\Sigma \cup \Delta$ where $\Delta = \{w, x\}$ and $|\Sigma \cap \Delta|=0$. Then transform each node of the returned tree into its respective extended Python class, replace all $w$ atoms with a wild dot, and replace all $x$ atoms with a uniformly chosen character class over the alphabet $\Sigma$.
+
+The inner structure of character classes is implemented as an inclusive ranged list of characters. To improve efficiency, whenever two inclusive, non-enclosing ranges $(a, b)$, $(c, d)$ overlap such that $c \leq b$, they are merged into the single range $(a, d)$. If one range is enclosed in the other, only the larger range is kept. The inner structure $S$ is associated with the character classes $[S]$ and $[^\wedge S]$ for positive and negated character classes respectively. We must uniformly choose a character class based on its internal structure, and not necessarily the form most commonly used by humans. For a finite alphabet of size $n$, the internal structure is a regular language. Its size presents an interesting combinatorial problem, but is beyond the scope of this project. First we enumerate the entire language of character class inner structures for the given alphabet. Then, when we want a uniformly selected character class we simply select an inner structure and decide 50/50 if it should be positive or negated.
+
+{\singlespacing
+  \begin{minipage}[t]{0.45\textwidth}
+    \begin{center}
+      Alphabet: $\{a,b\}$
+    \end{center}
+    \begin{enumerate}
+      \item $[(a,a)]$
+      \item $[(a,b)]$
+      \item $[(b,b)]$
+      \item $[(a,a), (b,b)]$
+      \item []
+      \item []
+    \end{enumerate}
+  \end{minipage}
+  \begin{minipage}[t]{0.45\textwidth}    
+    \begin{center}
+      Alphabet: $\{a,b,c\}$
+    \end{center}
+    \begin{multicols}{2}
+      \begin{enumerate}
+        \item $[(a,a)]$
+        \item $[(a,b)]$
+        \item $[(a,c)]$
+        \item $[(b,b)]$
+        \item $[(b,c)]$
+        \item $[(c,c)]$
+        \columnbreak
+        \item $[(a,a), (b,b)]$
+        \item $[(a,a), (b,c)]$
+        \item $[(a,a), (c,c)]$
+        \item $[(a,b), (c,c)]$
+        \item $[(b,b), (c,c)]$
+        \item $[(a,a), (b,b), (c,c)]$
+      \end{enumerate}
+    \end{multicols}
+  \end{minipage}
+}
+\\
+
+The inner structure of alphabets of size 2 and 3 are shown above. Each ordered list trivially corresponds with a word; for example $[(a,b), (c,c)]$ corresponds to $a-bc-c$. The number of words for each alphabet size starting at $|\Sigma|=2$ follows the sequence: 4, 12, 33, 88, 232, 609, 1,596, 4,180, etc. The language of inner structures is easily encoded using an automaton created in Algorithm \ref{alg:chars_inner}.
+
+\begin{lstlisting}[
+  label={alg:chars_inner}, 
+  caption={Pure FAdo implementation to enumerate all inner character class structures}, 
+  language={Python}
+]
+from FAdo.fa import NFA
+nfa = NFA()
+init = nfa.addState("init")
+nfa.addInitial(init)
+
+for i in reversed(range(0, len(alphabet))):
+    state = nfa.addState(alphabet[i]) # last seen
+    nfa.addFinal(state)
+
+    toState1 = nfa.addState("[]-" + alphabet[i])
+    toState2 = nfa.addState("-" + alphabet[i])
+    nfa.addTransition(toState1, "-", toState2)
+    nfa.addTransition(toState2, alphabet[i], state)
+    for j in range(0, i+1): # from initial state
+        nfa.addTransition(init, alphabet[j], toState1)
+
+    # state, alphabet[k(k>i)], all following states >=k
+    for j in range(i, len(alphabet)):
+        for k in range(i+1, j+1):
+            nfa.addTransition(state, alphabet[k], 
+                    nfa.stateIndex("[]-" + alphabet[j]))
+
+# use the NFA to generate the entire language
+innerStructures = [x for x in nfa.enumNFA(len(alphabet)*3)]
+\end{lstlisting}
+
+If Algorithm \ref{alg:chars_inner} is given the \emph{sorted} alphabet $[a,b,c]$, the resulting NFA is shown in Figure \ref{fig:chars_inner}. Each state is displayed using its created name from Algorithm \ref{alg:chars_inner} for clarity. Enumerating the language is simply accomplished using NFA cross-section enumeration from Section \ref{sec:Regular Language Enumeration}.
+
+\begin{figure}[H]
+  \centering
+  \begin{tikzpicture}[initial text={}, >={latex}]  
+    \node[state, initial]   (0)                       {init};
+    \node[state]            (a1) [above right=of 0]   {[]-a};
+    \node[state]            (a2) [right=of a1]        {-a};
+    \node[state, accepting] (a3) [right=of a2]        {a};
+    \node[state]            (b1) [below right=of 0]   {[]-b};
+    \node[state]            (b2) [right=of b1]        {-b};
+    \node[state, accepting] (b3) [right=of b2]        {b};
+    \node[state]            (c1) [below right=of a3]  {[]-c};
+    \node[state]            (c2) [right=of c1]        {-c};
+    \node[state, accepting] (c3) [right=of c2]        {c};
+    
+    \path[->] (0) edge                  node [above left]   {a}       (a1)
+              (0) edge                  node [below left]   {a, b}    (b1)
+              (0) edge  [bend left=12]  node [above]        {a, b, c} (c1)
+              (a1) edge                 node [above]        {-}       (a2)
+              (a2) edge                 node [above]        {a}       (a3)
+              (a3) edge [bend left=12]  node [below right]  {b}       (b1)
+              (a3) edge                 node [above right]  {b, c}    (c1)
+              (b1) edge                 node [above]        {-}       (b2)
+              (b2) edge                 node [above]        {b}       (b3)
+              (b3) edge                 node [above]        {c}       (c1)
+              (c1) edge                 node [above]        {-}       (c2)
+              (c2) edge                 node [above]        {c}       (c3);
+  \end{tikzpicture}
+  \caption{The NFA generated using Algorithm \ref{alg:chars_inner} on the sorted alphabet $[a,b,c]$}
+  \label{fig:chars_inner}
+\end{figure}
+
+Using an alphabet of size 10, we generated 784 regular expressions for each length in \{25, 50, 100, 150, 200, 300, 400, 500\}. This is sufficient for a 95\% confidence interval with a 3.5\% margin of error that our results are statistically correct. An alphabet of size 10 creates 10,945 inner character classes, and twice that many character classes when considering positive and negated versions.
+
+
+
+
+
+
+\section{Implementing FAdo Extensions}
+\label{sec:Implementing FAdo Extensions}
+One of FAdo's main advantages is its extensibility. Main concepts such as regular expression tree nodes and NFAs are implemented as Python class objects, allowing each class to be extended with new features and functionality. Below is an overall view of how FAdo's classes were extended. The ``u'' prefix refers to forcibly using unicode symbols, and the ``Invariant'' NFA name is inspired as a non-transducer version of the automata from \cite{alphabet-invariant}.
+
+\begin{multicols}{3}
+  \begin{tabular}{l|l}
+    FAdo class & Extension \\
+    \hline
+    regexp    & uregexp \\
+    concat    & uconcat \\
+    disj      & udisj \\
+    star      & ustar \\
+    option    & uoption \\
+  \end{tabular}
+
+  \begin{tabular}{l|l}
+    FAdo class & Extension \\
+    \hline
+    epsilon   & uepsilon \\
+    \empty    & anchor \\
+    atom      & uatom \\
+    \empty    & chars \\
+    \empty    & dotany \\
+  \end{tabular}
+  
+  \begin{tabular}{l|l}
+    FAdo class & Extension \\
+    \hline
+    NFA       & InvariantNFA \\
+  \end{tabular}
+\end{multicols}
+
+
+\subsection{Unicode Regular Expressions}
+\label{subsec:Unicode Regular Expressions}
+All regular expression classes have been extended to support the following features: partial derivative membership (Section \ref{sec:Derivatives}), pairwise language enumeration (Section \ref{subsec:Pairwise Word Generation}), backtracking word membership (Section \ref{sec:Backtracking Membership Algorithm}), explicit pointer-based tree compression (Section \ref{sec:Partial Derivative NFA}), partial matching anchor elimination construction (Section \ref{subsec:Partial Matching}), and displaying regular expression trees using graphviz \cite{graphviz}. And where relevant, FAdo bugs were fixed (e.g., \_delAttr not passing down to both children in concat class).
+
+The following InvariantNFA constructions are supported: Thompson, Glushkov, position, follow, and partial derivative (through nfaPDO, nfaPDDAG, and nfaPDRPN). The nfaPDRPN (partial derivative reverse polish notation) construction was created as a further optimization of FAdo's optimized partial derivative NFA construction nfaPDO. The nfaPDO algorithm memoizes the linear form of regular expressions within each node in case the exact node needs its linear form again. Like with the naive nfaPD construction from Section \ref{sec:Partial Derivative NFA}, each NFA state is named according to its regular expression tree. Whenever a new transition is created in the NFA, the destination node is either created or found according to its name (recall: the state's name is a regular expression tree). Repeatedly comparing regular expression trees for equality is expensive. By contrast, the nfaPDRPN algorithm first compresses the regular expression tree \cite{pddag}, then names its NFA states with the RPN string of the regular expression tree. nfaPDRPN avoids the duplicate linear form function evaluations of nfaPDO, and speeds up NFA state lookup by naming states with strings rather than trees that have to be traversed for equality. The performance of this algorithm is explored in Chapter \ref{ch:Results}.
+
+Additionally, all atomic subclasses (uatom, chars, and dotany) support taking the intersection with another atomic subclass. This is an important feature with respect to the product construction (Section \ref{sec:Product Construction}); especially with the added complexity of character classes. For the purpose of this thesis, the product construction is used for the cross-section language enumeration problem, and all comparisons are between an atom $\sigma$ and the wild dot. In this case, the intersection is simply $\sigma$.
+
+
+\subsection{Regular Expression Tree Equality}
+\label{subsec:Regular Expression Tree Equality}
+The partial derivative membership and NFA construction algorithms make use of sets of distinct regular expressions to improve their performance. However, when a regular expression tree is directly added to a Python set object, the associated computational costs can become larger than expected. FAdo compares equality of two regular expression trees by first converting each tree into its \emph{repr} form, and then comparing the resulting strings. In Python, repr is an overridable instance method on every class object that returns a string representing that object; although not strictly required, repr should return the string that constructs the object being represented. In the case of a regular expression tree in FAdo, repr traverses the entire tree to create a string. For example:
+
+\begin{center}
+  \begin{tabular}{r l}
+    Infix Syntax: & $a ((b + a) b^*)$ \\
+    Repr Syntax:  & \texttt{concat(atom(a),concat(disj(atom(b),atom(a)),star(atom(b))))}
+  \end{tabular}
+\end{center}
+
+Each time a regular expression tree is added to any set, its repr string is computed and saved internally within the set object. Now consider the definition of partial derivatives from Section \ref{sec:Derivatives}: each recursive step creates a new set, and when each regular expression tree is added, its repr string is linearly computed. Any algorithm that makes use of partial derivatives added directly to the set will experience these repeated linear cost repr computations.
+
+This can be improved by saving the repr value for each subtree as it is computed the first time, and then referring back to this previously computed repr string. Instead of using sets of regular expression trees, use dictionaries of repr keys and tree values. When adding a regular expression to the dictionary, strings are directly compared for equality rather than having to traverse the entire tree again. For brevity, the RPN string was selected over the repr string in the implementation, but it serves the exact same purpose.
+
+In the Results section, both pd and pdo represent partial derivative membership algorithms without constructing an NFA. The pd algorithm makes some use of string identification, while pdo (partial derivative optimized) makes use of string identification in a dictionary throughout the entire algorithm. A naive partial derivative algorithm using a set is far too unoptimized, and was not selected to be tested. Similarly, the partial derivative NFA can be constructed much more efficiently if the states of the NFA are identified by a string (nfaPDRPN) instead of a regular expression tree (nfaPDO).
+
+\subsection{Invariant NFA}
+Pure FAdo follows typical theory and implements its NFA transition function using single character string symbols. A HashMap uses an integer state index to find another HashMap of outgoing character transitions, and because this is an NFA, there can be multiple destinations given a single transition character.
+\begin{center}
+  HashMap$<$int, HashMap$<$character, Set$<$int$>>>$
+\end{center}
+This approach is extremely advantageous as finding the successors of a state given a symbol is a constant-time operation. So, evaluating NFA word membership of $w$ can be done in $O(n*|w|)$ time where $n$ is the number of states in the NFA.
+
+However, in practice when using the large UTF-8 alphabet, creating individual transitions for every symbol in a character class or wild dot is extremely space inefficient. And although word evaluation is still fast with a good hash function, constructing the NFA in the first place becomes slow and impractical. Instead, in order to keep construction time reasonable, the InvariantNFA uses Python classes as its transitions (uatom, chars, and dotany). Like in pure FAdo, the string ``@epsilon'' represents the the empty string and Python class uepsilon; this allows more FAdo NFA methods to work without needing to be extended.
+\begin{center}
+  HashMap$<$int, HashMap$<T$, Set$<$int$>>>$ \\
+  where $T \in \{\textrm{uatom}, \textrm{chars}, \textrm{dotany}, \textrm{``@epsilon''}\}$
+\end{center}
+
+The trade-off of this approach says that given a current state index and a symbol of the input word, each outgoing transition has to be matched individually. Although it could be expensive to analyze each outgoing transition for simple atomic membership, in practice there are relatively few outgoing transitions from an average state. Of the sampled practical regular expressions, no chosen NFA construction assigns an average state with more than 1.25 outgoing transitions (and the average number of transitions per state across all construction methods for the sampled practical regular expressions is approximately 1.187). Therefore it is straightforward to iterate through each outgoing transition as there is not generally a lot of them.
+
+
+
+
+
+\section{Design of Experiments}
+\label{sec:Design of Experiments}
+There are three stages each regular expression must complete: (1) preparation, (2) construction into an appropriate form, and (3) word membership time. The untimed preparation stage generates an appropriate test-set of accepting and rejecting words using techniques from Section \ref{sec:Regular Language Enumeration}. Next, for each selected evaluation method we measure the time taken for the regular expression string to be parsed into a regular expression tree that allows partial matching, then potentially converted into an InvariantNFA. Finally, we measure the time it takes this final structure to decide membership of all the accepting and rejecting words. No membership test is allowed to save any information to be used on a later membership test. In real implementations, it may be beneficial to save certain information (like previously computed partial derivatives), but this hurts our ability to fairly scale the number of word evaluations. It may be beneficial to build a more expensive NFA (like the partial derivative NFA) if you are evaluating thousands of words, while if you only evaluate one word another approach may be optimal. Our methods will retain the ability to contrast these algorithms with different capacities of input words.
+
+We considered three membership algorithms that can be applied directly on the regular expression tree: word derivatives, partial derivatives, and backtracking. In each case, the construction stage does not need to build an InvariantNFA. Word derivatives ($D_\sigma$ function from Section \ref{sec:Derivatives}) were initially tested, but due to their exponential blow-up during membership evaluation it became obvious practical implementations should avoid this method. A naive partial derivative algorithm directly inserts the partial derivatives of a regular expression into a set, but the chosen implementation is more efficient because it uses string equality instead of tree equality (Section \ref{subsec:Regular Expression Tree Equality}). The pd algorithm uses string key identification within the membership method only, and the pdo algorithm uses this approach both in the membership and recursive partial derivative methods. Unfortunately, the pdo optimization was conceived at a late stage of the thesis and there was only enough time to test the pdo algorithm on practical regular expressions. Finally, because most practical regular expression libraries support backreferences and therefore use backtracking membership, we wanted to test this approach in our framework.
+
+Another approach to solving word membership is to build an InvariantNFA, and then run the standard membership algorithm on it. FAdo's implementations of Thompson, Glushkov, position, follow ($\epsilon$-free), and a few partial derivative constructions were extended to create uatom, chars, dotany, and ``@epsilon'' transitions. The non-optimized partial derivative automaton construction (nfaPD) was not selected since a superior algorithm already exists within FAdo: nfaPDO. The optimized partial derivative NFA construction uses memoization and is much faster. Two additional partial derivative constructions were also selected: nfaPDDAG and nfaPDRPN.
+
+The above process was completed independently for both practically sampled and randomly generated regular expressions. Separating random and practical expressions allows the analysis to compare the results from each sample. For each evaluation method, we create a plot using every regular expression. This plot compares the time to accept or reject the average tested word against the tree length of the regular expression. The time measurement considers the construction time $n$ times and the average word evaluation $m$ times. Additionally, to smooth the plot we group regular expressions into bins according to their tree length; this bin size is also configurable.
+
+The main tests were conducted on a virtual private server (VPS) from Microsoft Azure (B4ms). This VPS was configured with 16 GB of memory and 4 virtual CPU cores. Up to 4 tests were computed in parallel; this number would shrink if there was a memory bottleneck, because sometimes the generated test set of words required several GB of memory (particularly with large randomly generated regular expressions with nested star operations), and we want to avoid using slow memory swap onto the disk. Each CPU-bound test process was given a ``nice value'' of -20, meaning the process scheduler would prioritize these processes above all others. The built-in Python module timeit was selected to measure the relevant times; it chooses the most precise time implementation for the system, and ensures garbage collection is turned off. If we were using Python $>3.3$, we would use time.process\_time() to measure CPU time directly. 
+
+An indicator of the efficiency of a regular expression's NFA is the number of states plus the number of transitions. For every practically sampled regular expression and supported NFA construction method we save the resulting NFA in a database \cite{dill} along with the number of states and the number of transitions. This analysis is completed to show how various NFA constructions scale on a practical sample of regular expressions. Although time measurements were taken, they were not the focus of this analysis, and therefore this was the only test executed on a personal computer.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
