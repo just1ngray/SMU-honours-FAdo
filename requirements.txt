@@ -1,6 +1,6 @@
 FAdo==1.3.5.1
 lark-parser==0.11.3
-regex
-matplotlib
+regex==2021.11.10
+matplotlib==2021.11.10
 psutil
 dill
